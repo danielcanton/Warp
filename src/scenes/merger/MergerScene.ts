@@ -164,96 +164,126 @@ export class MergerScene implements Scene {
 
   // Cleanup
   private boundHandlers: { el: EventTarget; type: string; fn: EventListener }[] = [];
+  private initialized = false;
 
   async init(ctx: SceneContext): Promise<void> {
     this.ctx = ctx;
     const { scene, camera, controls } = ctx;
+    const firstInit = !this.initialized;
 
-    // ─── Cache DOM elements ───
-    this.playBtn = document.getElementById("play-btn")!;
-    this.timeSlider = document.getElementById("time-slider") as HTMLInputElement;
-    this.timeLabel = document.getElementById("time-label")!;
-    this.speedBtn = document.getElementById("speed-btn")!;
-    this.speedLabel = document.getElementById("speed-label")!;
-    this.eventName = document.getElementById("event-name")!;
-    this.massesEl = document.getElementById("masses")!;
-    this.distanceEl = document.getElementById("distance")!;
-    this.typeBadgeEl = document.getElementById("type-badge")!;
-    this.chirpMassEl = document.getElementById("chirp-mass")!;
-    this.finalMassEl = document.getElementById("final-mass")!;
-    this.energyRadiatedEl = document.getElementById("energy-radiated")!;
-    this.chiEffEl = document.getElementById("chi-eff")!;
-    this.redshiftEl = document.getElementById("redshift")!;
-    this.snrEl = document.getElementById("snr")!;
-    this.pAstroEl = document.getElementById("p-astro")!;
-    this.catalogEl = document.getElementById("catalog-name")!;
-    this.eventListItems = document.getElementById("event-list-items")!;
-    this.mapToggleBtn = document.getElementById("map-toggle")!;
-    this.eventCountEl = document.getElementById("event-count")!;
-    this.timeControlsEl = document.getElementById("time-controls")!;
-    this.eventInfoEl = document.getElementById("event-info")!;
-    this.mapLegendEl = document.getElementById("map-legend")!;
-    this.helpOverlay = document.getElementById("help-overlay")!;
-    this.helpBtn = document.getElementById("help-btn")!;
-    this.helpCloseBtn = document.getElementById("help-close")!;
-    this.sortSelect = document.getElementById("sort-select") as HTMLSelectElement;
-    this.filterChips = document.querySelectorAll<HTMLButtonElement>(".filter-chip");
-    this.searchInput = document.getElementById("search-input") as HTMLInputElement;
-    this.loadingScreen = document.getElementById("loading-screen")!;
-    this.loadingStatus = document.getElementById("loading-status")!;
-    this.mapTooltip = document.getElementById("map-tooltip")!;
-    this.onboarding = document.getElementById("onboarding")!;
-    this.aboutOverlay = document.getElementById("about-overlay")!;
-    this.aboutCloseBtn = document.getElementById("about-close")!;
-    this.brandEl = document.getElementById("brand")!;
-    this.screenshotBtn = document.getElementById("screenshot-btn")!;
-    this.eventsToggleBtn = document.getElementById("events-toggle");
-    this.eventListEl = document.getElementById("event-list")!;
-    this.shareBtn = document.getElementById("share-btn")!;
-    this.shareToast = document.getElementById("share-toast")!;
+    // ─── Cache DOM elements (only once — they live in app.html) ───
+    if (firstInit) {
+      this.playBtn = document.getElementById("play-btn")!;
+      this.timeSlider = document.getElementById("time-slider") as HTMLInputElement;
+      this.timeLabel = document.getElementById("time-label")!;
+      this.speedBtn = document.getElementById("speed-btn")!;
+      this.speedLabel = document.getElementById("speed-label")!;
+      this.eventName = document.getElementById("event-name")!;
+      this.massesEl = document.getElementById("masses")!;
+      this.distanceEl = document.getElementById("distance")!;
+      this.typeBadgeEl = document.getElementById("type-badge")!;
+      this.chirpMassEl = document.getElementById("chirp-mass")!;
+      this.finalMassEl = document.getElementById("final-mass")!;
+      this.energyRadiatedEl = document.getElementById("energy-radiated")!;
+      this.chiEffEl = document.getElementById("chi-eff")!;
+      this.redshiftEl = document.getElementById("redshift")!;
+      this.snrEl = document.getElementById("snr")!;
+      this.pAstroEl = document.getElementById("p-astro")!;
+      this.catalogEl = document.getElementById("catalog-name")!;
+      this.eventListItems = document.getElementById("event-list-items")!;
+      this.mapToggleBtn = document.getElementById("map-toggle")!;
+      this.eventCountEl = document.getElementById("event-count")!;
+      this.timeControlsEl = document.getElementById("time-controls")!;
+      this.eventInfoEl = document.getElementById("event-info")!;
+      this.mapLegendEl = document.getElementById("map-legend")!;
+      this.helpOverlay = document.getElementById("help-overlay")!;
+      this.helpBtn = document.getElementById("help-btn")!;
+      this.helpCloseBtn = document.getElementById("help-close")!;
+      this.sortSelect = document.getElementById("sort-select") as HTMLSelectElement;
+      this.filterChips = document.querySelectorAll<HTMLButtonElement>(".filter-chip");
+      this.searchInput = document.getElementById("search-input") as HTMLInputElement;
+      this.loadingScreen = document.getElementById("loading-screen")!;
+      this.loadingStatus = document.getElementById("loading-status")!;
+      this.mapTooltip = document.getElementById("map-tooltip")!;
+      this.onboarding = document.getElementById("onboarding")!;
+      this.aboutOverlay = document.getElementById("about-overlay")!;
+      this.aboutCloseBtn = document.getElementById("about-close")!;
+      this.brandEl = document.getElementById("brand")!;
+      this.screenshotBtn = document.getElementById("screenshot-btn")!;
+      this.eventsToggleBtn = document.getElementById("events-toggle");
+      this.eventListEl = document.getElementById("event-list")!;
+      this.shareBtn = document.getElementById("share-btn")!;
+      this.shareToast = document.getElementById("share-toast")!;
 
-    this.tourToggleBtn = document.getElementById("tour-toggle")!;
-    this.tourMenu = document.getElementById("tour-menu")!;
-    this.tourMenuItems = document.getElementById("tour-menu-items")!;
-    this.tourOverlay = document.getElementById("tour-overlay")!;
-    this.tourNameEl = document.getElementById("tour-name")!;
-    this.tourStepCounter = document.getElementById("tour-step-counter")!;
-    this.tourEventName = document.getElementById("tour-event-name")!;
-    this.tourDescription = document.getElementById("tour-description")!;
-    this.tourPrevBtn = document.getElementById("tour-prev-btn") as HTMLButtonElement;
-    this.tourNextBtn = document.getElementById("tour-next-btn") as HTMLButtonElement;
-    this.tourExitBtn = document.getElementById("tour-exit-btn")!;
+      this.tourToggleBtn = document.getElementById("tour-toggle")!;
+      this.tourMenu = document.getElementById("tour-menu")!;
+      this.tourMenuItems = document.getElementById("tour-menu-items")!;
+      this.tourOverlay = document.getElementById("tour-overlay")!;
+      this.tourNameEl = document.getElementById("tour-name")!;
+      this.tourStepCounter = document.getElementById("tour-step-counter")!;
+      this.tourEventName = document.getElementById("tour-event-name")!;
+      this.tourDescription = document.getElementById("tour-description")!;
+      this.tourPrevBtn = document.getElementById("tour-prev-btn") as HTMLButtonElement;
+      this.tourNextBtn = document.getElementById("tour-next-btn") as HTMLButtonElement;
+      this.tourExitBtn = document.getElementById("tour-exit-btn")!;
+    }
 
-    // ─── Build 3D objects ───
-    this.buildSceneObjects(scene);
+    // ─── Build 3D objects (only first time — re-add on subsequent inits) ───
+    if (firstInit) {
+      this.buildSceneObjects(scene);
+    } else {
+      // Re-add objects that dispose() removed from scene
+      scene.add(this.eventViewGroup);
+      scene.add(this.stars);
+      scene.add(this.universeMap.group);
+    }
 
     // ─── Setup UI event handlers ───
     this.setupEventHandlers(ctx);
 
-    // ─── Embed mode ───
-    const isEmbed = new URLSearchParams(window.location.search).get("embed") === "true";
-    if (isEmbed) document.body.classList.add("embed");
+    // ─── First-time only setup ───
+    if (firstInit) {
+      // Embed mode
+      const isEmbed = new URLSearchParams(window.location.search).get("embed") === "true";
+      if (isEmbed) document.body.classList.add("embed");
 
-    // ─── Onboarding ───
-    if (localStorage.getItem("warplab-onboarded")) {
-      this.onboarding.remove();
-    } else {
-      const dismissHandler = () => this.dismissOnboarding();
-      window.addEventListener("click", dismissHandler, { once: true });
-      setTimeout(() => this.dismissOnboarding(), 12000);
+      // Onboarding
+      const onboardingEl = document.getElementById("onboarding");
+      if (onboardingEl) {
+        if (localStorage.getItem("warplab-onboarded")) {
+          onboardingEl.remove();
+        } else {
+          window.addEventListener("click", () => this.dismissOnboarding(), { once: true });
+          setTimeout(() => this.dismissOnboarding(), 12000);
+        }
+      }
+
+      // Build tour menu
+      this.buildTourMenu();
     }
 
-    // ─── Build tour menu ───
-    this.buildTourMenu();
-
-    // ─── Show merger-specific UI ───
+    // ─── Show all merger-specific UI ───
     this.eventInfoEl.style.display = "block";
     this.eventListEl.style.display = "";
     this.timeControlsEl.style.display = "flex";
+    this.mapToggleBtn.style.display = "";
+    this.mapTooltip.style.display = "none";
+    this.mapLegendEl.style.display = "none";
+    this.helpOverlay.style.display = "none";
     document.getElementById("ui")!.style.display = "flex";
+    document.getElementById("brand-bar")!.style.display = "";
 
-    // ─── Load data ───
-    await this.loadEventCatalog();
+    // ─── Load data (only first time) ───
+    if (firstInit) {
+      await this.loadEventCatalog();
+      this.initialized = true;
+    } else {
+      // Re-entering: re-select current event to refresh UI state
+      if (this.currentEvent) {
+        this.selectEvent(this.currentEvent);
+      }
+      this.renderEventList();
+    }
 
     // ─── Camera setup ───
     camera.position.set(3, 4, 7);
@@ -262,6 +292,7 @@ export class MergerScene implements Scene {
     controls.maxPolarAngle = Math.PI * 0.85;
     controls.minDistance = 2;
     controls.maxDistance = 25;
+    controls.enabled = true;
 
     scene.fog = new THREE.FogExp2(0x000005, 0.04);
   }
@@ -722,14 +753,28 @@ export class MergerScene implements Scene {
   private showTourStep() {
     if (!this.activeTour) return;
     const step = this.activeTour.steps[this.activeTourStep];
+
+    // If this event isn't in the catalog, auto-advance to the next valid step
+    const event = this.events.find((e) => e.commonName === step.event);
+    if (!event) {
+      // Try to find next valid step in current direction
+      if (this.activeTourStep < this.activeTour.steps.length - 1) {
+        this.activeTourStep++;
+        this.showTourStep();
+      } else if (this.activeTourStep > 0) {
+        this.activeTourStep--;
+        this.showTourStep();
+      }
+      return;
+    }
+
     this.tourNameEl.textContent = this.activeTour.name;
     this.tourStepCounter.textContent = `${this.activeTourStep + 1} of ${this.activeTour.steps.length}`;
     this.tourEventName.textContent = step.event;
     this.tourDescription.textContent = step.description;
     this.tourPrevBtn.disabled = this.activeTourStep === 0;
     this.tourNextBtn.disabled = this.activeTourStep === this.activeTour.steps.length - 1;
-    const event = this.events.find((e) => e.commonName === step.event);
-    if (event) this.selectEvent(event);
+    this.selectEvent(event);
   }
 
   private nextTourStep() {
@@ -755,9 +800,10 @@ export class MergerScene implements Scene {
   // ─── Onboarding ─────────────────────────────────────────────────────
 
   private dismissOnboarding() {
-    if (!this.onboarding || this.onboarding.classList.contains("hidden")) return;
-    this.onboarding.classList.add("hidden");
-    setTimeout(() => this.onboarding?.remove(), 800);
+    const el = document.getElementById("onboarding");
+    if (!el || el.classList.contains("hidden")) return;
+    el.classList.add("hidden");
+    setTimeout(() => el?.remove(), 800);
     localStorage.setItem("warplab-onboarded", "1");
   }
 
@@ -877,9 +923,10 @@ export class MergerScene implements Scene {
 
   private async loadEventCatalog() {
     try {
-      this.loadingStatus.textContent = "Fetching event catalog from GWOSC...";
+      const lsStatus = document.getElementById("loading-status");
+      if (lsStatus) lsStatus.textContent = "Fetching event catalog from GWOSC...";
       this.events = await fetchEventCatalog();
-      this.loadingStatus.textContent = `${this.events.length} events loaded. Preparing...`;
+      if (lsStatus) lsStatus.textContent = `${this.events.length} events loaded. Preparing...`;
 
       this.universeMap.populate(this.events);
       this.renderEventList();
@@ -897,12 +944,16 @@ export class MergerScene implements Scene {
 
       this.eventName.textContent = this.currentEvent?.commonName ?? "No events loaded";
 
-      this.loadingScreen.classList.add("fade-out");
-      setTimeout(() => this.loadingScreen.remove(), 700);
+      const ls = document.getElementById("loading-screen");
+      if (ls) {
+        ls.classList.add("fade-out");
+        setTimeout(() => ls.remove(), 700);
+      }
       this.startIntroZoom();
     } catch (err) {
       console.error("Failed to load event catalog:", err);
-      this.loadingStatus.textContent = "Failed to connect. Using offline data...";
+      const lsEl = document.getElementById("loading-status");
+      if (lsEl) lsEl.textContent = "Failed to connect. Using offline data...";
       this.eventName.textContent = "Failed to load catalog";
 
       const fallback: GWEvent = {
@@ -937,8 +988,11 @@ export class MergerScene implements Scene {
       this.selectEvent(fallback);
       this.renderEventList();
 
-      this.loadingScreen.classList.add("fade-out");
-      setTimeout(() => this.loadingScreen.remove(), 700);
+      const ls2 = document.getElementById("loading-screen");
+      if (ls2) {
+        ls2.classList.add("fade-out");
+        setTimeout(() => ls2.remove(), 700);
+      }
       this.startIntroZoom();
     }
   }
@@ -1005,15 +1059,16 @@ export class MergerScene implements Scene {
     }
     this.boundHandlers = [];
 
-    // Remove 3D objects from scene
+    // Remove 3D objects from scene (but keep references for re-add)
     this.ctx.scene.remove(this.eventViewGroup);
     this.ctx.scene.remove(this.stars);
     this.ctx.scene.remove(this.universeMap.group);
 
-    // Stop audio
+    // Stop audio & playback
+    this.isPlaying = false;
     this.audio.stop();
 
-    // Hide merger-specific UI
+    // Hide all merger-specific UI
     this.eventInfoEl.style.display = "none";
     this.timeControlsEl.style.display = "none";
     this.mapLegendEl.style.display = "none";
@@ -1022,6 +1077,8 @@ export class MergerScene implements Scene {
     this.tourMenu.classList.remove("show");
     this.mapTooltip.style.display = "none";
     this.eventListEl.style.display = "none";
+    this.aboutOverlay.classList.remove("show");
     document.getElementById("ui")!.style.display = "none";
+    document.getElementById("brand-bar")!.style.display = "none";
   }
 }

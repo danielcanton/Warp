@@ -111,6 +111,8 @@ export class SandboxPanel {
   }
 
   dispose() {
-    this.element.remove();
+    if (this.element.parentNode) {
+      this.element.parentNode.removeChild(this.element);
+    }
   }
 }

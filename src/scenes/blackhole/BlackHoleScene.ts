@@ -24,46 +24,55 @@ export class BlackHoleScene implements Scene {
   private elapsed = 0;
 
   private boundHandlers: { el: EventTarget; type: string; fn: EventListener }[] = [];
+  private initialized = false;
 
   async init(ctx: SceneContext): Promise<void> {
     this.ctx = ctx;
     const { scene } = ctx;
+    const firstInit = !this.initialized;
 
     // Clear fog — black hole scene manages its own background
     scene.fog = null;
 
-    // ─── Fullscreen quad ───
-    // We use an orthographic-style approach: PlaneGeometry(-1,-1 to 1,1) with
-    // a custom camera that renders it as a full-screen quad.
-    const geometry = new THREE.PlaneGeometry(2, 2);
+    if (firstInit) {
+      // ─── Fullscreen quad ───
+      const geometry = new THREE.PlaneGeometry(2, 2);
 
-    this.orbitCamera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 500);
-    this.updateOrbitCamera();
+      this.orbitCamera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 500);
+      this.updateOrbitCamera();
 
-    this.bhMaterial = new THREE.ShaderMaterial({
-      vertexShader,
-      fragmentShader,
-      uniforms: {
-        uTime: { value: 0 },
-        uMass: { value: this.mass },
-        uShowDisk: { value: 1.0 },
-        uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-        uCameraMatrix: { value: this.orbitCamera.matrixWorld },
-        uFov: { value: THREE.MathUtils.degToRad(60) },
-      },
-      depthWrite: false,
-      depthTest: false,
-    });
+      this.bhMaterial = new THREE.ShaderMaterial({
+        vertexShader,
+        fragmentShader,
+        uniforms: {
+          uTime: { value: 0 },
+          uMass: { value: this.mass },
+          uShowDisk: { value: 1.0 },
+          uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+          uCameraMatrix: { value: this.orbitCamera.matrixWorld },
+          uFov: { value: THREE.MathUtils.degToRad(60) },
+        },
+        depthWrite: false,
+        depthTest: false,
+      });
 
-    this.quad = new THREE.Mesh(geometry, this.bhMaterial);
-    this.quad.frustumCulled = false;
-    scene.add(this.quad);
+      this.quad = new THREE.Mesh(geometry, this.bhMaterial);
+      this.quad.frustumCulled = false;
+      scene.add(this.quad);
+    } else {
+      // Re-add quad to scene on re-entry
+      scene.add(this.quad);
+    }
 
     // ─── Disable OrbitControls — we handle camera ourselves ───
     ctx.controls.enabled = false;
 
     // ─── UI panel ───
-    this.buildPanel();
+    if (firstInit) {
+      this.buildPanel();
+    } else {
+      document.body.appendChild(this.panelEl!);
+    }
 
     // ─── Hide irrelevant UI ───
     document.getElementById("event-info")!.style.display = "none";
@@ -72,6 +81,7 @@ export class BlackHoleScene implements Scene {
     document.getElementById("map-legend")!.style.display = "none";
     document.getElementById("help-overlay")!.style.display = "none";
     document.getElementById("ui")!.style.display = "none";
+    document.getElementById("brand-bar")!.style.display = "none";
 
     // Remove loading screen if present
     const loadingScreen = document.getElementById("loading-screen");
@@ -81,6 +91,10 @@ export class BlackHoleScene implements Scene {
     }
 
     this.setupInteraction(ctx);
+
+    if (firstInit) {
+      this.initialized = true;
+    }
   }
 
   private updateOrbitCamera() {
@@ -233,10 +247,10 @@ export class BlackHoleScene implements Scene {
     this.boundHandlers = [];
 
     this.ctx.scene.remove(this.quad);
-    this.quad.geometry.dispose();
-    this.bhMaterial.dispose();
 
-    this.panelEl?.remove();
+    if (this.panelEl?.parentNode) {
+      this.panelEl.parentNode.removeChild(this.panelEl);
+    }
 
     // Re-enable OrbitControls
     this.ctx.controls.enabled = true;

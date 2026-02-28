@@ -47,13 +47,20 @@ export class SandboxScene implements Scene {
   private speedIndex = 2;
 
   private boundHandlers: { el: EventTarget; type: string; fn: EventListener }[] = [];
+  private initialized = false;
 
   async init(ctx: SceneContext): Promise<void> {
     this.ctx = ctx;
     const { scene, camera, controls } = ctx;
+    const firstInit = !this.initialized;
 
     // ─── Build 3D objects ───
-    this.buildSceneObjects(scene);
+    if (firstInit) {
+      this.buildSceneObjects(scene);
+    } else {
+      scene.add(this.group);
+      scene.add(this.stars);
+    }
 
     // ─── Camera setup ───
     camera.position.set(3, 4, 7);
@@ -62,30 +69,36 @@ export class SandboxScene implements Scene {
     controls.maxPolarAngle = Math.PI * 0.85;
     controls.minDistance = 2;
     controls.maxDistance = 25;
+    controls.enabled = true;
     scene.fog = new THREE.FogExp2(0x000005, 0.04);
 
     // ─── UI panel ───
-    this.panel = new SandboxPanel(
-      (params) => this.onParamsChange(params),
-      () => this.triggerMerge(),
-    );
+    if (firstInit) {
+      this.panel = new SandboxPanel(
+        (params) => this.onParamsChange(params),
+        () => this.triggerMerge(),
+      );
+    }
     document.body.appendChild(this.panel.element);
 
-    // ─── Time controls ───
-    this.playBtn = document.getElementById("play-btn")!;
-    this.timeSlider = document.getElementById("time-slider") as HTMLInputElement;
-    this.timeLabel = document.getElementById("time-label")!;
-    this.speedBtn = document.getElementById("speed-btn")!;
-    this.speedLabel = document.getElementById("speed-label")!;
-    this.timeControlsEl = document.getElementById("time-controls")!;
+    // ─── Cache time control elements (once) ───
+    if (firstInit) {
+      this.playBtn = document.getElementById("play-btn")!;
+      this.timeSlider = document.getElementById("time-slider") as HTMLInputElement;
+      this.timeLabel = document.getElementById("time-label")!;
+      this.speedBtn = document.getElementById("speed-btn")!;
+      this.speedLabel = document.getElementById("speed-label")!;
+      this.timeControlsEl = document.getElementById("time-controls")!;
+    }
     this.timeControlsEl.style.display = "flex";
 
-    // Hide merger-specific UI
+    // Hide other scenes' UI
     document.getElementById("event-info")!.style.display = "none";
     document.getElementById("event-list")!.style.display = "none";
     document.getElementById("map-legend")!.style.display = "none";
     document.getElementById("help-overlay")!.style.display = "none";
     document.getElementById("ui")!.style.display = "none";
+    document.getElementById("brand-bar")!.style.display = "none";
 
     // Remove loading screen if present
     const loadingScreen = document.getElementById("loading-screen");
@@ -97,9 +110,12 @@ export class SandboxScene implements Scene {
     this.setupHandlers();
 
     // Generate initial waveform
-    this.currentWaveform = generateCustomWaveform(this.currentParams);
-    this.audio.prepare(this.currentWaveform);
-    this.updateTexture();
+    if (firstInit) {
+      this.currentWaveform = generateCustomWaveform(this.currentParams);
+      this.audio.prepare(this.currentWaveform);
+      this.updateTexture();
+      this.initialized = true;
+    }
   }
 
   private buildSceneObjects(scene: THREE.Scene) {
