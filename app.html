@@ -731,8 +731,8 @@
 
         /* Brand — top left, smaller */
         #brand-bar {
-          bottom: auto; top: env(safe-area-inset-top, 12px);
-          left: 12px;
+          bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 16px);
+          left: 16px;
           font-size: 12px;
         }
         #brand { font-size: 11px; letter-spacing: 0.12em; }
@@ -755,8 +755,8 @@
 
         /* Bottom buttons — top right, no overlap */
         #ui {
-          bottom: auto; top: env(safe-area-inset-top, 12px);
-          left: auto; right: 12px;
+          bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 16px);
+          left: auto; right: 16px;
           transform: none;
           gap: 6px;
         }
