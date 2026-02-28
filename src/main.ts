@@ -224,9 +224,14 @@ const helpBtn = document.getElementById("help-btn")!;
 const helpCloseBtn = document.getElementById("help-close")!;
 const sortSelect = document.getElementById("sort-select") as HTMLSelectElement;
 const filterChips = document.querySelectorAll<HTMLButtonElement>(".filter-chip");
+const searchInput = document.getElementById("search-input") as HTMLInputElement;
+const loadingScreen = document.getElementById("loading-screen")!;
+const loadingStatus = document.getElementById("loading-status")!;
+const mapTooltip = document.getElementById("map-tooltip")!;
 
 let activeTypeFilter: string = "all";
 let activeSortKey: string = "snr";
+let searchQuery: string = "";
 
 playBtn.addEventListener("click", () => {
   if (!currentWaveform) return;
@@ -284,6 +289,7 @@ function setViewMode(mode: ViewMode) {
     eventInfoEl.style.display = "block";
     mapLegendEl.style.display = "none";
     mapToggleBtn.textContent = "Universe Map";
+    mapTooltip.style.display = "none";
   } else {
     eventViewGroup.visible = false;
     universeMap.show();
@@ -328,7 +334,7 @@ renderer.domElement.addEventListener("click", (e) => {
   }
 });
 
-// Hover cursor
+// Hover cursor + tooltip
 renderer.domElement.addEventListener("mousemove", (e) => {
   if (viewMode !== "map") return;
   mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -336,6 +342,17 @@ renderer.domElement.addEventListener("mousemove", (e) => {
 
   const hit = universeMap.raycast(mouse, camera);
   renderer.domElement.style.cursor = hit ? "pointer" : "default";
+
+  if (hit) {
+    const type = classifyEvent(hit);
+    const dist = hit.luminosity_distance.toFixed(0);
+    mapTooltip.innerHTML = `<span class="tooltip-name">${hit.commonName}</span><span class="tooltip-detail">${type} &middot; ${dist} Mpc</span>`;
+    mapTooltip.style.display = "block";
+    mapTooltip.style.left = `${e.clientX + 14}px`;
+    mapTooltip.style.top = `${e.clientY - 10}px`;
+  } else {
+    mapTooltip.style.display = "none";
+  }
 });
 
 // ─── Event Selection ─────────────────────────────────────────────────
@@ -421,10 +438,21 @@ function selectEvent(event: GWEvent) {
       el.getAttribute("data-name") === event.commonName
     );
   });
+
+  // Update URL without reload
+  const url = new URL(window.location.href);
+  url.searchParams.set("event", event.commonName);
+  history.replaceState(null, "", url.toString());
 }
 
 function getFilteredSortedEvents(): GWEvent[] {
   let filtered = events;
+
+  // Search filter
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    filtered = filtered.filter((e) => e.commonName.toLowerCase().includes(q));
+  }
 
   // Type filter
   if (activeTypeFilter !== "all") {
@@ -505,6 +533,11 @@ sortSelect.addEventListener("change", () => {
   renderEventList();
 });
 
+searchInput.addEventListener("input", () => {
+  searchQuery = searchInput.value.trim();
+  renderEventList();
+});
+
 // ─── Help Overlay ───────────────────────────────────────────────────
 
 function toggleHelp() {
@@ -524,6 +557,14 @@ helpCloseBtn.addEventListener("click", toggleHelp);
 // ─── Keyboard Shortcuts ──────────────────────────────────────────────
 
 window.addEventListener("keydown", (e) => {
+  // Don't intercept shortcuts when typing in search
+  if (document.activeElement === searchInput) {
+    if (e.code === "Escape") {
+      searchInput.blur();
+      e.preventDefault();
+    }
+    return;
+  }
   if (e.code === "Space") {
     e.preventDefault();
     playBtn.click();
@@ -533,6 +574,10 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "KeyH") toggleHelp();
   if (e.code === "Escape" && helpOverlay.style.display === "block") {
     toggleHelp();
+  }
+  if (e.code === "Slash") {
+    e.preventDefault();
+    searchInput.focus();
   }
 });
 
@@ -613,25 +658,36 @@ window.addEventListener("resize", () => {
 
 async function init() {
   try {
-    eventName.textContent = "Loading catalog...";
+    loadingStatus.textContent = "Fetching event catalog from GWOSC...";
     events = await fetchEventCatalog();
-    eventCountEl.textContent = `${events.length} events loaded`;
+
+    loadingStatus.textContent = `${events.length} events loaded. Preparing...`;
 
     // Populate universe map
     universeMap.populate(events);
 
     renderEventList();
 
-    const gw150914 = events.find((e) => e.commonName === "GW150914");
-    if (gw150914) {
-      selectEvent(gw150914);
+    // Check URL for deep link
+    const urlEvent = new URLSearchParams(window.location.search).get("event");
+    const target = urlEvent
+      ? events.find((e) => e.commonName === urlEvent)
+      : events.find((e) => e.commonName === "GW150914");
+
+    if (target) {
+      selectEvent(target);
     } else if (events.length > 0) {
       selectEvent(events[0]);
     }
 
     eventName.textContent = currentEvent?.commonName ?? "No events loaded";
+
+    // Fade out loading screen
+    loadingScreen.classList.add("fade-out");
+    setTimeout(() => loadingScreen.remove(), 700);
   } catch (err) {
     console.error("Failed to load event catalog:", err);
+    loadingStatus.textContent = "Failed to connect. Using offline data...";
     eventName.textContent = "Failed to load catalog";
 
     const fallback: GWEvent = {
@@ -665,6 +721,9 @@ async function init() {
     universeMap.populate(events);
     selectEvent(fallback);
     renderEventList();
+
+    loadingScreen.classList.add("fade-out");
+    setTimeout(() => loadingScreen.remove(), 700);
   }
 }
 

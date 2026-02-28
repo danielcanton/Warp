@@ -390,9 +390,88 @@
         color: rgba(255,255,255,0.4);
         margin-left: 4px;
       }
+
+      /* ─── Loading Screen ─── */
+      #loading-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        background: #000005;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 0.6s ease;
+      }
+      #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+      .loading-title {
+        font-size: 28px;
+        font-weight: 600;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.8);
+        margin-bottom: 24px;
+      }
+      .loading-ring {
+        width: 40px;
+        height: 40px;
+        border: 2px solid rgba(99, 102, 241, 0.15);
+        border-top-color: #6366f1;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 16px;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .loading-status {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.3);
+        letter-spacing: 0.04em;
+      }
+
+      /* ─── Search Input ─── */
+      .search-row {
+        padding: 0 4px;
+        margin-bottom: 8px;
+      }
+      .search-input {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 12px;
+        padding: 5px 10px;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      .search-input::placeholder { color: rgba(255, 255, 255, 0.2); }
+      .search-input:focus { border-color: rgba(99, 102, 241, 0.4); }
+
+      /* ─── Map Tooltip ─── */
+      #map-tooltip {
+        position: fixed;
+        z-index: 15;
+        padding: 6px 12px;
+        font-size: 12px;
+        pointer-events: none;
+        display: none;
+        white-space: nowrap;
+      }
+      .tooltip-name { color: #fff; font-weight: 500; }
+      .tooltip-detail { color: rgba(255, 255, 255, 0.4); font-size: 11px; margin-left: 8px; }
     </style>
   </head>
   <body>
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+      <div class="loading-title">Warp</div>
+      <div class="loading-ring"></div>
+      <div class="loading-status" id="loading-status">Connecting to LIGO/Virgo/KAGRA...</div>
+    </div>
+
+    <!-- Map Tooltip -->
+    <div id="map-tooltip" class="glass"></div>
+
     <div id="brand">WARP</div>
 
     <!-- Event View: Info Panel -->
@@ -470,6 +549,9 @@
     <div id="event-list" class="glass">
       <h3>Events</h3>
       <div id="event-count"></div>
+      <div class="search-row">
+        <input type="text" class="search-input" id="search-input" placeholder="Search events..." />
+      </div>
       <div class="filter-bar">
         <button class="filter-chip active" data-type="all">All</button>
         <button class="filter-chip bbh" data-type="BBH">BBH</button>
