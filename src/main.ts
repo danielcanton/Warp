@@ -3,7 +3,6 @@ inject();
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { VRButton } from "three/addons/webxr/VRButton.js";
 import {
   EffectComposer,
   EffectPass,
@@ -13,11 +12,14 @@ import {
   ToneMappingMode,
 } from "postprocessing";
 import { SceneManager } from "./lib/SceneManager";
+import { XRManager } from "./lib/XRManager";
 import { MergerScene } from "./scenes/merger/MergerScene";
 import { SandboxScene } from "./scenes/sandbox/SandboxScene";
 import { BlackHoleScene } from "./scenes/blackhole/BlackHoleScene";
 import { NBodyScene } from "./scenes/nbody/NBodyScene";
 import type { SceneContext } from "./scenes/types";
+import { initViewMode, setViewMode, onViewModeChange } from "./lib/view-mode";
+import type { ViewMode } from "./lib/view-mode";
 
 // ─── Three.js Setup ──────────────────────────────────────────────────
 
@@ -70,26 +72,21 @@ const toneMapping = new ToneMappingEffect({
 
 composer.addPass(new EffectPass(camera, bloom, toneMapping));
 
-// ─── VR Button ───────────────────────────────────────────────────────
+// ─── XR Manager ─────────────────────────────────────────────────────
+
+const xrManager = new XRManager(renderer, scene);
+xrManager.setupCameraRig(camera);
 
 const vrButtonEl = document.getElementById("vr-button")!;
-if ("xr" in navigator) {
-  (navigator as Navigator & { xr: XRSystem }).xr
-    .isSessionSupported("immersive-vr")
-    .then((supported) => {
-      if (supported) {
-        const vrBtn = VRButton.createButton(renderer);
-        vrBtn.style.cssText = vrButtonEl.style.cssText;
-        vrButtonEl.replaceWith(vrBtn);
-      } else {
-        vrButtonEl.textContent = "VR Not Supported";
-        vrButtonEl.style.opacity = "0.4";
-      }
-    });
-} else {
-  vrButtonEl.textContent = "WebXR Not Available";
-  vrButtonEl.style.opacity = "0.4";
-}
+xrManager.createButton().then((btn) => {
+  if (btn) {
+    btn.style.cssText = vrButtonEl.style.cssText;
+    vrButtonEl.replaceWith(btn);
+  } else {
+    vrButtonEl.textContent = "VR Not Supported";
+    vrButtonEl.style.opacity = "0.4";
+  }
+});
 
 // ─── Scene Manager ───────────────────────────────────────────────────
 
@@ -102,6 +99,7 @@ const ctx: SceneContext = {
   bloom,
   audioCtx: null,
   container: document.body,
+  xrManager,
 };
 
 const sceneManager = new SceneManager(ctx);
@@ -122,6 +120,45 @@ if (params.get("embed") === "true") {
 const startScene = params.get("scene") ?? "merger";
 sceneManager.switchScene(startScene);
 
+// ─── View Mode ──────────────────────────────────────────────────────
+
+const initialMode = initViewMode();
+
+const gearBtn = document.getElementById("gear-btn")!;
+const dropdown = document.getElementById("view-mode-dropdown")!;
+const modeOptions = dropdown.querySelectorAll<HTMLButtonElement>(".mode-option");
+
+// Set initial active state from resolved mode
+function updateModeUI(mode: ViewMode): void {
+  modeOptions.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.mode === mode);
+  });
+}
+updateModeUI(initialMode);
+
+gearBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  dropdown.classList.toggle("show");
+});
+
+modeOptions.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const mode = btn.dataset.mode as ViewMode;
+    setViewMode(mode);
+    dropdown.classList.remove("show");
+  });
+});
+
+// Close dropdown on click outside
+document.addEventListener("click", (e) => {
+  if (!(e.target as HTMLElement).closest("#view-mode-gear")) {
+    dropdown.classList.remove("show");
+  }
+});
+
+// Sync UI when mode changes programmatically
+onViewModeChange(updateModeUI);
+
 // ─── Render Loop ─────────────────────────────────────────────────────
 
 const clock = new THREE.Clock();
@@ -134,6 +171,7 @@ function animate() {
   sceneManager.update(delta, elapsedTotal);
 
   if (renderer.xr.isPresenting) {
+    xrManager.update();
     renderer.render(scene, camera);
   } else {
     composer.render(delta);
