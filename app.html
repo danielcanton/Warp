@@ -933,6 +933,7 @@
         border-radius: 20px;
       }
       body.embed #spectrogram-panel { display: none !important; }
+      body.embed #strain-chart-panel { display: none !important; }
       /* Embed: scene selector hidden (scene chosen via ?scene= param) */
       body.embed #scene-selector { display: none !important; }
       /* Embed: compact panels for non-merger scenes */
@@ -1102,6 +1103,17 @@
           border-radius: 14px;
         }
 
+        /* Strain chart — compact on mobile */
+        #strain-chart-panel {
+          bottom: 220px;
+          left: 12px;
+          right: 12px;
+          width: auto;
+          transform: none;
+          height: 120px;
+          border-radius: 14px;
+        }
+
         /* About overlay — mobile friendly */
         #about-overlay { padding: 16px; }
         .about-card {
@@ -1150,6 +1162,25 @@
         border-width: 1.5px;
         margin-right: 8px;
         margin-bottom: 0;
+      }
+
+      /* ─── Strain Chart Panel ─── */
+      #strain-chart-panel {
+        position: fixed;
+        bottom: 320px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 9;
+        width: min(600px, calc(100vw - 48px));
+        height: 160px;
+        border-radius: 12px;
+        overflow: hidden;
+        display: none;
+      }
+      #strain-chart-panel canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
       }
 
       /* ─── View Mode Gear ─── */
@@ -1762,6 +1793,11 @@
         <div class="loading-ring"></div>
         Computing spectrogram...
       </div>
+    </div>
+
+    <!-- Strain overlay chart (Student/Researcher modes only) -->
+    <div id="strain-chart-panel" class="glass">
+      <canvas id="strain-chart-canvas"></canvas>
     </div>
 
     <!-- Time Controls (event view only) -->

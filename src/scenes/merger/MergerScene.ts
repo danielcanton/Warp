@@ -14,6 +14,7 @@ import { UniverseMap } from "../../lib/universe-map";
 import { VRPanel } from "../../lib/VRPanel";
 import { loadStrain, hasStrainData } from "../../lib/strain";
 import { computeSpectrogram, renderSpectrogram, disposeSpectrogramWorker, type SpectrogramData } from "../../lib/spectrogram";
+import { prepareChartData, renderStrainChart, invalidateStrainChart, type StrainChartData } from "../../lib/strain-chart";
 import { getViewMode, onViewModeChange, type ViewMode } from "../../lib/view-mode";
 import { performExport } from "../../lib/export";
 import vertexShader from "../../shaders/spacetime.vert.glsl?raw";
@@ -174,6 +175,11 @@ export class MergerScene implements Scene {
   private spectrogramComputing = false;
   private unsubViewMode: (() => void) | null = null;
 
+  // Strain chart
+  private strainChartPanel!: HTMLElement;
+  private strainChartCanvas!: HTMLCanvasElement;
+  private strainChartData: StrainChartData | null = null;
+
   // Intro animation
   private introProgress = 0;
   private introActive = false;
@@ -239,6 +245,8 @@ export class MergerScene implements Scene {
       this.spectrogramPanel = document.getElementById("spectrogram-panel")!;
       this.spectrogramCanvas = document.getElementById("spectrogram-canvas") as HTMLCanvasElement;
       this.spectrogramLoading = document.getElementById("spectrogram-loading")!;
+      this.strainChartPanel = document.getElementById("strain-chart-panel")!;
+      this.strainChartCanvas = document.getElementById("strain-chart-canvas") as HTMLCanvasElement;
 
       this.tourToggleBtn = document.getElementById("tour-toggle")!;
       this.tourMenu = document.getElementById("tour-menu")!;
@@ -270,6 +278,7 @@ export class MergerScene implements Scene {
     if (!this.unsubViewMode) {
       this.unsubViewMode = onViewModeChange((mode) => {
         this.updateSpectrogramVisibility();
+        this.updateStrainChartVisibility();
         this.updateExportVisibility();
         this.applyInfoPanelModeGating(mode);
         this.updateInfoPanelValues();
@@ -305,6 +314,7 @@ export class MergerScene implements Scene {
     this.helpOverlay.style.display = "none";
     document.getElementById("ui")!.style.display = "flex";
     this.updateSpectrogramVisibility();
+    this.updateStrainChartVisibility();
     this.updateExportVisibility();
 
     // Apply initial mode gating
@@ -703,6 +713,7 @@ export class MergerScene implements Scene {
       this.mapToggleBtn.textContent = "Universe Map";
       this.mapTooltip.style.display = "none";
       this.updateSpectrogramVisibility();
+      this.updateStrainChartVisibility();
       this.updateExportVisibility();
     } else {
       this.eventViewGroup.visible = false;
@@ -863,6 +874,9 @@ export class MergerScene implements Scene {
 
     // Load spectrogram if in student/researcher mode
     this.loadSpectrogram(event.commonName);
+
+    // Load strain chart if in student/researcher mode
+    this.loadStrainChart(event);
   }
 
   // ─── Event list ─────────────────────────────────────────────────────
@@ -1139,6 +1153,34 @@ export class MergerScene implements Scene {
     this.spectrogramPanel.style.display = shouldShow ? "block" : "none";
   }
 
+  // ─── Strain Chart ───────────────────────────────────────────────────
+
+  private updateStrainChartVisibility() {
+    const mode = getViewMode();
+    const shouldShow = mode !== "explorer" && this.viewMode === "event" && this.strainChartData != null;
+    this.strainChartPanel.style.display = shouldShow ? "block" : "none";
+  }
+
+  private async loadStrainChart(event: GWEvent) {
+    const mode = getViewMode();
+    if (mode === "explorer" || !this.currentWaveform) return;
+
+    let strain: import("../../lib/strain").StrainData | null = null;
+    try {
+      const has = await hasStrainData(event.commonName);
+      if (has) {
+        strain = await loadStrain(event.commonName, "H1");
+      }
+    } catch {
+      // Strain unavailable — will show template only
+    }
+
+    invalidateStrainChart();
+    this.strainChartData = prepareChartData(this.currentWaveform, strain, event);
+    this.updateStrainChartVisibility();
+    renderStrainChart(this.strainChartCanvas, this.strainChartData, this.playbackTime);
+  }
+
   // ─── Export ──────────────────────────────────────────────────────────
 
   private updateExportVisibility() {
@@ -1352,6 +1394,11 @@ export class MergerScene implements Scene {
       if (this.spectrogramData && this.spectrogramPanel.style.display !== "none") {
         renderSpectrogram(this.spectrogramCanvas, this.spectrogramData, this.playbackTime);
       }
+
+      // Update strain chart cursor
+      if (this.strainChartData && this.strainChartPanel.style.display !== "none") {
+        renderStrainChart(this.strainChartCanvas, this.strainChartData, this.playbackTime);
+      }
     } else {
       this.ctx.bloom.intensity = 1.8;
     }
@@ -1397,6 +1444,11 @@ export class MergerScene implements Scene {
     // Clean up spectrogram
     this.spectrogramPanel.style.display = "none";
     this.spectrogramData = null;
+
+    // Clean up strain chart
+    this.strainChartPanel.style.display = "none";
+    this.strainChartData = null;
+    invalidateStrainChart();
     if (this.unsubViewMode) {
       this.unsubViewMode();
       this.unsubViewMode = null;
