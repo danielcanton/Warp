@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import SplashCursor from "./components/SplashCursor";
 import DecryptedText from "./components/DecryptedText";
-import StarBorder from "./components/StarBorder";
+import GlassCTA from "./components/GlassCTA";
 import "./landing.css";
 
 function Landing() {
@@ -49,18 +49,13 @@ function Landing() {
         </p>
 
         {/* CTA */}
-        <StarBorder
-          color="#818cf8"
-          speed="4s"
-          thickness={2}
+        <GlassCTA
           onClick={() => {
             window.location.href = "/app.html";
           }}
         >
-          <span className="text-lg font-medium tracking-wide px-4">
-            Enter the Lab
-          </span>
-        </StarBorder>
+          Enter the Lab
+        </GlassCTA>
 
         {/* Footer */}
         <div className="absolute bottom-8 flex flex-col items-center gap-3">
