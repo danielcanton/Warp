@@ -239,6 +239,8 @@ const brandEl = document.getElementById("brand")!;
 const screenshotBtn = document.getElementById("screenshot-btn")!;
 const eventsToggleBtn = document.getElementById("events-toggle");
 const eventListEl = document.getElementById("event-list")!;
+const shareBtn = document.getElementById("share-btn")!;
+const shareToast = document.getElementById("share-toast")!;
 
 // ─── Embed Mode ──────────────────────────────────────────────────────
 const isEmbed =
@@ -314,6 +316,44 @@ if (eventsToggleBtn) {
     eventsToggleBtn.textContent = isOpen ? "Close" : "Events";
   });
 }
+
+// Share button
+let shareToastTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showShareToast(message: string) {
+  shareToast.textContent = message;
+  shareToast.classList.add("show");
+  if (shareToastTimer) clearTimeout(shareToastTimer);
+  shareToastTimer = setTimeout(() => {
+    shareToast.classList.remove("show");
+  }, 2000);
+}
+
+shareBtn.addEventListener("click", async () => {
+  if (!currentEvent) return;
+  const shareUrl = `https://warplab.app/app.html?event=${encodeURIComponent(currentEvent.commonName)}`;
+
+  // On mobile, try Web Share API first
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: `WarpLab — ${currentEvent.commonName}`,
+        url: shareUrl,
+      });
+      return;
+    } catch {
+      // User cancelled or API failed — fall through to clipboard
+    }
+  }
+
+  // Clipboard fallback
+  try {
+    await navigator.clipboard.writeText(shareUrl);
+    showShareToast("Link copied!");
+  } catch {
+    showShareToast("Could not copy link");
+  }
+});
 
 let activeTypeFilter: string = "all";
 let activeSortKey: string = "snr";

@@ -78,6 +78,46 @@
         margin-top: 4px;
       }
       .help-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+      .share-btn {
+        width: 24px;
+        height: 24px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 50%;
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        flex-shrink: 0;
+        margin-top: 4px;
+      }
+      .share-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+
+      /* ─── Share Toast ─── */
+      #share-toast {
+        position: fixed;
+        bottom: 140px;
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        padding: 8px 18px;
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.85);
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.3s ease, transform 0.3s ease;
+        z-index: 100;
+      }
+      #share-toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
       .type-badge {
         display: inline-block;
         border-radius: 4px;
@@ -748,6 +788,7 @@
         }
         #event-info h2 { font-size: 16px; }
         #event-info .help-btn { display: flex; width: 22px; height: 22px; font-size: 11px; margin-top: 0; }
+        #event-info .share-btn { display: flex; width: 22px; height: 22px; margin-top: 0; }
         #event-info .info-divider,
         #event-info .info-detail,
         #event-info .info-catalog { display: none; }
@@ -854,7 +895,16 @@
     <div id="event-info" class="glass">
       <div class="info-header">
         <h2 id="event-name">Loading...</h2>
-        <button class="help-btn" id="help-btn" title="What am I looking at? (H)">?</button>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+          <button class="share-btn" id="share-btn" title="Share this event">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3"/>
+              <path d="M10 1h5v5"/>
+              <path d="M8 8L15 1"/>
+            </svg>
+          </button>
+          <button class="help-btn" id="help-btn" title="What am I looking at? (H)">?</button>
+        </div>
       </div>
       <div id="type-badge" class="type-badge bbh"></div>
       <div><span class="param">Masses </span><span class="value" id="masses">&mdash;</span></div>
@@ -1010,6 +1060,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Share Toast -->
+    <div id="share-toast">Link copied!</div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>
