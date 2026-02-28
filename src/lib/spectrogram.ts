@@ -135,7 +135,7 @@ async function getPrecomputedManifest(): Promise<Record<string, PrecomputedManif
   }
 }
 
-async function loadPrecomputed(eventName: string, detector: string): Promise<SpectrogramData | null> {
+export async function loadPrecomputed(eventName: string, detector: string): Promise<SpectrogramData | null> {
   const manifest = await getPrecomputedManifest();
   const key = `${eventName}/${detector}`;
   const entry = manifest[key];

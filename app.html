@@ -47,20 +47,22 @@
         z-index: 10;
         font-size: 13px;
         line-height: 1.8;
-        padding: 0;
+        padding: 16px 20px;
         min-width: 240px;
         max-width: 300px;
-        overflow: hidden;
       }
       #event-info .panel-body {
-        padding: 12px 20px 16px;
+        padding: 0;
       }
       .info-header {
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
         margin-bottom: 6px;
+        cursor: grab;
+        user-select: none;
       }
+      .info-header:active { cursor: grabbing; }
       #event-info h2 {
         font-size: 22px;
         font-weight: 600;
@@ -925,13 +927,12 @@
       body.embed #event-info {
         top: 12px;
         left: 12px;
-        padding: 0;
+        padding: 10px 14px;
         font-size: 12px;
         min-width: 200px;
         max-width: 260px;
       }
-      body.embed #event-info .panel-header { display: none; }
-      body.embed #event-info .panel-body { padding: 10px 14px; }
+      body.embed #event-info .panel-minimize-btn { display: none; }
       body.embed #event-info h2 { font-size: 16px; }
       body.embed #event-info .help-btn { display: none; }
       body.embed #event-info .info-divider,
@@ -1007,9 +1008,7 @@
           animation: none;
           line-height: 1.4;
         }
-        #event-info .panel-header { display: none; }
         #event-info .panel-body {
-          padding: 10px 14px;
           display: flex;
           flex-wrap: wrap;
           align-items: center;
@@ -1019,6 +1018,7 @@
           width: 100%;
           margin-bottom: 0;
         }
+        #event-info .panel-minimize-btn { display: none; }
         #event-info h2 { font-size: 16px; }
         #event-info .help-btn { display: flex; width: 22px; height: 22px; font-size: 11px; margin-top: 0; }
         #event-info .share-btn { display: flex; width: 22px; height: 22px; margin-top: 0; }
@@ -1229,10 +1229,10 @@
         font-weight: 500;
       }
       .panel-header-grip {
-        width: 24px;
+        width: 28px;
         height: 3px;
         border-radius: 2px;
-        background: rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.25);
         flex-shrink: 0;
       }
       .panel-header-inline {
@@ -1248,13 +1248,13 @@
         background: rgba(255, 255, 255, 0.2);
       }
       .panel-minimize-btn {
-        width: 18px;
-        height: 18px;
-        background: none;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        width: 20px;
+        height: 20px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.15);
         border-radius: 4px;
-        color: rgba(255, 255, 255, 0.3);
-        font-size: 14px;
+        color: rgba(255, 255, 255, 0.45);
+        font-size: 15px;
         line-height: 1;
         cursor: pointer;
         display: flex;
@@ -1265,9 +1265,9 @@
         padding: 0;
       }
       .panel-minimize-btn:hover {
-        background: rgba(255, 255, 255, 0.08);
-        color: rgba(255, 255, 255, 0.6);
-        border-color: rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.12);
+        color: rgba(255, 255, 255, 0.8);
+        border-color: rgba(255, 255, 255, 0.3);
       }
       .panel-body { transition: max-height 0.2s ease, opacity 0.15s ease; overflow: hidden; }
       .panel-minimized .panel-body { max-height: 0 !important; opacity: 0; overflow: hidden; }
@@ -1838,32 +1838,28 @@
 
     <!-- Event View: Info Panel -->
     <div id="event-info" class="glass">
-      <div class="panel-header" data-drag-target="event-info">
-        <span class="panel-header-title">Event Info</span>
-        <div class="panel-header-grip"></div>
-        <button class="panel-minimize-btn" data-minimize-target="event-info" title="Minimize">&#8722;</button>
+      <div class="info-header" data-drag-target="event-info">
+        <h2 id="event-name">Loading...</h2>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+          <button class="export-btn" id="export-btn" title="Export data">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 1v10M4 7l4 4 4-4"/>
+              <path d="M2 13h12"/>
+            </svg>
+            <span id="export-btn-label">Export</span>
+          </button>
+          <button class="share-btn" id="share-btn" title="Share this event">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3"/>
+              <path d="M10 1h5v5"/>
+              <path d="M8 8L15 1"/>
+            </svg>
+          </button>
+          <button class="help-btn" id="help-btn" title="What am I looking at? (H)">?</button>
+          <button class="panel-minimize-btn" data-minimize-target="event-info" title="Minimize">&#8722;</button>
+        </div>
       </div>
       <div class="panel-body">
-        <div class="info-header">
-          <h2 id="event-name">Loading...</h2>
-          <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
-            <button class="export-btn" id="export-btn" title="Export data">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M8 1v10M4 7l4 4 4-4"/>
-                <path d="M2 13h12"/>
-              </svg>
-              <span id="export-btn-label">Export</span>
-            </button>
-            <button class="share-btn" id="share-btn" title="Share this event">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M6 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3"/>
-                <path d="M10 1h5v5"/>
-                <path d="M8 8L15 1"/>
-              </svg>
-            </button>
-            <button class="help-btn" id="help-btn" title="What am I looking at? (H)">?</button>
-          </div>
-        </div>
         <div id="type-badge" class="type-badge bbh"></div>
         <div><span class="param">Masses </span><span class="value" id="masses">&mdash;</span></div>
         <div><span class="param">Distance </span><span class="value" id="distance">&mdash;</span></div>
@@ -2110,11 +2106,11 @@
       // ─── Drag ───
       let active = null, startX, startY, origX, origY;
       function onDown(e) {
-        // Support both .panel-header and legacy .panel-drag-handle
-        const handle = e.target.closest('.panel-header[data-drag-target], .panel-drag-handle[data-drag-target]');
+        // Support any element with data-drag-target
+        const handle = e.target.closest('[data-drag-target]');
         if (!handle) return;
-        // Don't drag when clicking minimize button
-        if (e.target.closest('.panel-minimize-btn')) return;
+        // Don't drag when clicking buttons
+        if (e.target.closest('.panel-minimize-btn, .help-btn, .share-btn, .export-btn, button')) return;
         const id = handle.dataset.dragTarget;
         active = document.getElementById(id);
         if (!active) return;

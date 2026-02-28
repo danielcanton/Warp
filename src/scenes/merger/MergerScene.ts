@@ -13,7 +13,7 @@ import { BinarySystem } from "../../lib/binary";
 import { UniverseMap } from "../../lib/universe-map";
 import { VRPanel } from "../../lib/VRPanel";
 import { loadStrain, hasStrainData, getAvailableDetectors, whiten } from "../../lib/strain";
-import { computeSpectrogram, renderSpectrogram, disposeSpectrogramWorker, installSpectrogramZoomPan, resetSpectrogramView, type SpectrogramData } from "../../lib/spectrogram";
+import { computeSpectrogram, loadPrecomputed, renderSpectrogram, disposeSpectrogramWorker, installSpectrogramZoomPan, resetSpectrogramView, type SpectrogramData } from "../../lib/spectrogram";
 import { prepareChartData, renderStrainChart, invalidateStrainChart, type StrainChartData } from "../../lib/strain-chart";
 import { getViewMode, onViewModeChange, type ViewMode } from "../../lib/view-mode";
 import { performExport } from "../../lib/export";
@@ -1312,6 +1312,23 @@ export class MergerScene implements Scene {
     const mode = getViewMode();
     if (mode === "explorer") return;
 
+    const detector = mode === "researcher" ? this.activeDetector : "H1";
+
+    // Reset zoom when switching events/detectors
+    resetSpectrogramView();
+
+    // 1. Try pre-computed spectrogram first (instant, no strain needed)
+    const precomputed = await loadPrecomputed(eventName, detector);
+    if (precomputed) {
+      this.spectrogramData = precomputed;
+      this.spectrogramLoading.style.display = "none";
+      this.updateSpectrogramVisibility();
+      this.updateSpectrogramZoomPan();
+      renderSpectrogram(this.spectrogramCanvas, precomputed, this.playbackTime);
+      return;
+    }
+
+    // 2. Fall back to strain-based computation
     const hasData = await hasStrainData(eventName);
     if (!hasData) {
       this.spectrogramData = null;
@@ -1319,16 +1336,13 @@ export class MergerScene implements Scene {
       return;
     }
 
-    // Reset zoom when switching events/detectors
-    resetSpectrogramView();
-
     this.spectrogramComputing = true;
     this.spectrogramLoading.style.display = "flex";
     this.updateSpectrogramVisibility();
 
     try {
-      const detector = mode === "researcher" ? this.activeDetector : undefined;
-      const strain = await loadStrain(eventName, detector);
+      const det = mode === "researcher" ? this.activeDetector : undefined;
+      const strain = await loadStrain(eventName, det);
       const data = await computeSpectrogram(strain, eventName);
       this.spectrogramData = data;
       this.spectrogramLoading.style.display = "none";
