@@ -10,7 +10,7 @@ import "./landing.css";
 
 function Landing() {
   return (
-    <div className="relative min-h-screen bg-black text-white overflow-hidden">
+    <div className="relative h-screen bg-black text-white overflow-hidden">
       {/* Fluid cursor background */}
       <SplashCursor
         BACK_COLOR={{ r: 0, g: 0, b: 0 }}
@@ -21,7 +21,7 @@ function Landing() {
       />
 
       {/* Content overlay */}
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6">
+      <div className="relative z-10 flex flex-col items-center justify-center h-full px-6">
         {/* Logo / Title */}
         <div className="mb-4">
           <h1 className="text-6xl sm:text-8xl font-bold tracking-tight">
