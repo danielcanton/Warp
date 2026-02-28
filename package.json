@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "download-strain": "python3 scripts/download-strain.py"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.1",

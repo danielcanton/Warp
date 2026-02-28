@@ -47,6 +47,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,wasm,glsl,vert,frag}"],
+        globIgnores: ["strain/**"],
         runtimeCaching: [
           {
             urlPattern:
