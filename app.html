@@ -669,6 +669,9 @@
       .tooltip-name { color: #fff; font-weight: 500; }
       .tooltip-detail { color: rgba(255, 255, 255, 0.4); font-size: 11px; margin-left: 8px; }
 
+      /* ── Screenshot button icon ── */
+      .btn-icon { vertical-align: -3px; margin-right: 2px; }
+
       /* ── Events toggle button (mobile only) ── */
       .mobile-only { display: none; }
 
@@ -780,6 +783,8 @@
           padding: 7px 12px;
           border-radius: 10px;
         }
+        .btn-label { display: none; }
+        .btn-icon { margin-right: 0; }
 
         /* About overlay — mobile friendly */
         #about-overlay { padding: 16px; }
@@ -922,6 +927,7 @@
 
     <!-- Bottom Bar -->
     <div id="ui">
+      <button class="ui-btn" id="screenshot-btn" title="Screenshot (P)"><svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span class="btn-label"> Capture</span></button>
       <button class="ui-btn" id="map-toggle" title="Toggle universe map (M)">Universe Map</button>
       <button class="ui-btn mobile-only" id="events-toggle">Events</button>
     </div>
