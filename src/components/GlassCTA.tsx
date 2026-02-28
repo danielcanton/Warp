@@ -36,7 +36,6 @@ export default function GlassCTA({
         rounded-full
         border border-white/[0.08]
         bg-white/[0.04] backdrop-blur-xl
-        px-20 py-5
         text-white text-lg font-medium tracking-wide
         transition-all duration-300
         hover:border-white/[0.15] hover:bg-white/[0.07]
@@ -44,6 +43,7 @@ export default function GlassCTA({
         active:scale-[0.97]
         ${className}
       `}
+      style={{ padding: "20px 80px" }}
     >
       {/* Spotlight follow */}
       <div
