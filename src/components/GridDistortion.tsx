@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 
 interface GridDistortionProps {
@@ -12,11 +12,9 @@ interface GridDistortionProps {
 const vertexShader = `
 uniform float time;
 varying vec2 vUv;
-varying vec3 vPosition;
 
 void main() {
   vUv = uv;
-  vPosition = position;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
 `;
@@ -24,19 +22,28 @@ void main() {
 const fragmentShader = `
 uniform sampler2D uDataTexture;
 uniform sampler2D uTexture;
-uniform vec4 resolution;
+uniform float time;
 varying vec2 vUv;
 
 void main() {
   vec2 uv = vUv;
   vec4 offset = texture2D(uDataTexture, vUv);
-  gl_FragColor = texture2D(uTexture, uv - 0.02 * offset.rg);
+
+  // Subtle ambient drift so the grid feels alive even without mouse
+  float drift = 0.003 * sin(time * 0.4 + vUv.x * 6.0) + 0.002 * cos(time * 0.3 + vUv.y * 5.0);
+  uv.x += drift;
+  uv.y += 0.003 * cos(time * 0.35 + vUv.x * 4.0);
+
+  // Mouse-driven distortion
+  uv -= 0.02 * offset.rg;
+
+  gl_FragColor = texture2D(uTexture, uv);
 }
 `;
 
 /** Generate a dark spacetime grid as a canvas-backed texture */
 function createGridTexture(): THREE.CanvasTexture {
-  const W = 1200, H = 800;
+  const W = 1600, H = 1000;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -46,43 +53,55 @@ function createGridTexture(): THREE.CanvasTexture {
   ctx.fillStyle = '#000005';
   ctx.fillRect(0, 0, W, H);
 
-  const gridSize = 40;
+  const gridSize = 48;
 
-  // Grid lines
+  // Grid lines — brighter and thicker
   for (let y = 0; y <= H; y += gridSize) {
-    const alpha = 0.08 + 0.04 * Math.sin(y * 0.01);
+    const alpha = 0.14 + 0.06 * Math.sin(y * 0.008);
     ctx.strokeStyle = `rgba(99, 102, 241, ${alpha})`;
-    ctx.lineWidth = 0.5;
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(W, y);
     ctx.stroke();
   }
   for (let x = 0; x <= W; x += gridSize) {
-    const alpha = 0.08 + 0.04 * Math.sin(x * 0.01);
+    const alpha = 0.14 + 0.06 * Math.sin(x * 0.008);
     ctx.strokeStyle = `rgba(99, 102, 241, ${alpha})`;
-    ctx.lineWidth = 0.5;
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, H);
     ctx.stroke();
   }
 
-  // Central glow — gravitational well
-  const gradient = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, 400);
-  gradient.addColorStop(0, 'rgba(139, 92, 246, 0.15)');
-  gradient.addColorStop(0.3, 'rgba(99, 102, 241, 0.06)');
-  gradient.addColorStop(0.6, 'rgba(34, 211, 238, 0.03)');
+  // Grid intersections — small bright dots
+  for (let y = 0; y <= H; y += gridSize) {
+    for (let x = 0; x <= W; x += gridSize) {
+      const dist = Math.sqrt((x - W / 2) ** 2 + (y - H / 2) ** 2);
+      const alpha = Math.max(0.05, 0.25 - dist / 1200);
+      ctx.fillStyle = `rgba(165, 180, 252, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Central glow — gravitational well (stronger)
+  const gradient = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, 500);
+  gradient.addColorStop(0, 'rgba(139, 92, 246, 0.25)');
+  gradient.addColorStop(0.2, 'rgba(99, 102, 241, 0.12)');
+  gradient.addColorStop(0.5, 'rgba(34, 211, 238, 0.05)');
   gradient.addColorStop(1, 'rgba(0, 0, 5, 0)');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, W, H);
 
-  // Scatter faint stars
-  for (let i = 0; i < 200; i++) {
+  // Scatter stars
+  for (let i = 0; i < 300; i++) {
     const x = Math.random() * W;
     const y = Math.random() * H;
-    const r = Math.random() * 1.2;
-    const alpha = 0.1 + Math.random() * 0.3;
+    const r = Math.random() * 1.4;
+    const alpha = 0.15 + Math.random() * 0.35;
     ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -92,15 +111,15 @@ function createGridTexture(): THREE.CanvasTexture {
   const tex = new THREE.CanvasTexture(canvas);
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
-  tex.wrapS = THREE.ClampToEdgeWrapping;
-  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
   return tex;
 }
 
 const GridDistortion: React.FC<GridDistortionProps> = ({
-  grid = 15,
-  mouse = 0.1,
-  strength = 0.15,
+  grid = 34,
+  mouse = 0.15,
+  strength = 0.25,
   relaxation = 0.9,
   className = ''
 }) => {
@@ -139,6 +158,8 @@ const GridDistortion: React.FC<GridDistortionProps> = ({
     }
 
     const dataTexture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat, THREE.FloatType);
+    dataTexture.magFilter = THREE.LinearFilter;
+    dataTexture.minFilter = THREE.LinearFilter;
     dataTexture.needsUpdate = true;
 
     const uniforms = {

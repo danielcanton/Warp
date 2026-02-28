@@ -12,12 +12,7 @@ function Landing() {
   return (
     <div className="relative h-screen bg-black text-white overflow-hidden">
       {/* Spacetime grid distortion background */}
-      <GridDistortion
-        grid={15}
-        mouse={0.12}
-        strength={0.2}
-        relaxation={0.92}
-      />
+      <GridDistortion />
 
       {/* Content overlay */}
       <div className="relative z-10 flex flex-col items-center justify-center h-full px-6">
