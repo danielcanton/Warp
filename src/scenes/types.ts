@@ -4,6 +4,7 @@ import type {
   BloomEffect,
 } from "postprocessing";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import type { XRManager } from "../lib/XRManager";
 
 export interface SceneContext {
   renderer: THREE.WebGLRenderer;
@@ -14,6 +15,7 @@ export interface SceneContext {
   bloom: BloomEffect;
   audioCtx: AudioContext | null;
   container: HTMLElement;
+  xrManager: XRManager | null;
 }
 
 export interface Scene {

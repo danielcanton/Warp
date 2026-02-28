@@ -92,7 +92,6 @@ export class BlackHoleScene implements Scene {
     document.getElementById("map-legend")!.style.display = "none";
     document.getElementById("help-overlay")!.style.display = "none";
     document.getElementById("ui")!.style.display = "none";
-    document.getElementById("brand-bar")!.style.display = "none";
 
     // Remove loading screen if present
     const loadingScreen = document.getElementById("loading-screen");
@@ -172,9 +171,10 @@ export class BlackHoleScene implements Scene {
 
   private async startCameraFeed() {
     try {
+      // Try rear camera first (mobile), fall back to any camera (laptop)
       this.cameraStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
-      });
+      }).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
 
       this.videoElement = document.createElement("video");
       this.videoElement.srcObject = this.cameraStream;

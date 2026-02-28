@@ -75,6 +75,14 @@ export class VRPanel {
     this.render();
   }
 
+  /** Update a button's label by index and re-render. */
+  updateButton(index: number, label: string) {
+    if (index >= 0 && index < this.buttons.length) {
+      this.buttons[index].label = label;
+      this.render();
+    }
+  }
+
   /** Called by XRManager when a controller ray intersects this panel. */
   handleClick(u: number, v: number) {
     // UV coordinates: u = 0..1 left-right, v = 0..1 bottom-top

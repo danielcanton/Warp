@@ -25,6 +25,8 @@ export class XRManager {
   // Teleport
   private teleportTarget: THREE.Mesh | null = null;
   private cameraRig: THREE.Group;
+  private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private teleportMaxDistance = 20;
 
   // Callbacks
   onSessionStart: (() => void) | null = null;
@@ -37,6 +39,12 @@ export class XRManager {
     // Camera rig for teleport locomotion
     this.cameraRig = new THREE.Group();
     this.cameraRig.name = "xr-camera-rig";
+  }
+
+  /** Add camera to the rig and add the rig to the scene. */
+  setupCameraRig(camera: THREE.Camera) {
+    this.cameraRig.add(camera);
+    this.scene.add(this.cameraRig);
   }
 
   /**
@@ -136,6 +144,15 @@ export class XRManager {
         return;
       }
     }
+
+    // Teleport: raycast against ground plane
+    const hit = new THREE.Vector3();
+    if (this.raycaster.ray.intersectPlane(this.groundPlane, hit)) {
+      if (hit.length() <= this.teleportMaxDistance) {
+        this.cameraRig.position.set(hit.x, 0, hit.z);
+        if (this.teleportTarget) this.teleportTarget.visible = false;
+      }
+    }
   }
 
   /** Register a VRPanel for ray interaction. */
@@ -153,17 +170,37 @@ export class XRManager {
   update() {
     if (!this.renderer.xr.isPresenting) return;
 
-    // Update pointer hover on panels
+    let showTeleport = false;
+    const hit = new THREE.Vector3();
+
+    // Update pointer hover on panels + teleport target
     for (const controller of [this.controller1, this.controller2]) {
       if (!controller) continue;
       this.tempMatrix.identity().extractRotation(controller.matrixWorld);
       this.raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
       this.raycaster.ray.direction.set(0, 0, -1).applyMatrix4(this.tempMatrix);
 
+      let hitPanel = false;
       for (const panel of this.panels) {
         const intersects = this.raycaster.intersectObject(panel.mesh);
+        if (intersects.length > 0) hitPanel = true;
         panel.setHovered(intersects.length > 0);
       }
+
+      // Show teleport ring if pointing at ground and not at a panel
+      if (!hitPanel && this.raycaster.ray.intersectPlane(this.groundPlane, hit)) {
+        if (hit.length() <= this.teleportMaxDistance) {
+          showTeleport = true;
+          if (this.teleportTarget) {
+            this.teleportTarget.position.copy(hit);
+            this.teleportTarget.position.y = 0.01;
+          }
+        }
+      }
+    }
+
+    if (this.teleportTarget) {
+      this.teleportTarget.visible = showTeleport;
     }
   }
 
