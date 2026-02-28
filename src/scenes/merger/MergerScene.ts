@@ -1333,10 +1333,8 @@ export class MergerScene implements Scene {
       this.spectrogramLoading.style.display = "none";
       this.updateSpectrogramVisibility();
       this.updateSpectrogramZoomPan();
-      // Wait a frame for the panel layout to settle before rendering
-      requestAnimationFrame(() => {
-        renderSpectrogram(this.spectrogramCanvas, precomputed, this.playbackTime);
-      });
+      // Wait for layout to settle — canvas needs non-zero dimensions
+      this.renderSpectrogramWhenReady(precomputed);
       return;
     }
 
@@ -1359,9 +1357,7 @@ export class MergerScene implements Scene {
       this.spectrogramData = data;
       this.spectrogramLoading.style.display = "none";
       this.updateSpectrogramZoomPan();
-      requestAnimationFrame(() => {
-        renderSpectrogram(this.spectrogramCanvas, data, this.playbackTime);
-      });
+      this.renderSpectrogramWhenReady(data);
     } catch (err) {
       console.warn("Spectrogram computation failed:", err);
       this.spectrogramData = null;
@@ -1369,6 +1365,21 @@ export class MergerScene implements Scene {
     } finally {
       this.spectrogramComputing = false;
     }
+  }
+
+  /**
+   * Retry rendering spectrogram until the canvas has non-zero dimensions.
+   * Panels transitioning from display:none need a few frames to layout.
+   */
+  private renderSpectrogramWhenReady(data: SpectrogramData, attempts = 0) {
+    if (attempts > 10) return; // give up after ~10 frames
+    requestAnimationFrame(() => {
+      if (this.spectrogramCanvas.clientWidth > 0 && this.spectrogramCanvas.clientHeight > 0) {
+        renderSpectrogram(this.spectrogramCanvas, data, this.playbackTime);
+      } else {
+        this.renderSpectrogramWhenReady(data, attempts + 1);
+      }
+    });
   }
 
   // ─── Intro zoom ─────────────────────────────────────────────────────

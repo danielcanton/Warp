@@ -49,7 +49,8 @@
         line-height: 1.8;
         padding: 16px 20px;
         min-width: 240px;
-        max-width: 300px;
+        max-width: 340px;
+        overflow: hidden;
       }
       #event-info .panel-body {
         padding: 0;
@@ -1207,7 +1208,7 @@
       #strain-chart-panel {
         position: fixed;
         bottom: 252px;
-        right: 16px;
+        left: 16px;
         z-index: 9;
         width: min(420px, calc(100vw - 32px));
         height: 154px;
@@ -1784,6 +1785,10 @@
           padding: 5px 10px;
           font-size: 10px;
           white-space: nowrap;
+        }
+        #view-mode-dropdown {
+          top: auto;
+          bottom: 38px;
         }
         #sandbox-panel {
           top: auto; bottom: 120px;

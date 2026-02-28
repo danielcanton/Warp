@@ -22,6 +22,7 @@ export class BlackHoleScene implements Scene {
   private mass = 1.5; // Schwarzschild radius scale
   private showDisk = true;
   private elapsed = 0;
+  private pinchStartDist = 0; // for pinch-zoom
 
   // AR mode state
   private arModeActive = false;
@@ -224,8 +225,8 @@ export class BlackHoleScene implements Scene {
     this.arModeActive = false;
   }
 
-  private addHandler(el: EventTarget, type: string, fn: EventListener) {
-    el.addEventListener(type, fn);
+  private addHandler(el: EventTarget, type: string, fn: EventListener, options?: AddEventListenerOptions) {
+    el.addEventListener(type, fn, options);
     this.boundHandlers.push({ el, type, fn });
   }
 
@@ -244,34 +245,50 @@ export class BlackHoleScene implements Scene {
       const dy = e.clientY - this.prevMouse.y;
       this.prevMouse.set(e.clientX, e.clientY);
 
-      this.targetSpherical.theta -= dx * 0.005;
+      this.targetSpherical.theta -= dx * 0.012;
       this.targetSpherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1,
-        this.targetSpherical.phi - dy * 0.005));
+        this.targetSpherical.phi - dy * 0.012));
     }) as EventListener);
 
     this.addHandler(window, "mouseup", (() => {
       this.isDragging = false;
     }) as EventListener);
 
-    // Touch support
+    // Touch support — single finger orbit, two finger pinch zoom
     this.addHandler(canvas, "touchstart", ((e: TouchEvent) => {
       if (e.touches.length === 1) {
         this.isDragging = true;
         this.prevMouse.set(e.touches[0].clientX, e.touches[0].clientY);
+      } else if (e.touches.length === 2) {
+        this.isDragging = false;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        this.pinchStartDist = Math.sqrt(dx * dx + dy * dy);
       }
     }) as EventListener);
 
     this.addHandler(canvas, "touchmove", ((e: TouchEvent) => {
-      if (!this.isDragging || e.touches.length !== 1) return;
       e.preventDefault();
-      const dx = e.touches[0].clientX - this.prevMouse.x;
-      const dy = e.touches[0].clientY - this.prevMouse.y;
+      if (e.touches.length === 2) {
+        // Pinch zoom
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const delta = this.pinchStartDist - dist;
+        this.targetSpherical.radius = Math.max(3, Math.min(80,
+          this.targetSpherical.radius + delta * 0.05));
+        this.pinchStartDist = dist;
+        return;
+      }
+      if (!this.isDragging || e.touches.length !== 1) return;
+      const tdx = e.touches[0].clientX - this.prevMouse.x;
+      const tdy = e.touches[0].clientY - this.prevMouse.y;
       this.prevMouse.set(e.touches[0].clientX, e.touches[0].clientY);
 
-      this.targetSpherical.theta -= dx * 0.005;
+      this.targetSpherical.theta -= tdx * 0.012;
       this.targetSpherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1,
-        this.targetSpherical.phi - dy * 0.005));
-    }) as EventListener);
+        this.targetSpherical.phi - tdy * 0.012));
+    }) as EventListener, { passive: false });
 
     this.addHandler(canvas, "touchend", (() => {
       this.isDragging = false;
@@ -281,8 +298,8 @@ export class BlackHoleScene implements Scene {
     this.addHandler(canvas, "wheel", ((e: WheelEvent) => {
       e.preventDefault();
       this.targetSpherical.radius = Math.max(3, Math.min(80,
-        this.targetSpherical.radius + e.deltaY * 0.02));
-    }) as EventListener);
+        this.targetSpherical.radius + e.deltaY * 0.05));
+    }) as EventListener, { passive: false });
   }
 
   update(dt: number, _elapsed: number): void {
@@ -299,14 +316,7 @@ export class BlackHoleScene implements Scene {
       this.targetSpherical.theta += dt * 0.03;
     }
 
-    if (this.arModeActive) {
-      // Lock camera to fixed position in AR mode so projection aligns with physical camera
-      this.orbitCamera.position.set(0, 0, 15);
-      this.orbitCamera.lookAt(0, 0, 0);
-      this.orbitCamera.updateMatrixWorld();
-    } else {
-      this.updateOrbitCamera();
-    }
+    this.updateOrbitCamera();
     this.bhMaterial.uniforms.uCameraMatrix.value = this.orbitCamera.matrixWorld;
 
     // Update inverse camera matrix for AR mode
