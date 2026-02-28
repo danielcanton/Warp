@@ -240,6 +240,13 @@ const screenshotBtn = document.getElementById("screenshot-btn")!;
 const eventsToggleBtn = document.getElementById("events-toggle");
 const eventListEl = document.getElementById("event-list")!;
 
+// ─── Embed Mode ──────────────────────────────────────────────────────
+const isEmbed =
+  new URLSearchParams(window.location.search).get("embed") === "true";
+if (isEmbed) {
+  document.body.classList.add("embed");
+}
+
 // ─── Screenshot Export ──────────────────────────────────────────────
 
 function takeScreenshot() {
