@@ -63,10 +63,36 @@ export async function fetchEventCatalog(): Promise<GWEvent[]> {
   if (!res.ok) throw new Error(`GWOSC API returned ${res.status}`);
   const data = await res.json();
 
-  const events: GWEvent[] = [];
+  // Catalog priority: later catalogs have better parameter estimates
+  const catalogPriority: Record<string, number> = {
+    "GWTC-1": 1,
+    "GWTC-2": 2,
+    "GWTC-2.1": 3,
+    "GWTC-3": 4,
+  };
+
+  const deduped = new Map<string, Record<string, unknown>>();
 
   for (const [, entry] of Object.entries(data.events)) {
     const e = entry as Record<string, unknown>;
+    const name = (e.commonName as string) ?? "";
+    if (!name) continue;
+
+    const existing = deduped.get(name);
+    if (existing) {
+      const existingPri = catalogPriority[(existing["catalog.shortName"] as string) ?? ""] ?? 0;
+      const newPri = catalogPriority[(e["catalog.shortName"] as string) ?? ""] ?? 0;
+      if (newPri > existingPri) {
+        deduped.set(name, e);
+      }
+    } else {
+      deduped.set(name, e);
+    }
+  }
+
+  const events: GWEvent[] = [];
+
+  for (const [, e] of deduped) {
 
     // Skip events without mass data
     if (!e.mass_1_source || !e.mass_2_source) continue;
