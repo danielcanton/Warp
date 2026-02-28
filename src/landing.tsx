@@ -21,8 +21,7 @@ function Landing() {
       />
 
       {/* Content overlay */}
-      <div className="relative z-10 flex flex-col items-center h-full px-6">
-        <div className="flex-1" />
+      <div className="relative z-10 flex flex-col items-center justify-center h-full px-6">
         {/* Logo / Title */}
         <div className="mb-4">
           <h1 className="text-6xl sm:text-8xl font-bold tracking-tight">
@@ -80,9 +79,8 @@ function Landing() {
           Star on GitHub
         </a>
 
-        <div className="flex-1" />
         {/* Footer */}
-        <div className="pb-6 sm:pb-8 flex flex-col items-center gap-2 sm:gap-3 px-4">
+        <div className="absolute bottom-[max(env(safe-area-inset-bottom,0px),1.5rem)] left-0 right-0 flex flex-col items-center gap-2 sm:gap-3 px-4">
           <div className="text-white/20 text-[10px] sm:text-xs tracking-widest uppercase">
             Gravitational wave visualizer
           </div>
