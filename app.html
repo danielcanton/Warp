@@ -118,6 +118,8 @@
         padding: 20px 24px;
         min-width: 320px;
         max-width: 380px;
+        max-height: calc(100vh - 48px);
+        overflow-y: auto;
         font-size: 13px;
         line-height: 1.6;
         display: none;
@@ -447,6 +449,118 @@
       .search-input::placeholder { color: rgba(255, 255, 255, 0.2); }
       .search-input:focus { border-color: rgba(99, 102, 241, 0.4); }
 
+      /* ─── Onboarding Hints ─── */
+      #onboarding {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        pointer-events: none;
+        transition: opacity 0.8s ease;
+      }
+      #onboarding.hidden { opacity: 0; pointer-events: none; }
+      .hint {
+        position: absolute;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(99, 102, 241, 0.25);
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.7);
+        max-width: 200px;
+        line-height: 1.5;
+        pointer-events: auto;
+        animation: hint-in 0.6s ease both;
+      }
+      .hint strong { color: #a5b4fc; font-weight: 500; }
+      .hint-1 { top: 100px; left: 30px; animation-delay: 0.3s; }
+      .hint-2 { bottom: 140px; left: 50%; transform: translateX(-50%); animation-delay: 0.6s; }
+      .hint-3 { top: 50%; right: 30px; transform: translateY(-50%); animation-delay: 0.9s; }
+      .hint-4 { bottom: 70px; right: 30px; animation-delay: 1.2s; }
+      @keyframes hint-in {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .hint-dismiss {
+        display: block;
+        margin-top: 6px;
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.3);
+      }
+
+      /* ─── About Overlay ─── */
+      #about-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(12px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+      }
+      #about-overlay.show { display: flex; }
+      .about-card {
+        background: rgba(10, 10, 20, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 32px 36px;
+        max-width: 380px;
+        text-align: center;
+      }
+      .about-card h2 {
+        font-size: 22px;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      .about-card .about-tagline {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.4);
+        margin-bottom: 20px;
+      }
+      .about-card .about-desc {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.55);
+        line-height: 1.7;
+        margin-bottom: 20px;
+      }
+      .about-links {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .about-links a {
+        color: rgba(255, 255, 255, 0.4);
+        text-decoration: none;
+        font-size: 12px;
+        transition: color 0.15s;
+      }
+      .about-links a:hover { color: #a5b4fc; }
+      .about-credit {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.2);
+        margin-top: 12px;
+      }
+      .about-close {
+        position: absolute;
+        top: 20px;
+        right: 24px;
+        width: 28px;
+        height: 28px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+        color: rgba(255, 255, 255, 0.4);
+        font-size: 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+      }
+      .about-close:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
       /* ─── Map Tooltip ─── */
       #map-tooltip {
         position: fixed;
@@ -472,7 +586,7 @@
     <!-- Map Tooltip -->
     <div id="map-tooltip" class="glass"></div>
 
-    <div id="brand">WARPLAB</div>
+    <div id="brand" style="cursor:pointer" title="About WarpLab">WARPLAB</div>
 
     <!-- Event View: Info Panel -->
     <div id="event-info" class="glass">
@@ -583,6 +697,46 @@
     <div id="ui">
       <button class="ui-btn" id="map-toggle" title="Toggle universe map (M)">Universe Map</button>
       <button class="ui-btn" id="vr-button">Enter VR</button>
+    </div>
+
+    <!-- Onboarding Hints (first visit) -->
+    <div id="onboarding">
+      <div class="hint hint-1">
+        <strong>Pick an event</strong> from the list to explore different black hole and neutron star mergers
+        <span class="hint-dismiss">click anywhere to dismiss</span>
+      </div>
+      <div class="hint hint-2">
+        <strong>Play the merger</strong> &mdash; press <strong>Space</strong> to hear the gravitational wave chirp and watch it unfold
+      </div>
+      <div class="hint hint-3">
+        <strong>Drag to orbit</strong> the binary system. Scroll to zoom in and out
+      </div>
+      <div class="hint hint-4">
+        Press <strong>M</strong> to see all events on a 3D universe map. Press <strong>H</strong> for help
+      </div>
+    </div>
+
+    <!-- About Overlay -->
+    <div id="about-overlay">
+      <button class="about-close" id="about-close">&times;</button>
+      <div class="about-card">
+        <h2>WarpLab</h2>
+        <p class="about-tagline">Feel spacetime bend</p>
+        <p class="about-desc">
+          An interactive gravitational wave visualizer. Explore real events detected by
+          LIGO, Virgo, and KAGRA &mdash; watch black holes merge, hear the chirp,
+          and navigate the cosmic map of collisions.
+        </p>
+        <div class="about-links">
+          <a href="https://dancanton.com" target="_blank" rel="noopener noreferrer">dancanton.com</a>
+          <a href="https://x.com/dancanton_" target="_blank" rel="noopener noreferrer">&#x1D54F; / X</a>
+          <a href="https://linkedin.com/in/danielcanton" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+        </div>
+        <div class="about-credit">
+          Data from LIGO / Virgo / KAGRA via GWOSC<br>
+          Built by Daniel Canton
+        </div>
+      </div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

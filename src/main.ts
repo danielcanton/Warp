@@ -228,6 +228,10 @@ const searchInput = document.getElementById("search-input") as HTMLInputElement;
 const loadingScreen = document.getElementById("loading-screen")!;
 const loadingStatus = document.getElementById("loading-status")!;
 const mapTooltip = document.getElementById("map-tooltip")!;
+const onboarding = document.getElementById("onboarding")!;
+const aboutOverlay = document.getElementById("about-overlay")!;
+const aboutCloseBtn = document.getElementById("about-close")!;
+const brandEl = document.getElementById("brand")!;
 
 let activeTypeFilter: string = "all";
 let activeSortKey: string = "snr";
@@ -554,6 +558,36 @@ function toggleHelp() {
 helpBtn.addEventListener("click", toggleHelp);
 helpCloseBtn.addEventListener("click", toggleHelp);
 
+// ─── About Overlay ──────────────────────────────────────────────────
+
+function toggleAbout() {
+  aboutOverlay.classList.toggle("show");
+}
+
+brandEl.addEventListener("click", toggleAbout);
+aboutCloseBtn.addEventListener("click", toggleAbout);
+aboutOverlay.addEventListener("click", (e) => {
+  if (e.target === aboutOverlay) toggleAbout();
+});
+
+// ─── Onboarding Hints ──────────────────────────────────────────────
+
+function dismissOnboarding() {
+  if (onboarding.classList.contains("hidden")) return;
+  onboarding.classList.add("hidden");
+  setTimeout(() => onboarding.remove(), 800);
+  localStorage.setItem("warplab-onboarded", "1");
+}
+
+// Show onboarding only on first visit
+if (localStorage.getItem("warplab-onboarded")) {
+  onboarding.remove();
+} else {
+  // Dismiss on any click or after 12 seconds
+  window.addEventListener("click", dismissOnboarding, { once: true });
+  setTimeout(dismissOnboarding, 12000);
+}
+
 // ─── Keyboard Shortcuts ──────────────────────────────────────────────
 
 window.addEventListener("keydown", (e) => {
@@ -572,8 +606,10 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "KeyS") speedBtn.click();
   if (e.code === "KeyM") mapToggleBtn.click();
   if (e.code === "KeyH") toggleHelp();
-  if (e.code === "Escape" && helpOverlay.style.display === "block") {
-    toggleHelp();
+  if (e.code === "Escape") {
+    if (helpOverlay.style.display === "block") toggleHelp();
+    if (aboutOverlay.classList.contains("show")) toggleAbout();
+    dismissOnboarding();
   }
   if (e.code === "Slash") {
     e.preventDefault();
