@@ -1095,23 +1095,21 @@
         /* Spectrogram — compact on mobile */
         #spectrogram-panel {
           bottom: 70px;
-          left: 12px;
-          right: 12px;
-          width: auto;
-          transform: none;
-          height: 140px;
-          border-radius: 14px;
+          right: 8px;
+          left: auto;
+          width: calc(100vw - 16px);
+          height: 110px;
+          border-radius: 10px;
         }
 
         /* Strain chart — compact on mobile */
         #strain-chart-panel {
-          bottom: 220px;
-          left: 12px;
-          right: 12px;
-          width: auto;
-          transform: none;
-          height: 120px;
-          border-radius: 14px;
+          bottom: 188px;
+          right: 8px;
+          left: auto;
+          width: calc(100vw - 16px);
+          height: 100px;
+          border-radius: 10px;
         }
 
         /* About overlay — mobile friendly */
@@ -1131,15 +1129,17 @@
       /* ─── Spectrogram Panel ─── */
       #spectrogram-panel {
         position: fixed;
-        bottom: 130px;
-        left: 50%;
-        transform: translateX(-50%);
+        bottom: 80px;
+        right: 16px;
         z-index: 9;
-        width: min(600px, calc(100vw - 48px));
-        height: 180px;
-        border-radius: 12px;
+        width: min(420px, calc(100vw - 32px));
+        height: 140px;
+        border-radius: 10px;
         overflow: hidden;
         display: none;
+        background: rgba(0, 0, 0, 0.25);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.05);
       }
       #spectrogram-panel canvas {
         width: 100%;
@@ -1167,24 +1167,48 @@
       /* ─── Strain Chart Panel ─── */
       #strain-chart-panel {
         position: fixed;
-        bottom: 320px;
-        left: 50%;
-        transform: translateX(-50%);
+        bottom: 228px;
+        right: 16px;
         z-index: 9;
-        width: min(600px, calc(100vw - 48px));
-        height: 160px;
-        border-radius: 12px;
+        width: min(420px, calc(100vw - 32px));
+        height: 130px;
+        border-radius: 10px;
         overflow: hidden;
         display: none;
+        background: rgba(0, 0, 0, 0.25);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.05);
       }
       #strain-chart-panel.has-tabs {
-        height: 190px;
-        bottom: 290px;
+        height: 160px;
       }
       #strain-chart-panel canvas {
         width: 100%;
         height: 100%;
         display: block;
+      }
+
+      /* ─── Draggable Panel Handle ─── */
+      .panel-drag-handle {
+        height: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: grab;
+        user-select: none;
+        flex-shrink: 0;
+      }
+      .panel-drag-handle:active { cursor: grabbing; }
+      .panel-drag-handle::after {
+        content: '';
+        width: 32px;
+        height: 3px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.2);
+      }
+      .panel-dragging {
+        opacity: 0.85;
+        transition: none !important;
       }
 
       /* ─── Detector Tabs (Researcher mode) ─── */
@@ -1848,6 +1872,7 @@
 
     <!-- Spectrogram (Student/Researcher modes only) -->
     <div id="spectrogram-panel" class="glass">
+      <div class="panel-drag-handle" data-drag-target="spectrogram-panel"></div>
       <canvas id="spectrogram-canvas"></canvas>
       <div id="spectrogram-loading">
         <div class="loading-ring"></div>
@@ -1857,6 +1882,7 @@
 
     <!-- Strain overlay chart (Student/Researcher modes only) -->
     <div id="strain-chart-panel" class="glass">
+      <div class="panel-drag-handle" data-drag-target="strain-chart-panel"></div>
       <div id="detector-tabs" style="display:none;">
         <button class="detector-tab active" data-detector="H1">H1</button>
         <button class="detector-tab" data-detector="L1">L1</button>
@@ -1963,6 +1989,46 @@
       <div class="export-spinner"></div>
       <span>Exporting…</span>
     </div>
+
+    <!-- Draggable data panels -->
+    <script>
+    (function() {
+      let active = null, startX, startY, origX, origY;
+      function onDown(e) {
+        const handle = e.target.closest('.panel-drag-handle');
+        if (!handle) return;
+        const id = handle.dataset.dragTarget;
+        active = document.getElementById(id);
+        if (!active) return;
+        const touch = e.touches ? e.touches[0] : e;
+        const rect = active.getBoundingClientRect();
+        startX = touch.clientX; startY = touch.clientY;
+        origX = rect.left; origY = rect.top;
+        active.classList.add('panel-dragging');
+        e.preventDefault();
+      }
+      function onMove(e) {
+        if (!active) return;
+        const touch = e.touches ? e.touches[0] : e;
+        const dx = touch.clientX - startX, dy = touch.clientY - startY;
+        active.style.left = (origX + dx) + 'px';
+        active.style.top = (origY + dy) + 'px';
+        active.style.right = 'auto';
+        active.style.bottom = 'auto';
+        active.style.transform = 'none';
+      }
+      function onUp() {
+        if (active) active.classList.remove('panel-dragging');
+        active = null;
+      }
+      document.addEventListener('mousedown', onDown);
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchstart', onDown, {passive: false});
+      document.addEventListener('touchmove', onMove, {passive: false});
+      document.addEventListener('touchend', onUp);
+    })();
+    </script>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

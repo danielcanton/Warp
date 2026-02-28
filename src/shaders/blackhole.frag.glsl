@@ -216,10 +216,11 @@ void main() {
       projected.x /= aspect;
       vec2 bgUV = projected * 0.5 + 0.5;
 
-      // Sample camera feed if within bounds, else fall back to procedural stars
-      if (bgUV.x >= 0.0 && bgUV.x <= 1.0 && bgUV.y >= 0.0 && bgUV.y <= 1.0) {
-        // Flip Y for video texture convention
+      // Only sample camera if ray points forward (toward the scene, not behind camera)
+      if (localDir.z < 0.0 && bgUV.x >= 0.0 && bgUV.x <= 1.0 && bgUV.y >= 0.0 && bgUV.y <= 1.0) {
+        // Flip Y for video texture, mirror X for front-facing camera
         bgUV.y = 1.0 - bgUV.y;
+        bgUV.x = 1.0 - bgUV.x;
         vec3 camColor = texture2D(uBackground, bgUV).rgb;
         finalColor += camColor;
       } else {

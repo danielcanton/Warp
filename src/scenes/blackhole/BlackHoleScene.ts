@@ -296,12 +296,19 @@ export class BlackHoleScene implements Scene {
     this.spherical.phi += (this.targetSpherical.phi - this.spherical.phi) * 0.08;
     this.spherical.radius += (this.targetSpherical.radius - this.spherical.radius) * 0.08;
 
-    // Slow auto-rotation when not dragging
-    if (!this.isDragging) {
+    // Slow auto-rotation when not dragging (disabled in AR mode)
+    if (!this.isDragging && !this.arModeActive) {
       this.targetSpherical.theta += dt * 0.03;
     }
 
-    this.updateOrbitCamera();
+    if (this.arModeActive) {
+      // Lock camera to fixed position in AR mode so projection aligns with physical camera
+      this.orbitCamera.position.set(0, 0, 15);
+      this.orbitCamera.lookAt(0, 0, 0);
+      this.orbitCamera.updateMatrixWorld();
+    } else {
+      this.updateOrbitCamera();
+    }
     this.bhMaterial.uniforms.uCameraMatrix.value = this.orbitCamera.matrixWorld;
 
     // Update inverse camera matrix for AR mode
