@@ -63,7 +63,7 @@ src/
 
 ```bash
 # Clone
-git clone https://github.com/danielcanton/Warp.git
+git clone https://github.com/danielcanton/warplab.git
 cd Warp
 
 # Install

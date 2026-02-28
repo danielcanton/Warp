@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import SplashCursor from "./components/SplashCursor";
 import DecryptedText from "./components/DecryptedText";
+import GradientText from "./components/GradientText";
 import GlassCTA from "./components/GlassCTA";
 import "./landing.css";
 
@@ -21,17 +22,22 @@ function Landing() {
         {/* Logo / Title */}
         <div className="mb-4">
           <h1 className="text-6xl sm:text-8xl font-bold tracking-tight">
-            <DecryptedText
-              text="WarpLab"
-              speed={60}
-              maxIterations={15}
-              characters="01∞∇∂∫Ωπ×÷±√∝∑∏∈∉⊂⊃∧∨¬∀∃"
-              className="text-white"
-              encryptedClassName="text-indigo-400/70"
-              animateOn="view"
-              sequential
-              revealDirection="center"
-            />
+            <GradientText
+              colors={["#818cf8", "#c084fc", "#22d3ee", "#818cf8"]}
+              animationSpeed={5}
+            >
+              <DecryptedText
+                text="WarpLab"
+                speed={60}
+                maxIterations={15}
+                characters="01∞∇∂∫Ωπ×÷±√∝∑∏∈∉⊂⊃∧∨¬∀∃"
+                className=""
+                encryptedClassName="opacity-50"
+                animateOn="view"
+                sequential
+                revealDirection="center"
+              />
+            </GradientText>
           </h1>
         </div>
 
@@ -59,7 +65,7 @@ function Landing() {
 
         {/* GitHub star */}
         <a
-          href="https://github.com/danielcanton/Warp"
+          href="https://github.com/danielcanton/warplab"
           target="_blank"
           rel="noopener noreferrer"
           className="mt-8 flex items-center gap-2 text-white/30 text-sm hover:text-white/60 transition-colors"
