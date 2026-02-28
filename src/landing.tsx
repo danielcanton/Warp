@@ -73,7 +73,7 @@ function Landing() {
               dancanton.com
             </a>
             <a
-              href="https://x.com/dancanton_"
+              href="https://x.com/coco_canton"
               target="_blank"
               rel="noopener noreferrer"
               className="text-white/30 hover:text-white/60 transition-colors"
@@ -81,7 +81,7 @@ function Landing() {
               &#x1D54F;
             </a>
             <a
-              href="https://linkedin.com/in/danielcanton"
+              href="https://www.linkedin.com/in/danielcantonarg/"
               target="_blank"
               rel="noopener noreferrer"
               className="text-white/30 hover:text-white/60 transition-colors"
