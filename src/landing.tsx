@@ -1,3 +1,6 @@
+import { inject } from "@vercel/analytics";
+inject();
+
 import { createRoot } from "react-dom/client";
 import SplashCursor from "./components/SplashCursor";
 import DecryptedText from "./components/DecryptedText";
