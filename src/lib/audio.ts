@@ -88,10 +88,10 @@ export class GWAudioEngine {
     for (let i = 0; i < srcLen; i++) {
       if (smoothFreq[i] > maxFreq) maxFreq = smoothFreq[i];
     }
-    // Scale so peak frequency maps to ~500 Hz (pleasant chirp peak)
-    const freqScale = maxFreq > 0 ? 500 / maxFreq : 1;
-    // But ensure minimum frequency is at least ~80 Hz
-    const minTarget = 80;
+    // Scale so peak frequency maps to ~600 Hz (clearer on mobile speakers)
+    const freqScale = maxFreq > 0 ? 600 / maxFreq : 1;
+    // Ensure minimum frequency is at least ~120 Hz (mobile speaker friendly)
+    const minTarget = 120;
 
     // Synthesise the audio chirp
     let phase = 0;
@@ -149,9 +149,25 @@ export class GWAudioEngine {
     this.source.playbackRate.value = speed;
 
     this.gainNode = ctx.createGain();
-    this.gainNode.gain.value = 0.7;
+    this.gainNode.gain.value = 0.5;
 
-    this.source.connect(this.gainNode);
+    // High-pass filter to clean up muddy bass on mobile speakers
+    const hpFilter = ctx.createBiquadFilter();
+    hpFilter.type = "highpass";
+    hpFilter.frequency.value = 120;
+    hpFilter.Q.value = 0.7;
+
+    // Light compressor to tame peaks on small speakers
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.value = -18;
+    compressor.knee.value = 12;
+    compressor.ratio.value = 4;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.15;
+
+    this.source.connect(hpFilter);
+    hpFilter.connect(compressor);
+    compressor.connect(this.gainNode);
     this.gainNode.connect(ctx.destination);
 
     const offset = normalizedTime * this.buffer.duration;
