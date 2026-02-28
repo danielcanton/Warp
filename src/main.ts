@@ -77,16 +77,18 @@ composer.addPass(new EffectPass(camera, bloom, toneMapping));
 const xrManager = new XRManager(renderer, scene);
 xrManager.setupCameraRig(camera);
 
-const vrButtonEl = document.getElementById("vr-button")!;
-xrManager.createButton().then((btn) => {
-  if (btn) {
-    btn.style.cssText = vrButtonEl.style.cssText;
-    vrButtonEl.replaceWith(btn);
-  } else {
-    vrButtonEl.textContent = "VR Not Supported";
-    vrButtonEl.style.opacity = "0.4";
-  }
-});
+const vrButtonEl = document.getElementById("vr-button");
+if (vrButtonEl) {
+  xrManager.createButton().then((btn) => {
+    if (btn) {
+      btn.style.cssText = vrButtonEl.style.cssText;
+      vrButtonEl.replaceWith(btn);
+    } else {
+      vrButtonEl.textContent = "VR Not Supported";
+      vrButtonEl.style.opacity = "0.4";
+    }
+  });
+}
 
 // ─── Scene Manager ───────────────────────────────────────────────────
 
