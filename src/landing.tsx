@@ -80,7 +80,7 @@ function Landing() {
         </a>
 
         {/* Footer */}
-        <div className="absolute bottom-12 sm:bottom-8 left-0 right-0 flex flex-col items-center gap-2 sm:gap-3 px-4">
+        <div className="absolute bottom-20 sm:bottom-8 left-0 right-0 flex flex-col items-center gap-2 sm:gap-3 px-4">
           <div className="text-white/20 text-[10px] sm:text-xs tracking-widest uppercase">
             Gravitational wave visualizer
           </div>
