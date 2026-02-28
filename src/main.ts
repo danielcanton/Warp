@@ -16,6 +16,7 @@ import { SceneManager } from "./lib/SceneManager";
 import { MergerScene } from "./scenes/merger/MergerScene";
 import { SandboxScene } from "./scenes/sandbox/SandboxScene";
 import { BlackHoleScene } from "./scenes/blackhole/BlackHoleScene";
+import { NBodyScene } from "./scenes/nbody/NBodyScene";
 import type { SceneContext } from "./scenes/types";
 
 // ─── Three.js Setup ──────────────────────────────────────────────────
@@ -109,9 +110,17 @@ const sceneManager = new SceneManager(ctx);
 sceneManager.register(new MergerScene());
 sceneManager.register(new SandboxScene());
 sceneManager.register(new BlackHoleScene());
+sceneManager.register(new NBodyScene());
 
-// Start with merger scene
-sceneManager.switchScene("merger");
+// ─── URL Parameters: embed mode & scene selection ────────────────────
+const params = new URLSearchParams(window.location.search);
+
+if (params.get("embed") === "true") {
+  document.body.classList.add("embed");
+}
+
+const startScene = params.get("scene") ?? "merger";
+sceneManager.switchScene(startScene);
 
 // ─── Render Loop ─────────────────────────────────────────────────────
 

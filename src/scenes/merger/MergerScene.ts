@@ -243,10 +243,6 @@ export class MergerScene implements Scene {
 
     // ─── First-time only setup ───
     if (firstInit) {
-      // Embed mode
-      const isEmbed = new URLSearchParams(window.location.search).get("embed") === "true";
-      if (isEmbed) document.body.classList.add("embed");
-
       // Onboarding
       const onboardingEl = document.getElementById("onboarding");
       if (onboardingEl) {

@@ -13,6 +13,11 @@ uniform vec2 uResolution;
 uniform mat4 uCameraMatrix;    // inverse view matrix (camera world transform)
 uniform float uFov;            // camera FOV in radians
 
+// AR mode — camera feed as background
+uniform sampler2D uBackground; // Camera feed texture (or empty)
+uniform float uUseCamera;      // 0.0 = procedural stars, 1.0 = camera feed
+uniform mat4 uInvCameraMatrix; // Inverse of uCameraMatrix (computed in JS)
+
 const float PI = 3.14159265359;
 const float MAX_DIST = 100.0;
 const int MAX_STEPS = 200;
@@ -197,21 +202,40 @@ void main() {
     float edgeGlow = 0.0;
     finalColor += vec3(0.0, 0.0, edgeGlow);
   } else if (hitBackground) {
-    // Star field, lensed through curved spacetime
-    float stars = starField(vel);
-
-    // Background color
-    vec3 bgColor = vec3(0.0, 0.002, 0.008); // deep space blue-black
-    vec3 starColor = vec3(0.9, 0.92, 1.0) * stars;
-
-    finalColor += bgColor + starColor;
-
     // Einstein ring glow — brighten rays that passed close to the photon sphere
-    // Photon sphere at r = 1.5 * rs
-    // Rays that barely escape have been strongly deflected
     float closest = length(cross(ro - bhPos, vel));  // impact parameter approximation
     float photonSphere = rs * 1.5;
     float ringGlow = exp(-pow((closest - photonSphere) / (rs * 0.3), 2.0)) * 0.8;
+
+    if (uUseCamera > 0.5) {
+      // AR mode: project lensed ray direction back to camera-space UV
+      vec3 localDir = (uInvCameraMatrix * vec4(vel, 0.0)).xyz;
+      float halfFovAR = uFov * 0.5;
+      float aspect = uResolution.x / uResolution.y;
+      vec2 projected = localDir.xy / (-localDir.z * tan(halfFovAR));
+      projected.x /= aspect;
+      vec2 bgUV = projected * 0.5 + 0.5;
+
+      // Sample camera feed if within bounds, else fall back to procedural stars
+      if (bgUV.x >= 0.0 && bgUV.x <= 1.0 && bgUV.y >= 0.0 && bgUV.y <= 1.0) {
+        // Flip Y for video texture convention
+        bgUV.y = 1.0 - bgUV.y;
+        vec3 camColor = texture2D(uBackground, bgUV).rgb;
+        finalColor += camColor;
+      } else {
+        // Outside camera FOV — procedural stars as fallback
+        float stars = starField(vel);
+        vec3 bgColor = vec3(0.0, 0.002, 0.008);
+        finalColor += bgColor + vec3(0.9, 0.92, 1.0) * stars;
+      }
+    } else {
+      // Standard mode: procedural star field lensed through curved spacetime
+      float stars = starField(vel);
+      vec3 bgColor = vec3(0.0, 0.002, 0.008); // deep space blue-black
+      vec3 starColor = vec3(0.9, 0.92, 1.0) * stars;
+      finalColor += bgColor + starColor;
+    }
+
     finalColor += vec3(0.6, 0.7, 1.0) * ringGlow;
   }
 

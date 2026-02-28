@@ -23,6 +23,14 @@ export class BlackHoleScene implements Scene {
   private showDisk = true;
   private elapsed = 0;
 
+  // AR mode state
+  private arModeActive = false;
+  private cameraStream: MediaStream | null = null;
+  private videoElement: HTMLVideoElement | null = null;
+  private videoTexture: THREE.VideoTexture | null = null;
+  private arCheckbox: HTMLInputElement | null = null;
+  private invCameraMatrix = new THREE.Matrix4();
+
   private boundHandlers: { el: EventTarget; type: string; fn: EventListener }[] = [];
   private initialized = false;
 
@@ -51,6 +59,9 @@ export class BlackHoleScene implements Scene {
           uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
           uCameraMatrix: { value: this.orbitCamera.matrixWorld },
           uFov: { value: THREE.MathUtils.degToRad(60) },
+          uBackground: { value: new THREE.Texture() },
+          uUseCamera: { value: 0.0 },
+          uInvCameraMatrix: { value: new THREE.Matrix4() },
         },
         depthWrite: false,
         depthTest: false,
@@ -121,6 +132,12 @@ export class BlackHoleScene implements Scene {
             Accretion Disk
           </label>
         </div>
+        <div class="bh-row">
+          <label class="bh-toggle-label">
+            <input type="checkbox" id="bh-ar" />
+            AR Mode
+          </label>
+        </div>
       </div>
       <div class="bh-hint">Drag to orbit. Scroll to zoom.</div>
     `;
@@ -141,6 +158,62 @@ export class BlackHoleScene implements Scene {
       this.showDisk = diskCheckbox.checked;
       this.bhMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
     });
+
+    // AR mode toggle
+    this.arCheckbox = this.panelEl.querySelector("#bh-ar") as HTMLInputElement;
+    this.arCheckbox.addEventListener("change", () => {
+      if (this.arCheckbox!.checked) {
+        this.startCameraFeed();
+      } else {
+        this.stopCameraFeed();
+      }
+    });
+  }
+
+  private async startCameraFeed() {
+    try {
+      this.cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
+
+      this.videoElement = document.createElement("video");
+      this.videoElement.srcObject = this.cameraStream;
+      this.videoElement.setAttribute("playsinline", "");
+      this.videoElement.muted = true;
+      await this.videoElement.play();
+
+      this.videoTexture = new THREE.VideoTexture(this.videoElement);
+      this.videoTexture.minFilter = THREE.LinearFilter;
+      this.videoTexture.magFilter = THREE.LinearFilter;
+
+      this.bhMaterial.uniforms.uBackground.value = this.videoTexture;
+      this.bhMaterial.uniforms.uUseCamera.value = 1.0;
+      this.arModeActive = true;
+    } catch (_err) {
+      // Permission denied or no camera — uncheck automatically
+      if (this.arCheckbox) this.arCheckbox.checked = false;
+      this.arModeActive = false;
+    }
+  }
+
+  private stopCameraFeed() {
+    if (this.cameraStream) {
+      for (const track of this.cameraStream.getTracks()) {
+        track.stop();
+      }
+      this.cameraStream = null;
+    }
+    if (this.videoElement) {
+      this.videoElement.srcObject = null;
+      this.videoElement = null;
+    }
+    if (this.videoTexture) {
+      this.videoTexture.dispose();
+      this.videoTexture = null;
+    }
+    this.bhMaterial.uniforms.uUseCamera.value = 0.0;
+    this.bhMaterial.uniforms.uBackground.value = new THREE.Texture();
+    this.arModeActive = false;
   }
 
   private addHandler(el: EventTarget, type: string, fn: EventListener) {
@@ -221,6 +294,10 @@ export class BlackHoleScene implements Scene {
     this.updateOrbitCamera();
     this.bhMaterial.uniforms.uCameraMatrix.value = this.orbitCamera.matrixWorld;
 
+    // Update inverse camera matrix for AR mode
+    this.invCameraMatrix.copy(this.orbitCamera.matrixWorld).invert();
+    this.bhMaterial.uniforms.uInvCameraMatrix.value = this.invCameraMatrix;
+
     // Half-resolution on mobile for performance
     const isMobile = window.innerWidth < 768;
     const scale = isMobile ? 0.5 : 1.0;
@@ -241,6 +318,8 @@ export class BlackHoleScene implements Scene {
   }
 
   dispose(): void {
+    this.stopCameraFeed();
+
     for (const { el, type, fn } of this.boundHandlers) {
       el.removeEventListener(type, fn);
     }

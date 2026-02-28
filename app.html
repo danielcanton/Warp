@@ -868,6 +868,33 @@
         padding: 6px 14px;
         border-radius: 20px;
       }
+      /* Embed: scene selector hidden (scene chosen via ?scene= param) */
+      body.embed #scene-selector { display: none !important; }
+      /* Embed: compact panels for non-merger scenes */
+      body.embed #blackhole-panel {
+        top: 12px; left: 12px;
+        padding: 10px 14px;
+        min-width: 180px; max-width: 220px;
+        font-size: 12px;
+      }
+      body.embed #blackhole-panel .bh-hint { display: none; }
+      body.embed #sandbox-panel {
+        top: 12px; left: 12px;
+        padding: 10px 14px;
+        min-width: 200px; max-width: 240px;
+        font-size: 12px;
+      }
+      body.embed #sandbox-panel .sandbox-hint { display: none; }
+      body.embed #nbody-panel {
+        top: 12px; left: 12px;
+        padding: 10px 14px;
+        min-width: 200px; max-width: 240px;
+        font-size: 12px;
+      }
+      body.embed #nbody-panel .nb-hint { display: none; }
+      body.embed #nbody-panel .nb-info { display: none; }
+      body.embed #nbody-panel .nb-collapsible { display: none; }
+      body.embed #nbody-panel .nb-expand-btn { display: inline-block; }
 
       /* ── Mobile ── */
       @media (max-width: 768px) {
@@ -1184,6 +1211,146 @@
         text-align: center;
       }
 
+      /* ─── N-Body Panel ─── */
+      #nbody-panel {
+        position: fixed;
+        top: 24px;
+        left: 24px;
+        z-index: 10;
+        padding: 16px 20px;
+        min-width: 260px;
+        max-width: 300px;
+        font-size: 13px;
+      }
+      .nb-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .nb-expand-btn {
+        display: none; /* hidden on desktop */
+        background: none;
+        border: none;
+        color: rgba(255,255,255,0.4);
+        font-size: 12px;
+        cursor: pointer;
+        padding: 2px 6px;
+      }
+      .nb-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        color: #fff;
+      }
+      .nb-section {
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .nb-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+      .nb-row label {
+        min-width: 50px;
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.45);
+      }
+      .nb-select {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 6px;
+        color: #fff;
+        padding: 4px 8px;
+        font-size: 11px;
+        outline: none;
+      }
+      .nb-select.nb-small {
+        flex: 0 0 auto;
+        min-width: 90px;
+      }
+      .nb-slider {
+        flex: 1;
+        accent-color: #22c55e;
+        height: 4px;
+      }
+      .nb-val, .nb-speed-val {
+        min-width: 36px;
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.6);
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .nb-btn {
+        padding: 4px 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+        font-size: 13px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .nb-btn:hover {
+        background: rgba(255, 255, 255, 0.15);
+      }
+      .nb-place-btn {
+        width: 100%;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        background: rgba(34, 197, 94, 0.12);
+        color: #86efac;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-top: 4px;
+      }
+      .nb-place-btn:hover {
+        background: rgba(34, 197, 94, 0.25);
+        border-color: rgba(34, 197, 94, 0.5);
+        color: #fff;
+      }
+      .nb-toggles {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+      }
+      .nb-toggle-label {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.45);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+      }
+      .nb-toggle-label input[type="checkbox"] {
+        accent-color: #22c55e;
+      }
+      .nb-info {
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.3);
+        margin-bottom: 6px;
+      }
+      .nb-info strong {
+        color: rgba(255, 255, 255, 0.6);
+      }
+      .nb-hint {
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.2);
+        text-align: center;
+      }
+      body.nb-placing canvas {
+        cursor: crosshair;
+      }
+
       /* ─── Mobile overrides for new panels ─── */
       @media (max-width: 768px) {
         #scene-selector {
@@ -1198,8 +1365,9 @@
           z-index: 25;
         }
         .scene-tab {
-          padding: 6px 12px;
-          font-size: 11px;
+          padding: 5px 10px;
+          font-size: 10px;
+          white-space: nowrap;
         }
         #sandbox-panel {
           top: auto; bottom: 120px;
@@ -1215,6 +1383,19 @@
           border-radius: 14px;
           padding: 12px 16px;
         }
+        #nbody-panel {
+          top: auto; bottom: 120px;
+          left: 12px; right: 12px;
+          max-width: none; min-width: 0;
+          border-radius: 14px;
+          padding: 10px 14px;
+        }
+        #nbody-panel .nb-title { font-size: 14px; margin-bottom: 8px; }
+        #nbody-panel .nb-expand-btn { display: inline-block; }
+        #nbody-panel .nb-section { margin-bottom: 6px; padding-bottom: 6px; }
+        #nbody-panel .nb-hint { display: none; }
+        #nbody-panel.nb-collapsed .nb-collapsible { display: none; }
+        #nbody-panel .nb-info { font-size: 9px; }
       }
     </style>
   </head>
@@ -1300,6 +1481,14 @@
         <dd>Signal-to-noise ratio. Higher = clearer detection. GW150914 had SNR 24, extremely loud</dd>
         <dt>Confidence (p_astro)</dt>
         <dd>Probability this is a real astrophysical event vs. detector noise. &gt; 0.99 means near-certain</dd>
+      </dl>
+      <dl class="help-glossary">
+        <dt>Embed on your site</dt>
+        <dd>
+          Use an iframe with URL params:<br>
+          <code style="font-size:10px;color:#a5b4fc">?embed=true&amp;scene=blackhole</code><br>
+          Scenes: <em>merger</em>, <em>sandbox</em>, <em>blackhole</em>, <em>nbody</em>
+        </dd>
       </dl>
       <div class="help-footer">
         Data from LIGO / Virgo / KAGRA via GWOSC &bull;
