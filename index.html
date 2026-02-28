@@ -171,6 +171,55 @@
       }
       .help-close:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
 
+      /* ─── Event Filters ─── */
+      .filter-bar {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+        padding: 0 4px;
+      }
+      .filter-chip {
+        padding: 3px 10px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: transparent;
+        color: rgba(255, 255, 255, 0.4);
+        font-size: 11px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .filter-chip:hover { background: rgba(255, 255, 255, 0.06); color: rgba(255, 255, 255, 0.6); }
+      .filter-chip.active { border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc; background: rgba(99, 102, 241, 0.12); }
+      .filter-chip.active.bbh { border-color: rgba(129, 140, 248, 0.4); color: #a5b4fc; background: rgba(129, 140, 248, 0.12); }
+      .filter-chip.active.bns { border-color: rgba(34, 211, 238, 0.4); color: #67e8f9; background: rgba(34, 211, 238, 0.12); }
+      .filter-chip.active.nsbh { border-color: rgba(251, 191, 36, 0.4); color: #fcd34d; background: rgba(251, 191, 36, 0.12); }
+      .sort-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 8px;
+        margin-bottom: 8px;
+      }
+      .sort-row label {
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.25);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .sort-select {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 11px;
+        padding: 2px 6px;
+        cursor: pointer;
+        outline: none;
+      }
+      .sort-select:hover { border-color: rgba(255, 255, 255, 0.2); }
+      .sort-select option { background: #1a1a2e; color: #fff; }
+
       /* ─── Event List ─── */
       #event-list {
         position: fixed;
@@ -421,6 +470,21 @@
     <div id="event-list" class="glass">
       <h3>Events</h3>
       <div id="event-count"></div>
+      <div class="filter-bar">
+        <button class="filter-chip active" data-type="all">All</button>
+        <button class="filter-chip bbh" data-type="BBH">BBH</button>
+        <button class="filter-chip bns" data-type="BNS">BNS</button>
+        <button class="filter-chip nsbh" data-type="NSBH">NSBH</button>
+      </div>
+      <div class="sort-row">
+        <label>Sort</label>
+        <select class="sort-select" id="sort-select">
+          <option value="snr">SNR</option>
+          <option value="mass">Mass</option>
+          <option value="distance">Distance</option>
+          <option value="date">Date</option>
+        </select>
+      </div>
       <div id="event-list-items"></div>
     </div>
 

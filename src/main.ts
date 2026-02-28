@@ -222,6 +222,11 @@ const mapLegendEl = document.getElementById("map-legend")!;
 const helpOverlay = document.getElementById("help-overlay")!;
 const helpBtn = document.getElementById("help-btn")!;
 const helpCloseBtn = document.getElementById("help-close")!;
+const sortSelect = document.getElementById("sort-select") as HTMLSelectElement;
+const filterChips = document.querySelectorAll<HTMLButtonElement>(".filter-chip");
+
+let activeTypeFilter: string = "all";
+let activeSortKey: string = "snr";
 
 playBtn.addEventListener("click", () => {
   if (!currentWaveform) return;
@@ -418,19 +423,60 @@ function selectEvent(event: GWEvent) {
   });
 }
 
+function getFilteredSortedEvents(): GWEvent[] {
+  let filtered = events;
+
+  // Type filter
+  if (activeTypeFilter !== "all") {
+    filtered = filtered.filter((e) => classifyEvent(e) === activeTypeFilter);
+  }
+
+  // Sort
+  const sorted = [...filtered];
+  switch (activeSortKey) {
+    case "snr":
+      sorted.sort((a, b) => b.network_matched_filter_snr - a.network_matched_filter_snr);
+      break;
+    case "mass":
+      sorted.sort((a, b) => (b.mass_1_source + b.mass_2_source) - (a.mass_1_source + a.mass_2_source));
+      break;
+    case "distance":
+      sorted.sort((a, b) => a.luminosity_distance - b.luminosity_distance);
+      break;
+    case "date":
+      sorted.sort((a, b) => b.GPS - a.GPS);
+      break;
+  }
+
+  return sorted;
+}
+
 function renderEventList() {
-  const displayed = events.slice(0, 80);
+  const sorted = getFilteredSortedEvents();
+  const displayed = sorted.slice(0, 100);
+
+  // Update count
+  const totalLabel = activeTypeFilter === "all"
+    ? `${events.length} events`
+    : `${sorted.length} of ${events.length} events`;
+  eventCountEl.textContent = totalLabel;
+
   eventListItems.innerHTML = displayed
     .map((e) => {
       const totalMass = (e.mass_1_source + e.mass_2_source).toFixed(0);
-      const type = classifyEvent(e);
-      const dot = type === "BNS" ? "\u{1F7E2}" : type === "NSBH" ? "\u{1F7E1}" : "\u{1F7E3}";
       return `<div class="event-item" data-name="${e.commonName}">
         <span>${e.commonName}</span>
         <span class="mass">${totalMass} M\u2609</span>
       </div>`;
     })
     .join("");
+
+  // Re-apply active highlight
+  if (currentEvent) {
+    eventListItems.querySelectorAll(".event-item").forEach((el) => {
+      el.classList.toggle("active", el.getAttribute("data-name") === currentEvent!.commonName);
+    });
+  }
 
   eventListItems.querySelectorAll(".event-item").forEach((el) => {
     el.addEventListener("click", () => {
@@ -443,6 +489,21 @@ function renderEventList() {
     });
   });
 }
+
+// ─── Filter & Sort Controls ─────────────────────────────────────────
+
+filterChips.forEach((chip) => {
+  chip.addEventListener("click", () => {
+    activeTypeFilter = chip.dataset.type!;
+    filterChips.forEach((c) => c.classList.toggle("active", c === chip));
+    renderEventList();
+  });
+});
+
+sortSelect.addEventListener("change", () => {
+  activeSortKey = sortSelect.value;
+  renderEventList();
+});
 
 // ─── Help Overlay ───────────────────────────────────────────────────
 
