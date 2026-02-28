@@ -15,6 +15,7 @@ import { VRPanel } from "../../lib/VRPanel";
 import { loadStrain, hasStrainData } from "../../lib/strain";
 import { computeSpectrogram, renderSpectrogram, disposeSpectrogramWorker, type SpectrogramData } from "../../lib/spectrogram";
 import { getViewMode, onViewModeChange } from "../../lib/view-mode";
+import { performExport } from "../../lib/export";
 import vertexShader from "../../shaders/spacetime.vert.glsl?raw";
 import fragmentShader from "../../shaders/spacetime.frag.glsl?raw";
 
@@ -130,6 +131,9 @@ export class MergerScene implements Scene {
   private eventListEl!: HTMLElement;
   private shareBtn!: HTMLElement;
   private shareToast!: HTMLElement;
+  private exportBtn!: HTMLElement;
+  private exportBtnLabel!: HTMLElement;
+  private exportToast!: HTMLElement;
 
   // Filter/sort state
   private activeTypeFilter = "all";
@@ -229,6 +233,9 @@ export class MergerScene implements Scene {
       this.eventListEl = document.getElementById("event-list")!;
       this.shareBtn = document.getElementById("share-btn")!;
       this.shareToast = document.getElementById("share-toast")!;
+      this.exportBtn = document.getElementById("export-btn")!;
+      this.exportBtnLabel = document.getElementById("export-btn-label")!;
+      this.exportToast = document.getElementById("export-toast")!;
       this.spectrogramPanel = document.getElementById("spectrogram-panel")!;
       this.spectrogramCanvas = document.getElementById("spectrogram-canvas") as HTMLCanvasElement;
       this.spectrogramLoading = document.getElementById("spectrogram-loading")!;
@@ -261,7 +268,10 @@ export class MergerScene implements Scene {
 
     // ─── Spectrogram: subscribe to view mode changes ───
     if (!this.unsubViewMode) {
-      this.unsubViewMode = onViewModeChange(() => this.updateSpectrogramVisibility());
+      this.unsubViewMode = onViewModeChange(() => {
+        this.updateSpectrogramVisibility();
+        this.updateExportVisibility();
+      });
     }
 
     // ─── First-time only setup ───
@@ -291,6 +301,7 @@ export class MergerScene implements Scene {
     this.helpOverlay.style.display = "none";
     document.getElementById("ui")!.style.display = "flex";
     this.updateSpectrogramVisibility();
+    this.updateExportVisibility();
 
     // ─── Load data (only first time) ───
     if (firstInit) {
@@ -581,6 +592,9 @@ export class MergerScene implements Scene {
     // Share
     this.addHandler(this.shareBtn, "click", () => this.handleShare());
 
+    // Export
+    this.addHandler(this.exportBtn, "click", () => this.handleExport());
+
     // Filter chips
     this.filterChips.forEach((chip) => {
       this.addHandler(chip, "click", () => {
@@ -669,6 +683,7 @@ export class MergerScene implements Scene {
       this.mapToggleBtn.textContent = "Universe Map";
       this.mapTooltip.style.display = "none";
       this.updateSpectrogramVisibility();
+      this.updateExportVisibility();
     } else {
       this.eventViewGroup.visible = false;
       this.universeMap.show();
@@ -1021,6 +1036,38 @@ export class MergerScene implements Scene {
     this.spectrogramPanel.style.display = shouldShow ? "block" : "none";
   }
 
+  // ─── Export ──────────────────────────────────────────────────────────
+
+  private updateExportVisibility() {
+    const mode = getViewMode();
+    const visible = mode !== "explorer" && this.viewMode === "event";
+    this.exportBtn.classList.toggle("visible", visible);
+    // Update label based on mode
+    this.exportBtnLabel.textContent = mode === "researcher" ? "Export Data" : "Export";
+  }
+
+  private async handleExport() {
+    if (!this.currentEvent) return;
+    const mode = getViewMode();
+    if (mode === "explorer") return;
+
+    // Show toast
+    this.exportToast.classList.add("show");
+
+    try {
+      await performExport({
+        event: this.currentEvent,
+        waveform: this.currentWaveform,
+        mode,
+      });
+    } finally {
+      // Hide toast after a brief delay
+      setTimeout(() => {
+        this.exportToast.classList.remove("show");
+      }, 800);
+    }
+  }
+
   private async loadSpectrogram(eventName: string) {
     if (this.spectrogramComputing) return;
     const mode = getViewMode();
@@ -1240,6 +1287,9 @@ export class MergerScene implements Scene {
     // Stop audio & playback
     this.isPlaying = false;
     this.audio.stop();
+
+    // Clean up export
+    this.exportBtn.classList.remove("visible");
 
     // Clean up spectrogram
     this.spectrogramPanel.style.display = "none";
