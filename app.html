@@ -390,15 +390,28 @@
         transition: background 0.15s;
         display: flex;
         justify-content: space-between;
-        align-items: center;
+        align-items: baseline;
+        gap: 8px;
         border: 1px solid transparent;
+      }
+      .event-item > span:first-child {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .event-item:hover { background: rgba(255, 255, 255, 0.06); }
       .event-item.active {
         background: rgba(99, 102, 241, 0.15);
         border-color: rgba(99, 102, 241, 0.3);
       }
-      .event-item .mass { color: rgba(255, 255, 255, 0.3); font-size: 11px; }
+      .event-item .mass {
+        color: rgba(255, 255, 255, 0.3);
+        font-size: 11px;
+        white-space: nowrap;
+        flex-shrink: 0;
+        text-align: right;
+      }
 
       /* ─── Time Controls ─── */
       #time-controls {
@@ -1117,17 +1130,17 @@
           right: 8px;
           left: auto;
           width: calc(100vw - 16px);
-          height: 110px;
+          height: 134px;
           border-radius: 10px;
         }
 
         /* Strain chart — compact on mobile */
         #strain-chart-panel {
-          bottom: 188px;
+          bottom: 212px;
           right: 8px;
           left: auto;
           width: calc(100vw - 16px);
-          height: 100px;
+          height: 124px;
           border-radius: 10px;
         }
 
@@ -1152,7 +1165,7 @@
         right: 16px;
         z-index: 9;
         width: min(420px, calc(100vw - 32px));
-        height: 140px;
+        height: 164px;
         border-radius: 10px;
         overflow: hidden;
         display: none;
@@ -1160,9 +1173,16 @@
         backdrop-filter: blur(8px);
         border: 1px solid rgba(255, 255, 255, 0.05);
       }
+      #spectrogram-panel .panel-body {
+        height: calc(100% - 25px);
+        position: relative;
+        display: flex;
+        flex-direction: column;
+      }
       #spectrogram-panel canvas {
         width: 100%;
-        height: 100%;
+        flex: 1;
+        min-height: 0;
         display: block;
       }
       #spectrogram-loading {
@@ -1186,11 +1206,11 @@
       /* ─── Strain Chart Panel ─── */
       #strain-chart-panel {
         position: fixed;
-        bottom: 228px;
+        bottom: 252px;
         right: 16px;
         z-index: 9;
         width: min(420px, calc(100vw - 32px));
-        height: 130px;
+        height: 154px;
         border-radius: 10px;
         overflow: hidden;
         display: none;
@@ -1199,11 +1219,17 @@
         border: 1px solid rgba(255, 255, 255, 0.05);
       }
       #strain-chart-panel.has-tabs {
-        height: 160px;
+        height: 184px;
+      }
+      #strain-chart-panel .panel-body {
+        height: calc(100% - 25px);
+        display: flex;
+        flex-direction: column;
       }
       #strain-chart-panel canvas {
         width: 100%;
-        height: 100%;
+        flex: 1;
+        min-height: 0;
         display: block;
       }
 

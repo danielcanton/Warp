@@ -298,6 +298,15 @@ export class MergerScene implements Scene {
         this.updateInfoPanelValues();
         this.applyControlsModeGating(mode);
         this.renderEventList();
+        // Load spectrogram/strain if switching to a mode that needs them
+        if (mode !== "explorer" && this.currentEvent) {
+          if (!this.spectrogramData) {
+            this.loadSpectrogram(this.currentEvent.commonName);
+          }
+          if (!this.strainChartData) {
+            this.loadStrainChart(this.currentEvent);
+          }
+        }
       });
     }
 
@@ -1324,7 +1333,10 @@ export class MergerScene implements Scene {
       this.spectrogramLoading.style.display = "none";
       this.updateSpectrogramVisibility();
       this.updateSpectrogramZoomPan();
-      renderSpectrogram(this.spectrogramCanvas, precomputed, this.playbackTime);
+      // Wait a frame for the panel layout to settle before rendering
+      requestAnimationFrame(() => {
+        renderSpectrogram(this.spectrogramCanvas, precomputed, this.playbackTime);
+      });
       return;
     }
 
@@ -1347,7 +1359,9 @@ export class MergerScene implements Scene {
       this.spectrogramData = data;
       this.spectrogramLoading.style.display = "none";
       this.updateSpectrogramZoomPan();
-      renderSpectrogram(this.spectrogramCanvas, data, this.playbackTime);
+      requestAnimationFrame(() => {
+        renderSpectrogram(this.spectrogramCanvas, data, this.playbackTime);
+      });
     } catch (err) {
       console.warn("Spectrogram computation failed:", err);
       this.spectrogramData = null;
