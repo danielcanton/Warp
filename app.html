@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WarpLab — Feel Spacetime Bend</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        background: #000;
+        color: #fff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        overflow: hidden;
+      }
+      canvas { display: block; }
+
+      /* ─── Glass panels (shared) ─── */
+      .glass {
+        background: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(12px);
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      /* ─── Event Info Panel ─── */
+      #event-info {
+        position: fixed;
+        top: 24px;
+        left: 24px;
+        z-index: 10;
+        font-size: 13px;
+        line-height: 1.8;
+        padding: 16px 20px;
+        min-width: 240px;
+        max-width: 300px;
+      }
+      .info-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 6px;
+      }
+      #event-info h2 {
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+      .help-btn {
+        width: 24px;
+        height: 24px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 50%;
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        flex-shrink: 0;
+        margin-top: 4px;
+      }
+      .help-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+      .type-badge {
+        display: inline-block;
+        border-radius: 4px;
+        padding: 1px 8px;
+        font-size: 11px;
+        font-weight: 500;
+        margin-bottom: 6px;
+      }
+      .type-badge.bbh { background: rgba(129, 140, 248, 0.2); border: 1px solid rgba(129, 140, 248, 0.3); color: #a5b4fc; }
+      .type-badge.bns { background: rgba(34, 211, 238, 0.2); border: 1px solid rgba(34, 211, 238, 0.3); color: #67e8f9; }
+      .type-badge.nsbh { background: rgba(251, 191, 36, 0.2); border: 1px solid rgba(251, 191, 36, 0.3); color: #fcd34d; }
+      #event-info .param { color: rgba(255, 255, 255, 0.45); }
+      #event-info .value { color: #fff; font-variant-numeric: tabular-nums; }
+      .info-divider {
+        border: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        margin: 8px 0;
+      }
+      .info-detail { color: rgba(255, 255, 255, 0.35); font-size: 12px; line-height: 1.7; }
+      .info-detail .value { color: rgba(255, 255, 255, 0.7); }
+      .snr-badge {
+        display: inline-block;
+        background: rgba(99, 102, 241, 0.2);
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        border-radius: 4px;
+        padding: 1px 6px;
+        font-size: 11px;
+        color: #a5b4fc;
+        margin-left: 4px;
+      }
+      .pastro-badge {
+        display: inline-block;
+        border-radius: 4px;
+        padding: 1px 6px;
+        font-size: 11px;
+        margin-left: 4px;
+      }
+      .pastro-badge.high { background: rgba(74, 222, 128, 0.15); border: 1px solid rgba(74, 222, 128, 0.25); color: #86efac; }
+      .pastro-badge.med { background: rgba(251, 191, 36, 0.15); border: 1px solid rgba(251, 191, 36, 0.25); color: #fcd34d; }
+      .pastro-badge.low { background: rgba(248, 113, 113, 0.15); border: 1px solid rgba(248, 113, 113, 0.25); color: #fca5a5; }
+      .info-catalog {
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.2);
+        margin-top: 4px;
+      }
+
+      /* ─── Help Overlay ─── */
+      #help-overlay {
+        position: fixed;
+        top: 24px;
+        left: 24px;
+        z-index: 20;
+        padding: 20px 24px;
+        min-width: 320px;
+        max-width: 380px;
+        font-size: 13px;
+        line-height: 1.6;
+        display: none;
+      }
+      #help-overlay h2 {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 12px;
+      }
+      .help-intro {
+        color: rgba(255, 255, 255, 0.7);
+        margin-bottom: 16px;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .help-glossary dt {
+        color: rgba(255, 255, 255, 0.9);
+        font-weight: 500;
+        font-size: 12px;
+        margin-top: 8px;
+      }
+      .help-glossary dd {
+        color: rgba(255, 255, 255, 0.45);
+        font-size: 12px;
+        margin-left: 0;
+        margin-bottom: 2px;
+      }
+      .help-footer {
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.2);
+        margin-top: 16px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .help-close {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        width: 24px;
+        height: 24px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 50%;
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+      }
+      .help-close:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+
+      /* ─── Event Filters ─── */
+      .filter-bar {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+        padding: 0 4px;
+      }
+      .filter-chip {
+        padding: 3px 10px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: transparent;
+        color: rgba(255, 255, 255, 0.4);
+        font-size: 11px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .filter-chip:hover { background: rgba(255, 255, 255, 0.06); color: rgba(255, 255, 255, 0.6); }
+      .filter-chip.active { border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc; background: rgba(99, 102, 241, 0.12); }
+      .filter-chip.active.bbh { border-color: rgba(129, 140, 248, 0.4); color: #a5b4fc; background: rgba(129, 140, 248, 0.12); }
+      .filter-chip.active.bns { border-color: rgba(34, 211, 238, 0.4); color: #67e8f9; background: rgba(34, 211, 238, 0.12); }
+      .filter-chip.active.nsbh { border-color: rgba(251, 191, 36, 0.4); color: #fcd34d; background: rgba(251, 191, 36, 0.12); }
+      .sort-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 8px;
+        margin-bottom: 8px;
+      }
+      .sort-row label {
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.25);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .sort-select {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 11px;
+        padding: 2px 6px;
+        cursor: pointer;
+        outline: none;
+      }
+      .sort-select:hover { border-color: rgba(255, 255, 255, 0.2); }
+      .sort-select option { background: #1a1a2e; color: #fff; }
+
+      /* ─── Event List ─── */
+      #event-list {
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        width: 260px;
+        max-height: calc(100vh - 48px);
+        overflow-y: auto;
+        z-index: 10;
+        font-size: 13px;
+        padding: 12px;
+      }
+      #event-list::-webkit-scrollbar { width: 4px; }
+      #event-list::-webkit-scrollbar-track { background: transparent; }
+      #event-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+      #event-list h3 {
+        font-size: 11px;
+        margin-bottom: 8px;
+        color: rgba(255, 255, 255, 0.35);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 500;
+        padding: 0 8px;
+      }
+      #event-count {
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.25);
+        padding: 0 8px;
+        margin-bottom: 8px;
+      }
+      .event-item {
+        padding: 6px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.15s;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid transparent;
+      }
+      .event-item:hover { background: rgba(255, 255, 255, 0.06); }
+      .event-item.active {
+        background: rgba(99, 102, 241, 0.15);
+        border-color: rgba(99, 102, 241, 0.3);
+      }
+      .event-item .mass { color: rgba(255, 255, 255, 0.3); font-size: 11px; }
+
+      /* ─── Time Controls ─── */
+      #time-controls {
+        position: fixed;
+        bottom: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        z-index: 10;
+        padding: 8px 16px;
+        border-radius: 24px;
+      }
+      .ctrl-btn {
+        width: 32px;
+        height: 32px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 50%;
+        color: #fff;
+        font-size: 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s;
+      }
+      .ctrl-btn:hover { background: rgba(255, 255, 255, 0.15); }
+      #time-slider { width: 280px; accent-color: #6366f1; height: 4px; }
+      #time-label {
+        font-size: 11px; color: rgba(255, 255, 255, 0.4);
+        font-variant-numeric: tabular-nums; min-width: 48px; text-align: right;
+      }
+      #speed-label {
+        font-size: 10px; color: rgba(255, 255, 255, 0.35);
+        min-width: 28px; text-align: center;
+      }
+
+      /* ─── Bottom Bar ─── */
+      #ui {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        z-index: 10;
+      }
+      .ui-btn {
+        padding: 10px 20px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 13px;
+        cursor: pointer;
+        backdrop-filter: blur(10px);
+        transition: all 0.2s;
+        letter-spacing: 0.02em;
+      }
+      .ui-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+
+      /* ─── Map Legend ─── */
+      #map-legend {
+        position: fixed;
+        top: 24px;
+        left: 24px;
+        z-index: 10;
+        padding: 16px 20px;
+        font-size: 13px;
+        line-height: 2;
+        display: none;
+      }
+      #map-legend h2 {
+        font-size: 18px;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+      .legend-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 8px;
+        vertical-align: middle;
+      }
+      .legend-dot.bbh { background: #818cf8; }
+      .legend-dot.bns { background: #22d3ee; }
+      .legend-dot.nsbh { background: #fbbf24; }
+      .legend-label { color: rgba(255, 255, 255, 0.6); }
+      .legend-hint {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.25);
+        margin-top: 8px;
+        line-height: 1.5;
+      }
+
+      /* ─── Branding ─── */
+      #brand {
+        position: fixed;
+        bottom: 28px;
+        left: 24px;
+        z-index: 10;
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.2);
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        font-weight: 600;
+      }
+
+      /* ─── Keyboard hints ─── */
+      .kbd {
+        display: inline-block;
+        padding: 1px 5px;
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 3px;
+        font-size: 10px;
+        font-family: monospace;
+        color: rgba(255,255,255,0.4);
+        margin-left: 4px;
+      }
+
+      /* ─── Loading Screen ─── */
+      #loading-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        background: #000005;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 0.6s ease;
+      }
+      #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+      .loading-title {
+        font-size: 28px;
+        font-weight: 600;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.8);
+        margin-bottom: 24px;
+      }
+      .loading-ring {
+        width: 40px;
+        height: 40px;
+        border: 2px solid rgba(99, 102, 241, 0.15);
+        border-top-color: #6366f1;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 16px;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .loading-status {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.3);
+        letter-spacing: 0.04em;
+      }
+
+      /* ─── Search Input ─── */
+      .search-row {
+        padding: 0 4px;
+        margin-bottom: 8px;
+      }
+      .search-input {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 12px;
+        padding: 5px 10px;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      .search-input::placeholder { color: rgba(255, 255, 255, 0.2); }
+      .search-input:focus { border-color: rgba(99, 102, 241, 0.4); }
+
+      /* ─── Map Tooltip ─── */
+      #map-tooltip {
+        position: fixed;
+        z-index: 15;
+        padding: 6px 12px;
+        font-size: 12px;
+        pointer-events: none;
+        display: none;
+        white-space: nowrap;
+      }
+      .tooltip-name { color: #fff; font-weight: 500; }
+      .tooltip-detail { color: rgba(255, 255, 255, 0.4); font-size: 11px; margin-left: 8px; }
+    </style>
+  </head>
+  <body>
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+      <div class="loading-title">WarpLab</div>
+      <div class="loading-ring"></div>
+      <div class="loading-status" id="loading-status">Connecting to LIGO/Virgo/KAGRA...</div>
+    </div>
+
+    <!-- Map Tooltip -->
+    <div id="map-tooltip" class="glass"></div>
+
+    <div id="brand">WARPLAB</div>
+
+    <!-- Event View: Info Panel -->
+    <div id="event-info" class="glass">
+      <div class="info-header">
+        <h2 id="event-name">Loading...</h2>
+        <button class="help-btn" id="help-btn" title="What am I looking at? (H)">?</button>
+      </div>
+      <div id="type-badge" class="type-badge bbh"></div>
+      <div><span class="param">Masses </span><span class="value" id="masses">&mdash;</span></div>
+      <div><span class="param">Distance </span><span class="value" id="distance">&mdash;</span></div>
+      <hr class="info-divider">
+      <div class="info-detail"><span class="param">Chirp mass </span><span class="value" id="chirp-mass">&mdash;</span></div>
+      <div class="info-detail"><span class="param">Final mass </span><span class="value" id="final-mass">&mdash;</span></div>
+      <div class="info-detail"><span class="param">Energy radiated </span><span class="value" id="energy-radiated">&mdash;</span></div>
+      <div class="info-detail"><span class="param">Eff. spin </span><span class="value" id="chi-eff">&mdash;</span></div>
+      <div class="info-detail"><span class="param">Redshift </span><span class="value" id="redshift">&mdash;</span></div>
+      <div class="info-detail"><span class="param">SNR </span><span class="snr-badge" id="snr">&mdash;</span></div>
+      <div class="info-detail"><span class="param">Confidence </span><span class="pastro-badge" id="p-astro">&mdash;</span></div>
+      <div class="info-catalog" id="catalog-name"></div>
+    </div>
+
+    <!-- Help Overlay -->
+    <div id="help-overlay" class="glass">
+      <button class="help-close" id="help-close">&times;</button>
+      <h2>What am I looking at?</h2>
+      <p class="help-intro">
+        You're watching two massive objects &mdash; black holes or neutron stars &mdash;
+        spiraling into each other and merging. The rippling grid is spacetime itself,
+        bending under their gravity. The sound is the gravitational wave signal,
+        shifted into the range of human hearing.
+      </p>
+      <dl class="help-glossary">
+        <dt>Masses</dt>
+        <dd>How heavy each object is, measured in solar masses (M&#9737; = our Sun's mass)</dd>
+        <dt>Chirp mass</dt>
+        <dd>A combined mass that determines how the gravitational wave signal "chirps" &mdash; the key parameter detectors measure</dd>
+        <dt>Distance</dt>
+        <dd>How far away this happened, in megaparsecs (1 Mpc &asymp; 3.26 million light-years)</dd>
+        <dt>Final mass</dt>
+        <dd>The mass of the merged remnant &mdash; always less than the sum of the two original objects</dd>
+        <dt>Energy radiated</dt>
+        <dd>Mass converted into gravitational wave energy (E = mc&sup2;). This is the "missing" mass</dd>
+        <dt>Effective spin</dt>
+        <dd>Whether the objects spin in the same direction (+1) or opposite (&minus;1). Zero means no net spin alignment</dd>
+        <dt>Redshift</dt>
+        <dd>How much the universe expanded while the waves traveled to us &mdash; higher means older and farther</dd>
+        <dt>SNR</dt>
+        <dd>Signal-to-noise ratio. Higher = clearer detection. GW150914 had SNR 24, extremely loud</dd>
+        <dt>Confidence (p_astro)</dt>
+        <dd>Probability this is a real astrophysical event vs. detector noise. &gt; 0.99 means near-certain</dd>
+      </dl>
+      <div class="help-footer">
+        Data from LIGO / Virgo / KAGRA via GWOSC &bull;
+        <span class="kbd">H</span> toggle help &bull;
+        <span class="kbd">Esc</span> close
+      </div>
+    </div>
+
+    <!-- Map View: Legend -->
+    <div id="map-legend" class="glass">
+      <h2>Gravitational Wave Events</h2>
+      <div><span class="legend-dot bbh"></span><span class="legend-label">Binary Black Hole</span></div>
+      <div><span class="legend-dot bns"></span><span class="legend-label">Binary Neutron Star</span></div>
+      <div><span class="legend-dot nsbh"></span><span class="legend-label">Neutron Star &ndash; Black Hole</span></div>
+      <div class="legend-hint">
+        Dot size = total mass<br>
+        Earth is the green dot at center<br>
+        Click any event to inspect it<br>
+        <span class="kbd">M</span> toggle map
+      </div>
+    </div>
+
+    <!-- Event List (shown in both views) -->
+    <div id="event-list" class="glass">
+      <h3>Events</h3>
+      <div id="event-count"></div>
+      <div class="search-row">
+        <input type="text" class="search-input" id="search-input" placeholder="Search events..." />
+      </div>
+      <div class="filter-bar">
+        <button class="filter-chip active" data-type="all">All</button>
+        <button class="filter-chip bbh" data-type="BBH">BBH</button>
+        <button class="filter-chip bns" data-type="BNS">BNS</button>
+        <button class="filter-chip nsbh" data-type="NSBH">NSBH</button>
+      </div>
+      <div class="sort-row">
+        <label>Sort</label>
+        <select class="sort-select" id="sort-select">
+          <option value="snr">SNR</option>
+          <option value="mass">Mass</option>
+          <option value="distance">Distance</option>
+          <option value="date">Date</option>
+        </select>
+      </div>
+      <div id="event-list-items"></div>
+    </div>
+
+    <!-- Time Controls (event view only) -->
+    <div id="time-controls" class="glass">
+      <button class="ctrl-btn" id="play-btn" title="Play/Pause (Space)">&#9654;</button>
+      <input type="range" id="time-slider" min="0" max="1000" value="0" />
+      <span id="time-label">0.00s</span>
+      <button class="ctrl-btn" id="speed-btn" title="Speed (S)">&#9202;</button>
+      <span id="speed-label">1x</span>
+    </div>
+
+    <!-- Bottom Bar -->
+    <div id="ui">
+      <button class="ui-btn" id="map-toggle" title="Toggle universe map (M)">Universe Map</button>
+      <button class="ui-btn" id="vr-button">Enter VR</button>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
