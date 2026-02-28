@@ -48,6 +48,7 @@ const renderer = new THREE.WebGLRenderer({
   antialias: true,
   alpha: true,
   powerPreference: "high-performance",
+  preserveDrawingBuffer: true,
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -235,8 +236,69 @@ const onboarding = document.getElementById("onboarding")!;
 const aboutOverlay = document.getElementById("about-overlay")!;
 const aboutCloseBtn = document.getElementById("about-close")!;
 const brandEl = document.getElementById("brand")!;
+const screenshotBtn = document.getElementById("screenshot-btn")!;
 const eventsToggleBtn = document.getElementById("events-toggle");
 const eventListEl = document.getElementById("event-list")!;
+
+// ─── Screenshot Export ──────────────────────────────────────────────
+
+function takeScreenshot() {
+  // Force a fresh render so the buffer is current
+  if (renderer.xr.isPresenting) {
+    renderer.render(scene, camera);
+  } else {
+    composer.render(0);
+  }
+
+  const sourceCanvas = renderer.domElement;
+  const w = sourceCanvas.width;
+  const h = sourceCanvas.height;
+
+  // Create offscreen canvas and draw the screenshot
+  const offscreen = document.createElement("canvas");
+  offscreen.width = w;
+  offscreen.height = h;
+  const ctx = offscreen.getContext("2d")!;
+  ctx.drawImage(sourceCanvas, 0, 0);
+
+  // Watermark text settings
+  const eventLabel = currentEvent?.commonName ?? "WarpLab";
+  const watermark = "warplab.app";
+  const fontSize = Math.max(16, Math.round(h * 0.025));
+
+  ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif`;
+  ctx.textBaseline = "top";
+
+  // Event name — top left
+  const pad = Math.round(fontSize * 1.2);
+  ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+  ctx.shadowBlur = 6;
+  ctx.shadowOffsetX = 1;
+  ctx.shadowOffsetY = 1;
+  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.fillText(eventLabel, pad, pad);
+
+  // Watermark — bottom right
+  ctx.textBaseline = "bottom";
+  ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif`;
+  ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+  const metrics = ctx.measureText(watermark);
+  ctx.fillText(watermark, w - metrics.width - pad, h - pad);
+
+  // Trigger download
+  offscreen.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const safeName = (currentEvent?.commonName ?? "warplab").replace(/[^a-zA-Z0-9_-]/g, "");
+    a.download = `warplab-${safeName}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, "image/png");
+}
+
+screenshotBtn.addEventListener("click", takeScreenshot);
 
 // Mobile events panel toggle
 if (eventsToggleBtn) {
@@ -622,6 +684,7 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "KeyS") speedBtn.click();
   if (e.code === "KeyM") mapToggleBtn.click();
   if (e.code === "KeyH") toggleHelp();
+  if (e.code === "KeyP") takeScreenshot();
   if (e.code === "Escape") {
     if (helpOverlay.style.display === "block") toggleHelp();
     if (aboutOverlay.classList.contains("show")) toggleAbout();
