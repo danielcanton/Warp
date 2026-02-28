@@ -43,7 +43,7 @@ export default function GlassCTA({
         active:scale-[0.97]
         ${className}
       `}
-      style={{ padding: "20px 80px" }}
+      style={{ padding: "18px 48px" }}
     >
       {/* Spotlight follow */}
       <div
