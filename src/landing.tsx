@@ -2,7 +2,7 @@ import { inject } from "@vercel/analytics";
 inject();
 
 import { createRoot } from "react-dom/client";
-import SplashCursor from "./components/SplashCursor";
+import GridDistortion from "./components/GridDistortion";
 import DecryptedText from "./components/DecryptedText";
 import GradientText from "./components/GradientText";
 import GlassCTA from "./components/GlassCTA";
@@ -11,13 +11,12 @@ import "./landing.css";
 function Landing() {
   return (
     <div className="relative h-screen bg-black text-white overflow-hidden">
-      {/* Fluid cursor background */}
-      <SplashCursor
-        BACK_COLOR={{ r: 0, g: 0, b: 0 }}
-        DENSITY_DISSIPATION={3}
-        VELOCITY_DISSIPATION={2}
-        SPLAT_RADIUS={0.3}
-        CURL={5}
+      {/* Spacetime grid distortion background */}
+      <GridDistortion
+        grid={15}
+        mouse={0.12}
+        strength={0.2}
+        relaxation={0.92}
       />
 
       {/* Content overlay */}
