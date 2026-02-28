@@ -120,6 +120,9 @@ const GridDistortion: React.FC<GridDistortionProps> = ({
     renderer.setClearColor(0x000000, 0);
 
     container.innerHTML = '';
+    renderer.domElement.style.display = 'block';
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
     container.appendChild(renderer.domElement);
 
     const camera = new THREE.OrthographicCamera(0, 0, 0, 0, -1000, 1000);
@@ -183,6 +186,7 @@ const GridDistortion: React.FC<GridDistortionProps> = ({
 
     const mouseState = { x: 0, y: 0, prevX: 0, prevY: 0, vX: 0, vY: 0 };
 
+    // Listen on document so mouse events work even when content overlays the canvas
     const handleMouseMove = (e: MouseEvent) => {
       const rect = container.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width;
@@ -203,13 +207,8 @@ const GridDistortion: React.FC<GridDistortionProps> = ({
       Object.assign(mouseState, { x, y, prevX: x, prevY: y });
     };
 
-    const handleMouseLeave = () => {
-      Object.assign(mouseState, { x: 0, y: 0, prevX: 0, prevY: 0, vX: 0, vY: 0 });
-    };
-
-    container.addEventListener('mousemove', handleMouseMove);
-    container.addEventListener('mouseleave', handleMouseLeave);
-    container.addEventListener('touchmove', handleTouchMove, { passive: true });
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('touchmove', handleTouchMove, { passive: true });
 
     handleResize();
 
@@ -249,9 +248,8 @@ const GridDistortion: React.FC<GridDistortionProps> = ({
     return () => {
       cancelAnimationFrame(animId);
       resizeObserver.disconnect();
-      container.removeEventListener('mousemove', handleMouseMove);
-      container.removeEventListener('mouseleave', handleMouseLeave);
-      container.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('touchmove', handleTouchMove);
       renderer.dispose();
       geometry.dispose();
       material.dispose();
