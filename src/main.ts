@@ -22,6 +22,11 @@ import { BinarySystem } from "./lib/binary";
 import { UniverseMap } from "./lib/universe-map";
 import vertexShader from "./shaders/spacetime.vert.glsl?raw";
 import fragmentShader from "./shaders/spacetime.frag.glsl?raw";
+import { inject } from "@vercel/analytics";
+
+// ─── Initialize Vercel Web Analytics ─────────────────────────────────
+
+inject();
 
 // ─── State ───────────────────────────────────────────────────────────
 
