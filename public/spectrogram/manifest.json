@@ -1,0 +1,20 @@
+{
+  "GW150914/H1": {
+    "freqBins": 64,
+    "timeBins": 512,
+    "freqMin": 20,
+    "freqMax": 1024,
+    "qMin": 4,
+    "qMax": 64,
+    "maxAmplitude": 3.1788378717847977e-21
+  },
+  "GW150914/L1": {
+    "freqBins": 64,
+    "timeBins": 512,
+    "freqMin": 20,
+    "freqMax": 1024,
+    "qMin": 4,
+    "qMax": 64,
+    "maxAmplitude": 3.443524188638581e-20
+  }
+}

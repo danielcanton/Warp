@@ -106,6 +106,66 @@ async function setCache(key: string, data: SpectrogramData): Promise<void> {
   }
 }
 
+// ─── Pre-computed spectrogram loader ─────────────────────────────────
+
+interface PrecomputedManifestEntry {
+  freqBins: number;
+  timeBins: number;
+  freqMin: number;
+  freqMax: number;
+  qMin: number;
+  qMax: number;
+  maxAmplitude: number;
+}
+
+let precomputedManifest: Record<string, PrecomputedManifestEntry> | null = null;
+let precomputedUnavailable = false;
+
+async function getPrecomputedManifest(): Promise<Record<string, PrecomputedManifestEntry>> {
+  if (precomputedUnavailable) return {};
+  if (precomputedManifest) return precomputedManifest;
+  try {
+    const res = await fetch("/spectrogram/manifest.json");
+    if (!res.ok) { precomputedUnavailable = true; return {}; }
+    precomputedManifest = await res.json();
+    return precomputedManifest!;
+  } catch {
+    precomputedUnavailable = true;
+    return {};
+  }
+}
+
+async function loadPrecomputed(eventName: string, detector: string): Promise<SpectrogramData | null> {
+  const manifest = await getPrecomputedManifest();
+  const key = `${eventName}/${detector}`;
+  const entry = manifest[key];
+  if (!entry) return null;
+
+  try {
+    const res = await fetch(`/spectrogram/${eventName}/${detector}.bin`);
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    const all = new Float32Array(buf);
+
+    const ampLen = entry.freqBins * entry.timeBins;
+    const freqLen = entry.freqBins;
+    const timeLen = entry.timeBins;
+
+    return {
+      amplitudes: all.slice(0, ampLen),
+      freqs: all.slice(ampLen, ampLen + freqLen),
+      times: all.slice(ampLen + freqLen, ampLen + freqLen + timeLen),
+      freqBins: entry.freqBins,
+      timeBins: entry.timeBins,
+      maxAmplitude: entry.maxAmplitude,
+      eventName,
+      detector,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ─── Worker lifecycle ────────────────────────────────────────────────
 
 let worker: Worker | null = null;
@@ -121,7 +181,8 @@ function getWorker(): Worker {
 }
 
 /**
- * Compute (or retrieve cached) spectrogram for strain data.
+ * Load (or compute) spectrogram for strain data.
+ * Priority: pre-computed static file → IndexedDB cache → Web Worker.
  */
 export async function computeSpectrogram(
   strain: StrainData,
@@ -129,11 +190,15 @@ export async function computeSpectrogram(
 ): Promise<SpectrogramData> {
   const cacheKey = `${eventName}/${strain.detector}`;
 
-  // Check IndexedDB cache
+  // 1. Try pre-computed static file (instant, no computation)
+  const precomputed = await loadPrecomputed(eventName, strain.detector);
+  if (precomputed) return precomputed;
+
+  // 2. Check IndexedDB cache
   const cached = await getCached(cacheKey);
   if (cached) return cached;
 
-  // Compute via Web Worker
+  // 3. Fall back to Web Worker computation
   const w = getWorker();
 
   const request: SpectrogramRequest = {
@@ -156,7 +221,6 @@ export async function computeSpectrogram(
       clearTimeout(timeout);
       reject(err);
     };
-    // Transfer the data buffer copy to the worker
     const dataCopy = new Float32Array(strain.data);
     w.postMessage(
       { ...request, data: dataCopy },

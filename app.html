@@ -47,9 +47,13 @@
         z-index: 10;
         font-size: 13px;
         line-height: 1.8;
-        padding: 16px 20px;
+        padding: 0;
         min-width: 240px;
         max-width: 300px;
+        overflow: hidden;
+      }
+      #event-info .panel-body {
+        padding: 12px 20px 16px;
       }
       .info-header {
         display: flex;
@@ -351,7 +355,13 @@
         overflow-y: auto;
         z-index: 10;
         font-size: 13px;
+        padding: 0;
+        overflow: hidden;
+      }
+      #event-list .panel-body {
         padding: 12px;
+        max-height: calc(100vh - 96px);
+        overflow-y: auto;
       }
       #event-list::-webkit-scrollbar { width: 4px; }
       #event-list::-webkit-scrollbar-track { background: transparent; }
@@ -915,11 +925,13 @@
       body.embed #event-info {
         top: 12px;
         left: 12px;
-        padding: 10px 14px;
+        padding: 0;
         font-size: 12px;
         min-width: 200px;
         max-width: 260px;
       }
+      body.embed #event-info .panel-header { display: none; }
+      body.embed #event-info .panel-body { padding: 10px 14px; }
       body.embed #event-info h2 { font-size: 16px; }
       body.embed #event-info .help-btn { display: none; }
       body.embed #event-info .info-divider,
@@ -990,14 +1002,18 @@
         #event-info {
           top: auto; bottom: 80px; left: 12px; right: 12px;
           max-width: none; min-width: 0;
-          padding: 10px 14px;
+          padding: 0;
           border-radius: 14px;
           animation: none;
+          line-height: 1.4;
+        }
+        #event-info .panel-header { display: none; }
+        #event-info .panel-body {
+          padding: 10px 14px;
           display: flex;
           flex-wrap: wrap;
           align-items: center;
           gap: 6px 10px;
-          line-height: 1.4;
         }
         #event-info .info-header {
           width: 100%;
@@ -1020,7 +1036,10 @@
           border-radius: 14px;
           z-index: 30;
           display: none;
+          padding: 0;
         }
+        #event-list .panel-header { display: none; }
+        #event-list .panel-body { padding: 12px; max-height: none; }
         #event-list.mobile-open { display: block; }
         #event-list h3 { font-size: 10px; }
 
@@ -1188,7 +1207,78 @@
         display: block;
       }
 
-      /* ─── Draggable Panel Handle ─── */
+      /* ─── Draggable Panel Header ─── */
+      .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 8px;
+        cursor: grab;
+        user-select: none;
+        flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.03);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        min-height: 24px;
+      }
+      .panel-header:active { cursor: grabbing; }
+      .panel-header-title {
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.3);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-weight: 500;
+      }
+      .panel-header-grip {
+        width: 24px;
+        height: 3px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.15);
+        flex-shrink: 0;
+      }
+      .panel-header-inline {
+        padding: 0 6px;
+        min-height: 0;
+        border: none;
+        background: none;
+        width: 20px;
+      }
+      .panel-header-inline .panel-header-grip {
+        width: 3px;
+        height: 16px;
+        background: rgba(255, 255, 255, 0.2);
+      }
+      .panel-minimize-btn {
+        width: 18px;
+        height: 18px;
+        background: none;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        color: rgba(255, 255, 255, 0.3);
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+        flex-shrink: 0;
+        padding: 0;
+      }
+      .panel-minimize-btn:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.6);
+        border-color: rgba(255, 255, 255, 0.2);
+      }
+      .panel-body { transition: max-height 0.2s ease, opacity 0.15s ease; overflow: hidden; }
+      .panel-minimized .panel-body { max-height: 0 !important; opacity: 0; overflow: hidden; }
+      .panel-minimized { min-height: auto !important; height: auto !important; }
+      .panel-minimized canvas { display: none; }
+      .panel-minimized #spectrogram-loading { display: none; }
+      .panel-dragging {
+        opacity: 0.85;
+        transition: none !important;
+      }
+      /* Legacy handle (keep for compat) */
       .panel-drag-handle {
         height: 18px;
         display: flex;
@@ -1205,10 +1295,6 @@
         height: 3px;
         border-radius: 2px;
         background: rgba(255, 255, 255, 0.2);
-      }
-      .panel-dragging {
-        opacity: 0.85;
-        transition: none !important;
       }
 
       /* ─── Detector Tabs (Researcher mode) ─── */
@@ -1752,38 +1838,45 @@
 
     <!-- Event View: Info Panel -->
     <div id="event-info" class="glass">
-      <div class="info-header">
-        <h2 id="event-name">Loading...</h2>
-        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
-          <button class="export-btn" id="export-btn" title="Export data">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M8 1v10M4 7l4 4 4-4"/>
-              <path d="M2 13h12"/>
-            </svg>
-            <span id="export-btn-label">Export</span>
-          </button>
-          <button class="share-btn" id="share-btn" title="Share this event">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M6 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3"/>
-              <path d="M10 1h5v5"/>
-              <path d="M8 8L15 1"/>
-            </svg>
-          </button>
-          <button class="help-btn" id="help-btn" title="What am I looking at? (H)">?</button>
-        </div>
+      <div class="panel-header" data-drag-target="event-info">
+        <span class="panel-header-title">Event Info</span>
+        <div class="panel-header-grip"></div>
+        <button class="panel-minimize-btn" data-minimize-target="event-info" title="Minimize">&#8722;</button>
       </div>
-      <div id="type-badge" class="type-badge bbh"></div>
-      <div><span class="param">Masses </span><span class="value" id="masses">&mdash;</span></div>
-      <div><span class="param">Distance </span><span class="value" id="distance">&mdash;</span></div>
-      <hr class="info-divider">
-      <div class="info-detail"><span class="param">Chirp mass </span><span class="value" id="chirp-mass">&mdash;</span></div>
-      <div class="info-detail"><span class="param">Final mass </span><span class="value" id="final-mass">&mdash;</span></div>
-      <div class="info-detail"><span class="param">Energy radiated </span><span class="value" id="energy-radiated">&mdash;</span></div>
-      <div class="info-detail"><span class="param">Eff. spin </span><span class="value" id="chi-eff">&mdash;</span></div>
-      <div class="info-detail"><span class="param">Redshift </span><span class="value" id="redshift">&mdash;</span></div>
-      <div class="info-detail"><span class="param">SNR </span><span class="snr-badge" id="snr">&mdash;</span></div>
-      <div class="info-detail"><span class="param">Confidence </span><span class="pastro-badge" id="p-astro">&mdash;</span></div>
-      <div class="info-catalog" id="catalog-name"></div>
+      <div class="panel-body">
+        <div class="info-header">
+          <h2 id="event-name">Loading...</h2>
+          <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+            <button class="export-btn" id="export-btn" title="Export data">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 1v10M4 7l4 4 4-4"/>
+                <path d="M2 13h12"/>
+              </svg>
+              <span id="export-btn-label">Export</span>
+            </button>
+            <button class="share-btn" id="share-btn" title="Share this event">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3"/>
+                <path d="M10 1h5v5"/>
+                <path d="M8 8L15 1"/>
+              </svg>
+            </button>
+            <button class="help-btn" id="help-btn" title="What am I looking at? (H)">?</button>
+          </div>
+        </div>
+        <div id="type-badge" class="type-badge bbh"></div>
+        <div><span class="param">Masses </span><span class="value" id="masses">&mdash;</span></div>
+        <div><span class="param">Distance </span><span class="value" id="distance">&mdash;</span></div>
+        <hr class="info-divider">
+        <div class="info-detail"><span class="param">Chirp mass </span><span class="value" id="chirp-mass">&mdash;</span></div>
+        <div class="info-detail"><span class="param">Final mass </span><span class="value" id="final-mass">&mdash;</span></div>
+        <div class="info-detail"><span class="param">Energy radiated </span><span class="value" id="energy-radiated">&mdash;</span></div>
+        <div class="info-detail"><span class="param">Eff. spin </span><span class="value" id="chi-eff">&mdash;</span></div>
+        <div class="info-detail"><span class="param">Redshift </span><span class="value" id="redshift">&mdash;</span></div>
+        <div class="info-detail"><span class="param">SNR </span><span class="snr-badge" id="snr">&mdash;</span></div>
+        <div class="info-detail"><span class="param">Confidence </span><span class="pastro-badge" id="p-astro">&mdash;</span></div>
+        <div class="info-catalog" id="catalog-name"></div>
+      </div>
     </div>
 
     <!-- Help Overlay -->
@@ -1847,53 +1940,74 @@
 
     <!-- Event List (shown in both views) -->
     <div id="event-list" class="glass">
-      <h3>Events</h3>
-      <div id="event-count"></div>
-      <div class="search-row">
-        <input type="text" class="search-input" id="search-input" placeholder="Search events..." />
+      <div class="panel-header" data-drag-target="event-list">
+        <span class="panel-header-title">Events</span>
+        <div class="panel-header-grip"></div>
+        <button class="panel-minimize-btn" data-minimize-target="event-list" title="Minimize">&#8722;</button>
       </div>
-      <div class="filter-bar">
-        <button class="filter-chip active" data-type="all">All</button>
-        <button class="filter-chip bbh" data-type="BBH">BBH</button>
-        <button class="filter-chip bns" data-type="BNS">BNS</button>
-        <button class="filter-chip nsbh" data-type="NSBH">NSBH</button>
+      <div class="panel-body">
+        <div id="event-count"></div>
+        <div class="search-row">
+          <input type="text" class="search-input" id="search-input" placeholder="Search events..." />
+        </div>
+        <div class="filter-bar">
+          <button class="filter-chip active" data-type="all">All</button>
+          <button class="filter-chip bbh" data-type="BBH">BBH</button>
+          <button class="filter-chip bns" data-type="BNS">BNS</button>
+          <button class="filter-chip nsbh" data-type="NSBH">NSBH</button>
+        </div>
+        <div class="sort-row">
+          <label>Sort</label>
+          <select class="sort-select" id="sort-select">
+            <option value="snr">SNR</option>
+            <option value="mass">Mass</option>
+            <option value="distance">Distance</option>
+            <option value="date">Date</option>
+          </select>
+        </div>
+        <div id="event-list-items"></div>
       </div>
-      <div class="sort-row">
-        <label>Sort</label>
-        <select class="sort-select" id="sort-select">
-          <option value="snr">SNR</option>
-          <option value="mass">Mass</option>
-          <option value="distance">Distance</option>
-          <option value="date">Date</option>
-        </select>
-      </div>
-      <div id="event-list-items"></div>
     </div>
 
     <!-- Spectrogram (Student/Researcher modes only) -->
     <div id="spectrogram-panel" class="glass">
-      <div class="panel-drag-handle" data-drag-target="spectrogram-panel"></div>
-      <canvas id="spectrogram-canvas"></canvas>
-      <div id="spectrogram-loading">
-        <div class="loading-ring"></div>
-        Computing spectrogram...
+      <div class="panel-header" data-drag-target="spectrogram-panel">
+        <span class="panel-header-title">Spectrogram</span>
+        <div class="panel-header-grip"></div>
+        <button class="panel-minimize-btn" data-minimize-target="spectrogram-panel" title="Minimize">&#8722;</button>
+      </div>
+      <div class="panel-body">
+        <canvas id="spectrogram-canvas"></canvas>
+        <div id="spectrogram-loading">
+          <div class="loading-ring"></div>
+          Computing spectrogram...
+        </div>
       </div>
     </div>
 
     <!-- Strain overlay chart (Student/Researcher modes only) -->
     <div id="strain-chart-panel" class="glass">
-      <div class="panel-drag-handle" data-drag-target="strain-chart-panel"></div>
-      <div id="detector-tabs" style="display:none;">
-        <button class="detector-tab active" data-detector="H1">H1</button>
-        <button class="detector-tab" data-detector="L1">L1</button>
-        <button class="detector-tab" data-detector="V1">V1</button>
-        <button id="whiten-toggle" class="whiten-btn" title="Toggle whitened strain">Raw</button>
+      <div class="panel-header" data-drag-target="strain-chart-panel">
+        <span class="panel-header-title">Strain</span>
+        <div class="panel-header-grip"></div>
+        <button class="panel-minimize-btn" data-minimize-target="strain-chart-panel" title="Minimize">&#8722;</button>
       </div>
-      <canvas id="strain-chart-canvas"></canvas>
+      <div class="panel-body">
+        <div id="detector-tabs" style="display:none;">
+          <button class="detector-tab active" data-detector="H1">H1</button>
+          <button class="detector-tab" data-detector="L1">L1</button>
+          <button class="detector-tab" data-detector="V1">V1</button>
+          <button id="whiten-toggle" class="whiten-btn" title="Toggle whitened strain">Raw</button>
+        </div>
+        <canvas id="strain-chart-canvas"></canvas>
+      </div>
     </div>
 
     <!-- Time Controls (event view only) -->
     <div id="time-controls" class="glass">
+      <div class="panel-header panel-header-inline" data-drag-target="time-controls">
+        <div class="panel-header-grip"></div>
+      </div>
       <button class="ctrl-btn" id="play-btn" title="Play/Pause (Space)">&#9654;</button>
       <input type="range" id="time-slider" min="0" max="1000" value="0" />
       <span id="time-label">0.00s</span>
@@ -1990,13 +2104,17 @@
       <span>Exporting…</span>
     </div>
 
-    <!-- Draggable data panels -->
+    <!-- Draggable + minimizable panels -->
     <script>
     (function() {
+      // ─── Drag ───
       let active = null, startX, startY, origX, origY;
       function onDown(e) {
-        const handle = e.target.closest('.panel-drag-handle');
+        // Support both .panel-header and legacy .panel-drag-handle
+        const handle = e.target.closest('.panel-header[data-drag-target], .panel-drag-handle[data-drag-target]');
         if (!handle) return;
+        // Don't drag when clicking minimize button
+        if (e.target.closest('.panel-minimize-btn')) return;
         const id = handle.dataset.dragTarget;
         active = document.getElementById(id);
         if (!active) return;
@@ -2027,6 +2145,18 @@
       document.addEventListener('touchstart', onDown, {passive: false});
       document.addEventListener('touchmove', onMove, {passive: false});
       document.addEventListener('touchend', onUp);
+
+      // ─── Minimize / Restore ───
+      document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.panel-minimize-btn');
+        if (!btn) return;
+        const id = btn.dataset.minimizeTarget;
+        const panel = document.getElementById(id);
+        if (!panel) return;
+        const isMin = panel.classList.toggle('panel-minimized');
+        btn.innerHTML = isMin ? '&#43;' : '&#8722;';
+        btn.title = isMin ? 'Restore' : 'Minimize';
+      });
     })();
     </script>
 
