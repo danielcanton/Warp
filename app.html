@@ -870,6 +870,7 @@
         padding: 6px 14px;
         border-radius: 20px;
       }
+      body.embed #spectrogram-panel { display: none !important; }
       /* Embed: scene selector hidden (scene chosen via ?scene= param) */
       body.embed #scene-selector { display: none !important; }
       /* Embed: compact panels for non-merger scenes */
@@ -1028,6 +1029,17 @@
         .tour-event-name { font-size: 15px; }
         .tour-description { font-size: 12px; }
 
+        /* Spectrogram — compact on mobile */
+        #spectrogram-panel {
+          bottom: 70px;
+          left: 12px;
+          right: 12px;
+          width: auto;
+          transform: none;
+          height: 140px;
+          border-radius: 14px;
+        }
+
         /* About overlay — mobile friendly */
         #about-overlay { padding: 16px; }
         .about-card {
@@ -1040,6 +1052,42 @@
 
         /* Loading screen */
         .loading-title { font-size: 20px; }
+      }
+
+      /* ─── Spectrogram Panel ─── */
+      #spectrogram-panel {
+        position: fixed;
+        bottom: 130px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 9;
+        width: min(600px, calc(100vw - 48px));
+        height: 180px;
+        border-radius: 12px;
+        overflow: hidden;
+        display: none;
+      }
+      #spectrogram-panel canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      #spectrogram-loading {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.4);
+        letter-spacing: 0.04em;
+      }
+      #spectrogram-loading .loading-ring {
+        width: 16px;
+        height: 16px;
+        border-width: 1.5px;
+        margin-right: 8px;
+        margin-bottom: 0;
       }
 
       /* ─── View Mode Gear ─── */
@@ -1636,6 +1684,15 @@
         </select>
       </div>
       <div id="event-list-items"></div>
+    </div>
+
+    <!-- Spectrogram (Student/Researcher modes only) -->
+    <div id="spectrogram-panel" class="glass">
+      <canvas id="spectrogram-canvas"></canvas>
+      <div id="spectrogram-loading">
+        <div class="loading-ring"></div>
+        Computing spectrogram...
+      </div>
     </div>
 
     <!-- Time Controls (event view only) -->

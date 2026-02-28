@@ -11,6 +11,10 @@ import {
 import { GWAudioEngine } from "../../lib/audio";
 import { BinarySystem } from "../../lib/binary";
 import { UniverseMap } from "../../lib/universe-map";
+import { VRPanel } from "../../lib/VRPanel";
+import { loadStrain, hasStrainData } from "../../lib/strain";
+import { computeSpectrogram, renderSpectrogram, disposeSpectrogramWorker, type SpectrogramData } from "../../lib/spectrogram";
+import { getViewMode, onViewModeChange } from "../../lib/view-mode";
 import vertexShader from "../../shaders/spacetime.vert.glsl?raw";
 import fragmentShader from "../../shaders/spacetime.frag.glsl?raw";
 
@@ -155,6 +159,17 @@ export class MergerScene implements Scene {
   // Share
   private shareToastTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // VR panel
+  private vrPanel: VRPanel | null = null;
+
+  // Spectrogram
+  private spectrogramPanel!: HTMLElement;
+  private spectrogramCanvas!: HTMLCanvasElement;
+  private spectrogramLoading!: HTMLElement;
+  private spectrogramData: SpectrogramData | null = null;
+  private spectrogramComputing = false;
+  private unsubViewMode: (() => void) | null = null;
+
   // Intro animation
   private introProgress = 0;
   private introActive = false;
@@ -214,6 +229,9 @@ export class MergerScene implements Scene {
       this.eventListEl = document.getElementById("event-list")!;
       this.shareBtn = document.getElementById("share-btn")!;
       this.shareToast = document.getElementById("share-toast")!;
+      this.spectrogramPanel = document.getElementById("spectrogram-panel")!;
+      this.spectrogramCanvas = document.getElementById("spectrogram-canvas") as HTMLCanvasElement;
+      this.spectrogramLoading = document.getElementById("spectrogram-loading")!;
 
       this.tourToggleBtn = document.getElementById("tour-toggle")!;
       this.tourMenu = document.getElementById("tour-menu")!;
@@ -241,6 +259,11 @@ export class MergerScene implements Scene {
     // ─── Setup UI event handlers ───
     this.setupEventHandlers(ctx);
 
+    // ─── Spectrogram: subscribe to view mode changes ───
+    if (!this.unsubViewMode) {
+      this.unsubViewMode = onViewModeChange(() => this.updateSpectrogramVisibility());
+    }
+
     // ─── First-time only setup ───
     if (firstInit) {
       // Onboarding
@@ -267,7 +290,7 @@ export class MergerScene implements Scene {
     this.mapLegendEl.style.display = "none";
     this.helpOverlay.style.display = "none";
     document.getElementById("ui")!.style.display = "flex";
-    document.getElementById("brand-bar")!.style.display = "";
+    this.updateSpectrogramVisibility();
 
     // ─── Load data (only first time) ───
     if (firstInit) {
@@ -281,6 +304,11 @@ export class MergerScene implements Scene {
       this.renderEventList();
     }
 
+    // ─── VR Panel ───
+    if (ctx.xrManager && !this.vrPanel) {
+      this.setupVRPanel(ctx);
+    }
+
     // ─── Camera setup ───
     camera.position.set(3, 4, 7);
     camera.lookAt(0, 0.5, 0);
@@ -291,6 +319,92 @@ export class MergerScene implements Scene {
     controls.enabled = true;
 
     scene.fog = new THREE.FogExp2(0x000005, 0.04);
+  }
+
+  private setupVRPanel(ctx: SceneContext) {
+    const xr = ctx.xrManager!;
+    this.vrPanel = new VRPanel(1.4, 0.5);
+    this.vrPanel.setTitle(this.currentEvent?.commonName ?? "Merger");
+
+    // Button layout: 4 buttons in a row
+    const btnY = 0.55;
+    const btnH = 0.35;
+    const btnW = 0.22;
+    const gap = 0.02;
+    const startX = 0.04;
+
+    this.vrPanel.addButton({
+      label: this.isPlaying ? "\u23F8" : "\u25B6",
+      x: startX,
+      y: btnY,
+      w: btnW,
+      h: btnH,
+      onClick: () => {
+        this.playBtn.click();
+      },
+    });
+
+    this.vrPanel.addButton({
+      label: `${this.playbackSpeed}x`,
+      x: startX + btnW + gap,
+      y: btnY,
+      w: btnW,
+      h: btnH,
+      onClick: () => {
+        this.speedBtn.click();
+      },
+    });
+
+    this.vrPanel.addButton({
+      label: "\u2190 Prev",
+      x: startX + (btnW + gap) * 2,
+      y: btnY,
+      w: btnW,
+      h: btnH,
+      onClick: () => {
+        const events = this.getFilteredSortedEvents();
+        if (!this.currentEvent || events.length === 0) return;
+        const idx = events.findIndex((e) => e.commonName === this.currentEvent!.commonName);
+        const prev = events[(idx - 1 + events.length) % events.length];
+        this.selectEvent(prev);
+      },
+    });
+
+    this.vrPanel.addButton({
+      label: "Next \u2192",
+      x: startX + (btnW + gap) * 3,
+      y: btnY,
+      w: btnW,
+      h: btnH,
+      onClick: () => {
+        const events = this.getFilteredSortedEvents();
+        if (!this.currentEvent || events.length === 0) return;
+        const idx = events.findIndex((e) => e.commonName === this.currentEvent!.commonName);
+        const next = events[(idx + 1) % events.length];
+        this.selectEvent(next);
+      },
+    });
+
+    xr.registerPanel(this.vrPanel);
+
+    xr.onSessionStart = () => {
+      if (this.vrPanel) {
+        this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
+        ctx.scene.add(this.vrPanel.mesh);
+      }
+    };
+
+    xr.onSessionEnd = () => {
+      if (this.vrPanel) {
+        ctx.scene.remove(this.vrPanel.mesh);
+      }
+    };
+
+    // If already in VR (scene switch mid-session), show panel immediately
+    if (xr.isPresenting && this.vrPanel) {
+      this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
+      ctx.scene.add(this.vrPanel.mesh);
+    }
   }
 
   private buildSceneObjects(scene: THREE.Scene) {
@@ -386,6 +500,7 @@ export class MergerScene implements Scene {
         this.isPlaying = false;
         this.audio.stop();
         this.playBtn.innerHTML = "&#9654;";
+        this.vrPanel?.updateButton(0, "\u25B6");
       } else {
         this.isPlaying = true;
         if (this.playbackTime >= 0.99) {
@@ -394,6 +509,7 @@ export class MergerScene implements Scene {
         }
         this.audio.play(this.playbackTime, this.playbackSpeed);
         this.playBtn.innerHTML = "&#9646;&#9646;";
+        this.vrPanel?.updateButton(0, "\u23F8");
       }
     });
 
@@ -412,6 +528,7 @@ export class MergerScene implements Scene {
       this.playbackSpeed = this.speeds[this.speedIndex];
       this.speedLabel.textContent = `${this.playbackSpeed}x`;
       this.audio.setSpeed(this.playbackSpeed);
+      this.vrPanel?.updateButton(1, `${this.playbackSpeed}x`);
     });
 
     // Map toggle
@@ -551,6 +668,7 @@ export class MergerScene implements Scene {
       this.mapLegendEl.style.display = "none";
       this.mapToggleBtn.textContent = "Universe Map";
       this.mapTooltip.style.display = "none";
+      this.updateSpectrogramVisibility();
     } else {
       this.eventViewGroup.visible = false;
       this.universeMap.show();
@@ -562,11 +680,13 @@ export class MergerScene implements Scene {
       this.isPlaying = false;
       this.audio.stop();
       this.playBtn.innerHTML = "&#9654;";
+      this.vrPanel?.updateButton(0, "\u25B6");
       this.timeControlsEl.style.display = "none";
       this.eventInfoEl.style.display = "none";
       this.helpOverlay.style.display = "none";
       this.mapLegendEl.style.display = "block";
       this.mapToggleBtn.textContent = "Back to Event";
+      this.spectrogramPanel.style.display = "none";
     }
     controls.update();
   }
@@ -591,6 +711,7 @@ export class MergerScene implements Scene {
     this.binary.reset();
 
     // Update UI
+    this.vrPanel?.setTitle(event.commonName);
     this.eventName.textContent = event.commonName;
     this.massesEl.textContent = `${event.mass_1_source.toFixed(1)} + ${event.mass_2_source.toFixed(1)} M\u2609`;
     this.distanceEl.textContent = `${event.luminosity_distance.toFixed(0)} Mpc`;
@@ -642,6 +763,9 @@ export class MergerScene implements Scene {
     const url = new URL(window.location.href);
     url.searchParams.set("event", event.commonName);
     history.replaceState(null, "", url.toString());
+
+    // Load spectrogram if in student/researcher mode
+    this.loadSpectrogram(event.commonName);
   }
 
   // ─── Event list ─────────────────────────────────────────────────────
@@ -889,6 +1013,45 @@ export class MergerScene implements Scene {
     }, 2000);
   }
 
+  // ─── Spectrogram ────────────────────────────────────────────────────
+
+  private updateSpectrogramVisibility() {
+    const mode = getViewMode();
+    const shouldShow = mode !== "explorer" && this.viewMode === "event";
+    this.spectrogramPanel.style.display = shouldShow ? "block" : "none";
+  }
+
+  private async loadSpectrogram(eventName: string) {
+    if (this.spectrogramComputing) return;
+    const mode = getViewMode();
+    if (mode === "explorer") return;
+
+    const hasData = await hasStrainData(eventName);
+    if (!hasData) {
+      this.spectrogramData = null;
+      this.spectrogramPanel.style.display = "none";
+      return;
+    }
+
+    this.spectrogramComputing = true;
+    this.spectrogramLoading.style.display = "flex";
+    this.updateSpectrogramVisibility();
+
+    try {
+      const strain = await loadStrain(eventName);
+      const data = await computeSpectrogram(strain, eventName);
+      this.spectrogramData = data;
+      this.spectrogramLoading.style.display = "none";
+      renderSpectrogram(this.spectrogramCanvas, data, this.playbackTime);
+    } catch (err) {
+      console.warn("Spectrogram computation failed:", err);
+      this.spectrogramData = null;
+      this.spectrogramPanel.style.display = "none";
+    } finally {
+      this.spectrogramComputing = false;
+    }
+  }
+
   // ─── Intro zoom ─────────────────────────────────────────────────────
 
   private startIntroZoom() {
@@ -1006,6 +1169,7 @@ export class MergerScene implements Scene {
           this.isPlaying = false;
           this.audio.stop();
           this.playBtn.innerHTML = "&#9654;";
+          this.vrPanel?.updateButton(0, "\u25B6");
         }
       }
 
@@ -1033,6 +1197,11 @@ export class MergerScene implements Scene {
       if (this.currentWaveform) {
         this.timeLabel.textContent = `${(this.playbackTime * this.currentWaveform.duration).toFixed(2)}s`;
       }
+
+      // Update spectrogram cursor
+      if (this.spectrogramData && this.spectrogramPanel.style.display !== "none") {
+        renderSpectrogram(this.spectrogramCanvas, this.spectrogramData, this.playbackTime);
+      }
     } else {
       this.ctx.bloom.intensity = 1.8;
     }
@@ -1055,6 +1224,14 @@ export class MergerScene implements Scene {
     }
     this.boundHandlers = [];
 
+    // Clean up VR panel
+    if (this.vrPanel) {
+      this.ctx.xrManager?.unregisterPanel(this.vrPanel);
+      this.ctx.scene.remove(this.vrPanel.mesh);
+      this.vrPanel.dispose();
+      this.vrPanel = null;
+    }
+
     // Remove 3D objects from scene (but keep references for re-add)
     this.ctx.scene.remove(this.eventViewGroup);
     this.ctx.scene.remove(this.stars);
@@ -1063,6 +1240,15 @@ export class MergerScene implements Scene {
     // Stop audio & playback
     this.isPlaying = false;
     this.audio.stop();
+
+    // Clean up spectrogram
+    this.spectrogramPanel.style.display = "none";
+    this.spectrogramData = null;
+    if (this.unsubViewMode) {
+      this.unsubViewMode();
+      this.unsubViewMode = null;
+    }
+    disposeSpectrogramWorker();
 
     // Hide all merger-specific UI
     this.eventInfoEl.style.display = "none";
@@ -1075,6 +1261,5 @@ export class MergerScene implements Scene {
     this.eventListEl.style.display = "none";
     this.aboutOverlay.classList.remove("show");
     document.getElementById("ui")!.style.display = "none";
-    document.getElementById("brand-bar")!.style.display = "none";
   }
 }
