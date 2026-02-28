@@ -669,16 +669,19 @@
       .tooltip-name { color: #fff; font-weight: 500; }
       .tooltip-detail { color: rgba(255, 255, 255, 0.4); font-size: 11px; margin-left: 8px; }
 
+      /* ── Events toggle button (mobile only) ── */
+      .mobile-only { display: none; }
+
       /* ── Mobile ── */
       @media (max-width: 768px) {
+        .mobile-only { display: block; }
+
         /* Hide heavy panels */
-        #event-list,
         #help-overlay,
         #onboarding,
-        #map-tooltip,
-        #vr-button { display: none !important; }
+        #map-tooltip { display: none !important; }
 
-        /* Compact event info — just name + type + masses at top */
+        /* Compact event info — just name + type + masses */
         #event-info {
           top: auto; bottom: 80px; left: 12px; right: 12px;
           max-width: none; min-width: 0;
@@ -701,6 +704,19 @@
         #event-info .info-detail,
         #event-info .info-catalog { display: none; }
         .type-badge { margin-bottom: 0; font-size: 10px; padding: 1px 6px; }
+
+        /* Event list — mobile overlay (hidden by default, toggled via JS) */
+        #event-list {
+          position: fixed;
+          top: 48px; bottom: 80px; left: 12px; right: 12px;
+          width: auto;
+          max-height: none;
+          border-radius: 14px;
+          z-index: 30;
+          display: none;
+        }
+        #event-list.mobile-open { display: block; }
+        #event-list h3 { font-size: 10px; }
 
         /* Map legend — compact bottom card */
         #map-legend {
@@ -737,10 +753,10 @@
         #speed-btn { display: none; }
         .ctrl-btn { width: 36px; height: 36px; font-size: 14px; }
 
-        /* Bottom buttons — above time controls */
+        /* Bottom buttons — top right, no overlap */
         #ui {
-          bottom: 68px;
-          left: 12px; right: auto;
+          bottom: auto; top: env(safe-area-inset-top, 12px);
+          left: auto; right: 12px;
           transform: none;
           gap: 6px;
         }
@@ -892,7 +908,7 @@
     <!-- Bottom Bar -->
     <div id="ui">
       <button class="ui-btn" id="map-toggle" title="Toggle universe map (M)">Universe Map</button>
-      <button class="ui-btn" id="vr-button">Enter VR</button>
+      <button class="ui-btn mobile-only" id="events-toggle">Events</button>
     </div>
 
     <!-- Onboarding Hints (first visit) -->

@@ -235,6 +235,16 @@ const onboarding = document.getElementById("onboarding")!;
 const aboutOverlay = document.getElementById("about-overlay")!;
 const aboutCloseBtn = document.getElementById("about-close")!;
 const brandEl = document.getElementById("brand")!;
+const eventsToggleBtn = document.getElementById("events-toggle");
+const eventListEl = document.getElementById("event-list")!;
+
+// Mobile events panel toggle
+if (eventsToggleBtn) {
+  eventsToggleBtn.addEventListener("click", () => {
+    const isOpen = eventListEl.classList.toggle("mobile-open");
+    eventsToggleBtn.textContent = isOpen ? "Close" : "Events";
+  });
+}
 
 let activeTypeFilter: string = "all";
 let activeSortKey: string = "snr";
@@ -520,6 +530,9 @@ function renderEventList() {
       if (event) {
         selectEvent(event);
         if (viewMode === "map") setViewMode("event");
+        // Close mobile events panel
+        eventListEl.classList.remove("mobile-open");
+        if (eventsToggleBtn) eventsToggleBtn.textContent = "Events";
       }
     });
   });
