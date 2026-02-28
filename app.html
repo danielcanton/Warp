@@ -712,6 +712,130 @@
       /* ── Screenshot button icon ── */
       .btn-icon { vertical-align: -3px; margin-right: 2px; }
 
+      /* ─── Tour Menu ─── */
+      #tour-menu {
+        position: fixed;
+        bottom: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 25;
+        padding: 12px 16px;
+        min-width: 240px;
+        max-width: 320px;
+        display: none;
+      }
+      #tour-menu.show { display: block; }
+      #tour-menu h3 {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.35);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 500;
+        margin-bottom: 8px;
+      }
+      .tour-option {
+        display: block;
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 13px;
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.15s;
+        margin-bottom: 2px;
+      }
+      .tour-option:hover {
+        background: rgba(99, 102, 241, 0.1);
+        border-color: rgba(99, 102, 241, 0.2);
+        color: #fff;
+      }
+      .tour-option .tour-option-count {
+        color: rgba(255, 255, 255, 0.25);
+        font-size: 11px;
+        margin-left: 6px;
+      }
+
+      /* ─── Tour Overlay ─── */
+      #tour-overlay {
+        position: fixed;
+        bottom: 130px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 20;
+        padding: 16px 20px;
+        max-width: 400px;
+        width: 90%;
+        display: none;
+        pointer-events: auto;
+      }
+      #tour-overlay.show { display: block; }
+      .tour-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+      .tour-name {
+        font-size: 11px;
+        color: rgba(99, 102, 241, 0.8);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-weight: 500;
+      }
+      .tour-step-counter {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.3);
+        font-variant-numeric: tabular-nums;
+      }
+      .tour-event-name {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      .tour-description {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.6);
+        line-height: 1.6;
+        margin-bottom: 12px;
+      }
+      .tour-nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .tour-nav-btn {
+        padding: 6px 16px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .tour-nav-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+      .tour-nav-btn:disabled { opacity: 0.3; cursor: default; }
+      .tour-nav-btn:disabled:hover { background: rgba(255, 255, 255, 0.06); color: rgba(255, 255, 255, 0.6); }
+      .tour-exit-btn {
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid rgba(248, 113, 113, 0.2);
+        background: rgba(248, 113, 113, 0.08);
+        color: rgba(248, 113, 113, 0.7);
+        font-size: 11px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .tour-exit-btn:hover { background: rgba(248, 113, 113, 0.15); color: #fca5a5; }
+      .tour-nav-group {
+        display: flex;
+        gap: 6px;
+      }
+
       /* ── Events toggle button (mobile only) ── */
       .mobile-only { display: none; }
 
@@ -856,6 +980,24 @@
         }
         .btn-label { display: none; }
         .btn-icon { margin-right: 0; }
+
+        /* Tour — mobile full-width */
+        #tour-menu {
+          left: 12px; right: 12px;
+          transform: none;
+          min-width: 0; max-width: none;
+          bottom: 70px;
+          border-radius: 14px;
+        }
+        #tour-overlay {
+          left: 12px; right: 12px;
+          transform: none;
+          max-width: none;
+          bottom: 70px;
+          border-radius: 14px;
+        }
+        .tour-event-name { font-size: 15px; }
+        .tour-description { font-size: 12px; }
 
         /* About overlay — mobile friendly */
         #about-overlay { padding: 16px; }
@@ -1005,10 +1147,34 @@
       <span id="speed-label">1x</span>
     </div>
 
+    <!-- Tour Menu -->
+    <div id="tour-menu" class="glass">
+      <h3>Guided Tours</h3>
+      <div id="tour-menu-items"></div>
+    </div>
+
+    <!-- Tour Overlay -->
+    <div id="tour-overlay" class="glass">
+      <div class="tour-header">
+        <span class="tour-name" id="tour-name"></span>
+        <span class="tour-step-counter" id="tour-step-counter"></span>
+      </div>
+      <div class="tour-event-name" id="tour-event-name"></div>
+      <div class="tour-description" id="tour-description"></div>
+      <div class="tour-nav">
+        <button class="tour-exit-btn" id="tour-exit-btn">Exit</button>
+        <div class="tour-nav-group">
+          <button class="tour-nav-btn" id="tour-prev-btn">Prev</button>
+          <button class="tour-nav-btn" id="tour-next-btn">Next</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Bottom Bar -->
     <div id="ui">
       <button class="ui-btn" id="screenshot-btn" title="Screenshot (P)"><svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span class="btn-label"> Capture</span></button>
       <button class="ui-btn" id="map-toggle" title="Toggle universe map (M)">Universe Map</button>
+      <button class="ui-btn" id="tour-toggle" title="Guided tours (T)">Tours</button>
       <button class="ui-btn mobile-only" id="events-toggle">Events</button>
     </div>
 
