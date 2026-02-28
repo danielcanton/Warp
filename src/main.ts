@@ -617,6 +617,40 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+// ─── Intro Zoom Animation ────────────────────────────────────────────
+
+let introProgress = 0;
+let introActive = false;
+const introStartPos = new THREE.Vector3(12, 16, 28);
+const introEndPos = new THREE.Vector3(3, 4, 7);
+const introDuration = 2.0; // seconds
+
+function startIntroZoom() {
+  introActive = true;
+  introProgress = 0;
+  camera.position.copy(introStartPos);
+  // Start with canvas fully transparent, fade in
+  renderer.domElement.style.opacity = "0";
+  renderer.domElement.style.transition = "opacity 0.8s ease";
+  requestAnimationFrame(() => {
+    renderer.domElement.style.opacity = "1";
+  });
+}
+
+function updateIntroZoom(delta: number) {
+  if (!introActive) return;
+  introProgress += delta / introDuration;
+  if (introProgress >= 1) {
+    introProgress = 1;
+    introActive = false;
+    camera.position.copy(introEndPos);
+    return;
+  }
+  // Ease-out cubic
+  const t = 1 - Math.pow(1 - introProgress, 3);
+  camera.position.lerpVectors(introStartPos, introEndPos, t);
+}
+
 // ─── Render Loop ─────────────────────────────────────────────────────
 
 const clock = new THREE.Clock();
@@ -625,6 +659,8 @@ let elapsedTotal = 0;
 function animate() {
   const delta = clock.getDelta();
   elapsedTotal += delta;
+
+  updateIntroZoom(delta);
 
   if (viewMode === "event") {
     // Advance playback
@@ -718,9 +754,10 @@ async function init() {
 
     eventName.textContent = currentEvent?.commonName ?? "No events loaded";
 
-    // Fade out loading screen
+    // Fade out loading screen and start intro zoom
     loadingScreen.classList.add("fade-out");
     setTimeout(() => loadingScreen.remove(), 700);
+    startIntroZoom();
   } catch (err) {
     console.error("Failed to load event catalog:", err);
     loadingStatus.textContent = "Failed to connect. Using offline data...";
@@ -760,6 +797,7 @@ async function init() {
 
     loadingScreen.classList.add("fade-out");
     setTimeout(() => loadingScreen.remove(), 700);
+    startIntroZoom();
   }
 }
 
