@@ -3,6 +3,7 @@ import type { Scene, SceneContext } from "../types";
 import { generateCustomWaveform, waveformToTexture, type BinaryParams } from "../../lib/waveform-generator";
 import { GWAudioEngine } from "../../lib/audio";
 import { BinarySystem } from "../../lib/binary";
+import { VRPanel } from "../../lib/VRPanel";
 import type { WaveformData, GWEvent } from "../../lib/waveform";
 import { SandboxPanel } from "./SandboxPanel";
 import vertexShader from "../../shaders/spacetime.vert.glsl?raw";
@@ -45,6 +46,9 @@ export class SandboxScene implements Scene {
   // Speed control
   private speeds = [0.25, 0.5, 1, 2, 4];
   private speedIndex = 2;
+
+  // VR panel
+  private vrPanel: VRPanel | null = null;
 
   private boundHandlers: { el: EventTarget; type: string; fn: EventListener }[] = [];
   private initialized = false;
@@ -98,7 +102,6 @@ export class SandboxScene implements Scene {
     document.getElementById("map-legend")!.style.display = "none";
     document.getElementById("help-overlay")!.style.display = "none";
     document.getElementById("ui")!.style.display = "none";
-    document.getElementById("brand-bar")!.style.display = "none";
 
     // Remove loading screen if present
     const loadingScreen = document.getElementById("loading-screen");
@@ -108,6 +111,11 @@ export class SandboxScene implements Scene {
     }
 
     this.setupHandlers();
+
+    // ─── VR Panel ───
+    if (ctx.xrManager && !this.vrPanel) {
+      this.setupVRPanel(ctx);
+    }
 
     // Generate initial waveform
     if (firstInit) {
@@ -200,6 +208,7 @@ export class SandboxScene implements Scene {
         this.isPlaying = false;
         this.audio.stop();
         this.playBtn.innerHTML = "&#9654;";
+        this.vrPanel?.updateButton(0, "\u25B6");
       } else {
         this.isPlaying = true;
         if (this.playbackTime >= 0.99) {
@@ -208,6 +217,7 @@ export class SandboxScene implements Scene {
         }
         this.audio.play(this.playbackTime, this.playbackSpeed);
         this.playBtn.innerHTML = "&#9646;&#9646;";
+        this.vrPanel?.updateButton(0, "\u23F8");
       }
     });
 
@@ -224,6 +234,7 @@ export class SandboxScene implements Scene {
       this.playbackSpeed = this.speeds[this.speedIndex];
       this.speedLabel.textContent = `${this.playbackSpeed}x`;
       this.audio.setSpeed(this.playbackSpeed);
+      this.vrPanel?.updateButton(1, `${this.playbackSpeed}x`);
     });
 
     // Keyboard
@@ -248,6 +259,7 @@ export class SandboxScene implements Scene {
     this.binary.reset();
     this.audio.play(0, this.playbackSpeed);
     this.playBtn.innerHTML = "&#9646;&#9646;";
+    this.vrPanel?.updateButton(0, "\u23F8");
   }
 
   private updateTexture() {
@@ -258,6 +270,72 @@ export class SandboxScene implements Scene {
     const totalMass = this.currentParams.m1 + this.currentParams.m2;
     const snrScale = Math.min(totalMass / 50, 3);
     this.spacetimeMaterial.uniforms.uAmplitude.value = 1.2 + snrScale * 0.6;
+  }
+
+  private setupVRPanel(ctx: SceneContext) {
+    const xr = ctx.xrManager!;
+    this.vrPanel = new VRPanel(1.2, 0.5);
+    this.vrPanel.setTitle("Binary Sandbox");
+
+    const btnY = 0.55;
+    const btnH = 0.35;
+    const btnW = 0.28;
+    const gap = 0.03;
+    const startX = 0.05;
+
+    this.vrPanel.addButton({
+      label: this.isPlaying ? "\u23F8" : "\u25B6",
+      x: startX,
+      y: btnY,
+      w: btnW,
+      h: btnH,
+      onClick: () => {
+        this.playBtn.click();
+      },
+    });
+
+    this.vrPanel.addButton({
+      label: `${this.playbackSpeed}x`,
+      x: startX + btnW + gap,
+      y: btnY,
+      w: btnW,
+      h: btnH,
+      onClick: () => {
+        this.speedBtn.click();
+      },
+    });
+
+    this.vrPanel.addButton({
+      label: "Merge",
+      x: startX + (btnW + gap) * 2,
+      y: btnY,
+      w: btnW,
+      h: btnH,
+      onClick: () => {
+        this.triggerMerge();
+      },
+    });
+
+    xr.registerPanel(this.vrPanel);
+
+    xr.onSessionStart = () => {
+      if (this.vrPanel) {
+        this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
+        ctx.scene.add(this.vrPanel.mesh);
+      }
+    };
+
+    xr.onSessionEnd = () => {
+      if (this.vrPanel) {
+        ctx.scene.remove(this.vrPanel.mesh);
+      }
+    };
+
+    // If already in VR (scene switch mid-session), show panel immediately
+    if (xr.isPresenting && this.vrPanel) {
+      this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
+      ctx.scene.add(this.vrPanel.mesh);
+    }
   }
 
   // Create a fake GWEvent for the binary system update
@@ -298,6 +376,7 @@ export class SandboxScene implements Scene {
         this.isPlaying = false;
         this.audio.stop();
         this.playBtn.innerHTML = "&#9654;";
+        this.vrPanel?.updateButton(0, "\u25B6");
       }
     }
 
@@ -342,6 +421,14 @@ export class SandboxScene implements Scene {
       el.removeEventListener(type, fn);
     }
     this.boundHandlers = [];
+
+    // Clean up VR panel
+    if (this.vrPanel) {
+      this.ctx.xrManager?.unregisterPanel(this.vrPanel);
+      this.ctx.scene.remove(this.vrPanel.mesh);
+      this.vrPanel.dispose();
+      this.vrPanel = null;
+    }
 
     this.ctx.scene.remove(this.group);
     this.ctx.scene.remove(this.stars);

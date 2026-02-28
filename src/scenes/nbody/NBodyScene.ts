@@ -87,7 +87,6 @@ export class NBodyScene implements Scene {
     document.getElementById("map-legend")!.style.display = "none";
     document.getElementById("help-overlay")!.style.display = "none";
     document.getElementById("ui")!.style.display = "none";
-    document.getElementById("brand-bar")!.style.display = "none";
 
     const loadingScreen = document.getElementById("loading-screen");
     if (loadingScreen) {
