@@ -675,6 +675,36 @@
       /* ── Events toggle button (mobile only) ── */
       .mobile-only { display: none; }
 
+      /* ─── Embed Mode ─── */
+      body.embed { overflow: hidden; }
+      body.embed #brand-bar,
+      body.embed #event-list,
+      body.embed #help-overlay,
+      body.embed #about-overlay,
+      body.embed #onboarding,
+      body.embed #map-legend,
+      body.embed #ui { display: none !important; }
+      body.embed #event-info {
+        top: 12px;
+        left: 12px;
+        padding: 10px 14px;
+        font-size: 12px;
+        min-width: 200px;
+        max-width: 260px;
+      }
+      body.embed #event-info h2 { font-size: 16px; }
+      body.embed #event-info .help-btn { display: none; }
+      body.embed #event-info .info-divider,
+      body.embed #event-info .info-detail,
+      body.embed #event-info .info-catalog { display: none; }
+      body.embed #time-controls {
+        bottom: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 6px 14px;
+        border-radius: 20px;
+      }
+
       /* ── Mobile ── */
       @media (max-width: 768px) {
         .mobile-only { display: block; }
