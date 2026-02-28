@@ -695,6 +695,196 @@ aboutOverlay.addEventListener("click", (e) => {
   if (e.target === aboutOverlay) toggleAbout();
 });
 
+// ─── Tours ──────────────────────────────────────────────────────────
+
+interface TourStep {
+  event: string;
+  description: string;
+}
+
+interface Tour {
+  name: string;
+  steps: TourStep[];
+}
+
+const tours: Tour[] = [
+  {
+    name: "Greatest Hits",
+    steps: [
+      {
+        event: "GW150914",
+        description:
+          "The first gravitational wave ever detected. Two black holes, 36 and 29 solar masses, merged 1.3 billion light-years away.",
+      },
+      {
+        event: "GW170817",
+        description:
+          "The first neutron star merger detected \u2014 and the first event seen in both gravitational waves and light.",
+      },
+      {
+        event: "GW190521",
+        description:
+          "The heaviest merger observed. Created a 142 solar mass black hole \u2014 the first confirmed intermediate-mass black hole.",
+      },
+      {
+        event: "GW200115",
+        description:
+          "A neutron star swallowed by a black hole \u2014 confirming these mixed mergers exist.",
+      },
+      {
+        event: "GW190814",
+        description:
+          "A mystery: the lighter object (2.6 M\u2609) could be the heaviest neutron star or lightest black hole ever found.",
+      },
+    ],
+  },
+  {
+    name: "Record Breakers",
+    steps: [
+      {
+        event: "GW190521",
+        description:
+          "The heaviest merger ever observed \u2014 two black holes totaling over 150 solar masses collided to form the first confirmed intermediate-mass black hole.",
+      },
+      {
+        event: "GW190425",
+        description:
+          "The heaviest binary neutron star system ever detected. At ~3.4 solar masses total, it far exceeds any known neutron star binary in our galaxy.",
+      },
+      {
+        event: "GW190814",
+        description:
+          "The most asymmetric merger: a 23 solar mass black hole swallowed a 2.6 solar mass mystery object. The mass ratio of ~9:1 broke all previous records.",
+      },
+      {
+        event: "GW150914",
+        description:
+          "The loudest detection \u2014 with a network SNR of ~24, this was the clearest gravitational wave signal ever recorded, heard across all detectors.",
+      },
+    ],
+  },
+  {
+    name: "Neutron Stars",
+    steps: [
+      {
+        event: "GW170817",
+        description:
+          "The landmark multi-messenger event. This neutron star merger was seen in gravitational waves, gamma rays, X-rays, and visible light simultaneously.",
+      },
+      {
+        event: "GW190425",
+        description:
+          "A heavy neutron star binary \u2014 significantly more massive than any double pulsar system known in our Milky Way.",
+      },
+      {
+        event: "GW200105",
+        description:
+          "One of the first confirmed neutron star\u2013black hole mergers. A ~9 solar mass black hole consumed a ~1.9 solar mass neutron star.",
+      },
+      {
+        event: "GW200115",
+        description:
+          "The second confirmed NSBH merger, detected just 10 days after GW200105. Together they proved this class of merger really exists in nature.",
+      },
+    ],
+  },
+];
+
+let activeTour: Tour | null = null;
+let activeTourStep = 0;
+let tourMenuOpen = false;
+
+const tourToggleBtn = document.getElementById("tour-toggle")!;
+const tourMenu = document.getElementById("tour-menu")!;
+const tourMenuItems = document.getElementById("tour-menu-items")!;
+const tourOverlay = document.getElementById("tour-overlay")!;
+const tourNameEl = document.getElementById("tour-name")!;
+const tourStepCounter = document.getElementById("tour-step-counter")!;
+const tourEventName = document.getElementById("tour-event-name")!;
+const tourDescription = document.getElementById("tour-description")!;
+const tourPrevBtn = document.getElementById("tour-prev-btn") as HTMLButtonElement;
+const tourNextBtn = document.getElementById("tour-next-btn") as HTMLButtonElement;
+const tourExitBtn = document.getElementById("tour-exit-btn")!;
+
+// Build tour menu items
+tourMenuItems.innerHTML = tours
+  .map(
+    (t, i) =>
+      `<button class="tour-option" data-tour-index="${i}">${t.name}<span class="tour-option-count">${t.steps.length} events</span></button>`
+  )
+  .join("");
+
+tourMenuItems.querySelectorAll(".tour-option").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const index = parseInt(btn.getAttribute("data-tour-index")!);
+    startTour(index);
+  });
+});
+
+tourToggleBtn.addEventListener("click", () => {
+  if (activeTour) {
+    // If a tour is active, exit it
+    exitTour();
+    return;
+  }
+  tourMenuOpen = !tourMenuOpen;
+  tourMenu.classList.toggle("show", tourMenuOpen);
+});
+
+function startTour(tourIndex: number) {
+  activeTour = tours[tourIndex];
+  activeTourStep = 0;
+  tourMenuOpen = false;
+  tourMenu.classList.remove("show");
+
+  // Make sure we're in event view
+  if (viewMode === "map") setViewMode("event");
+
+  showTourStep();
+  tourOverlay.classList.add("show");
+}
+
+function showTourStep() {
+  if (!activeTour) return;
+
+  const step = activeTour.steps[activeTourStep];
+  tourNameEl.textContent = activeTour.name;
+  tourStepCounter.textContent = `${activeTourStep + 1} of ${activeTour.steps.length}`;
+  tourEventName.textContent = step.event;
+  tourDescription.textContent = step.description;
+
+  tourPrevBtn.disabled = activeTourStep === 0;
+  tourNextBtn.disabled = activeTourStep === activeTour.steps.length - 1;
+
+  // Select the event in the 3D scene
+  const event = events.find((e) => e.commonName === step.event);
+  if (event) selectEvent(event);
+}
+
+function nextTourStep() {
+  if (!activeTour || activeTourStep >= activeTour.steps.length - 1) return;
+  activeTourStep++;
+  showTourStep();
+}
+
+function prevTourStep() {
+  if (!activeTour || activeTourStep <= 0) return;
+  activeTourStep--;
+  showTourStep();
+}
+
+function exitTour() {
+  activeTour = null;
+  activeTourStep = 0;
+  tourOverlay.classList.remove("show");
+  tourMenu.classList.remove("show");
+  tourMenuOpen = false;
+}
+
+tourNextBtn.addEventListener("click", nextTourStep);
+tourPrevBtn.addEventListener("click", prevTourStep);
+tourExitBtn.addEventListener("click", exitTour);
+
 // ─── Onboarding Hints ──────────────────────────────────────────────
 
 function dismissOnboarding() {
