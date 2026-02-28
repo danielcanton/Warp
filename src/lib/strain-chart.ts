@@ -100,6 +100,10 @@ export interface StrainChartData {
   eventName: string;
   /** Duration of the aligned time axis in seconds */
   duration: number;
+  /** Active detector ID (e.g. "H1") for legend label */
+  detector?: string;
+  /** Whether the strain has been whitened */
+  whitened?: boolean;
 }
 
 /**
@@ -340,6 +344,8 @@ async function buildBaseImage(
 
   if (data.hasStrain) {
     // Strain legend
+    const detLabel = data.detector ?? "H1";
+    const whiteLabel = data.whitened ? " (W)" : "";
     ctx.strokeStyle = STRAIN_COLOR;
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -349,10 +355,10 @@ async function buildBaseImage(
     ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText("Strain (H1)", legendX + 20, legendY + 5);
+    ctx.fillText(`Strain (${detLabel})${whiteLabel}`, legendX + 20, legendY + 5);
 
     // Template legend
-    const templateLegendX = legendX + 100;
+    const templateLegendX = legendX + 120;
     ctx.strokeStyle = TEMPLATE_COLOR;
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -380,7 +386,7 @@ async function buildBaseImage(
   }
 
   cachedBase = await createImageBitmap(off);
-  cachedKey = data.eventName;
+  cachedKey = `${data.eventName}/${data.detector ?? ""}/${data.whitened ? "w" : "r"}`;
   cachedW = displayW;
   cachedH = displayH;
 }
@@ -405,7 +411,8 @@ export function renderStrainChart(
   const displayH = canvas.clientHeight;
 
   // Rebuild base if needed
-  if (!cachedBase || cachedKey !== data.eventName || cachedW !== displayW || cachedH !== displayH) {
+  const dataKey = `${data.eventName}/${data.detector ?? ""}/${data.whitened ? "w" : "r"}`;
+  if (!cachedBase || cachedKey !== dataKey || cachedW !== displayW || cachedH !== displayH) {
     canvas.width = displayW * dpr;
     canvas.height = displayH * dpr;
     buildBaseImage(canvas, data).then(() => {

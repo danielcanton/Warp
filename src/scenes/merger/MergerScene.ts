@@ -12,8 +12,8 @@ import { GWAudioEngine } from "../../lib/audio";
 import { BinarySystem } from "../../lib/binary";
 import { UniverseMap } from "../../lib/universe-map";
 import { VRPanel } from "../../lib/VRPanel";
-import { loadStrain, hasStrainData } from "../../lib/strain";
-import { computeSpectrogram, renderSpectrogram, disposeSpectrogramWorker, type SpectrogramData } from "../../lib/spectrogram";
+import { loadStrain, hasStrainData, getAvailableDetectors, whiten } from "../../lib/strain";
+import { computeSpectrogram, renderSpectrogram, disposeSpectrogramWorker, installSpectrogramZoomPan, resetSpectrogramView, type SpectrogramData } from "../../lib/spectrogram";
 import { prepareChartData, renderStrainChart, invalidateStrainChart, type StrainChartData } from "../../lib/strain-chart";
 import { getViewMode, onViewModeChange, type ViewMode } from "../../lib/view-mode";
 import { performExport } from "../../lib/export";
@@ -180,6 +180,15 @@ export class MergerScene implements Scene {
   private strainChartCanvas!: HTMLCanvasElement;
   private strainChartData: StrainChartData | null = null;
 
+  // Detector tabs & whitening (Researcher mode)
+  private detectorTabs!: HTMLElement;
+  private detectorTabBtns!: NodeListOf<HTMLButtonElement>;
+  private whitenToggle!: HTMLButtonElement;
+  private activeDetector = "H1";
+  private isWhitened = false;
+  private availableDetectors: string[] = [];
+  private cleanupZoomPan: (() => void) | null = null;
+
   // Intro animation
   private introProgress = 0;
   private introActive = false;
@@ -247,6 +256,9 @@ export class MergerScene implements Scene {
       this.spectrogramLoading = document.getElementById("spectrogram-loading")!;
       this.strainChartPanel = document.getElementById("strain-chart-panel")!;
       this.strainChartCanvas = document.getElementById("strain-chart-canvas") as HTMLCanvasElement;
+      this.detectorTabs = document.getElementById("detector-tabs")!;
+      this.detectorTabBtns = document.querySelectorAll<HTMLButtonElement>(".detector-tab");
+      this.whitenToggle = document.getElementById("whiten-toggle") as HTMLButtonElement;
 
       this.tourToggleBtn = document.getElementById("tour-toggle")!;
       this.tourMenu = document.getElementById("tour-menu")!;
@@ -279,6 +291,8 @@ export class MergerScene implements Scene {
       this.unsubViewMode = onViewModeChange((mode) => {
         this.updateSpectrogramVisibility();
         this.updateStrainChartVisibility();
+        this.updateDetectorTabsVisibility();
+        this.updateSpectrogramZoomPan();
         this.updateExportVisibility();
         this.applyInfoPanelModeGating(mode);
         this.updateInfoPanelValues();
@@ -691,6 +705,30 @@ export class MergerScene implements Scene {
       }
       if (e.code === "Slash") { e.preventDefault(); this.searchInput.focus(); }
     }) as EventListener);
+
+    // Detector tab clicks (Researcher mode)
+    this.detectorTabBtns.forEach((btn) => {
+      this.addHandler(btn, "click", () => {
+        if (btn.disabled) return;
+        const det = btn.dataset.detector!;
+        this.activeDetector = det;
+        this.detectorTabBtns.forEach((b) => b.classList.toggle("active", b.dataset.detector === det));
+        if (this.currentEvent) {
+          this.loadStrainChart(this.currentEvent);
+          this.loadSpectrogram(this.currentEvent.commonName);
+        }
+      });
+    });
+
+    // Whitening toggle (Researcher mode)
+    this.addHandler(this.whitenToggle, "click", () => {
+      this.isWhitened = !this.isWhitened;
+      this.whitenToggle.textContent = this.isWhitened ? "Whitened" : "Raw";
+      this.whitenToggle.classList.toggle("active", this.isWhitened);
+      if (this.currentEvent) {
+        this.loadStrainChart(this.currentEvent);
+      }
+    });
   }
 
   // ─── View mode ──────────────────────────────────────────────────────
@@ -1161,23 +1199,78 @@ export class MergerScene implements Scene {
     this.strainChartPanel.style.display = shouldShow ? "block" : "none";
   }
 
+  private updateDetectorTabsVisibility() {
+    const mode = getViewMode();
+    const show = mode === "researcher" && this.viewMode === "event" && this.strainChartData?.hasStrain;
+    this.detectorTabs.style.display = show ? "flex" : "none";
+    this.strainChartPanel.classList.toggle("has-tabs", !!show);
+  }
+
+  private updateSpectrogramZoomPan() {
+    const mode = getViewMode();
+    if (mode === "researcher" && !this.cleanupZoomPan) {
+      this.cleanupZoomPan = installSpectrogramZoomPan(this.spectrogramCanvas);
+    } else if (mode !== "researcher" && this.cleanupZoomPan) {
+      this.cleanupZoomPan();
+      this.cleanupZoomPan = null;
+      resetSpectrogramView();
+    }
+  }
+
+  private async updateDetectorTabStates(eventName: string) {
+    this.availableDetectors = await getAvailableDetectors(eventName);
+    this.detectorTabBtns.forEach((btn) => {
+      const det = btn.dataset.detector!;
+      const available = this.availableDetectors.includes(det);
+      btn.disabled = !available;
+      btn.title = available ? det : `${det} (N/A)`;
+      if (!available && btn.classList.contains("active")) {
+        btn.classList.remove("active");
+      }
+    });
+    // If active detector is not available, switch to first available
+    if (!this.availableDetectors.includes(this.activeDetector)) {
+      this.activeDetector = this.availableDetectors[0] ?? "H1";
+      this.detectorTabBtns.forEach((b) =>
+        b.classList.toggle("active", b.dataset.detector === this.activeDetector)
+      );
+    }
+  }
+
   private async loadStrainChart(event: GWEvent) {
     const mode = getViewMode();
     if (mode === "explorer" || !this.currentWaveform) return;
+
+    // Update detector availability for this event
+    await this.updateDetectorTabStates(event.commonName);
+
+    const detector = mode === "researcher" ? this.activeDetector : undefined;
 
     let strain: import("../../lib/strain").StrainData | null = null;
     try {
       const has = await hasStrainData(event.commonName);
       if (has) {
-        strain = await loadStrain(event.commonName, "H1");
+        strain = await loadStrain(event.commonName, detector);
       }
     } catch {
       // Strain unavailable — will show template only
     }
 
+    // Apply whitening if enabled (researcher mode only)
+    if (strain && this.isWhitened && mode === "researcher") {
+      const whitened = whiten(strain.data, strain.sampleRate);
+      strain = { ...strain, data: whitened };
+    }
+
     invalidateStrainChart();
     this.strainChartData = prepareChartData(this.currentWaveform, strain, event);
+    // Annotate with detector and whitening state
+    if (strain) {
+      this.strainChartData.detector = strain.detector;
+      this.strainChartData.whitened = this.isWhitened && mode === "researcher";
+    }
     this.updateStrainChartVisibility();
+    this.updateDetectorTabsVisibility();
     renderStrainChart(this.strainChartCanvas, this.strainChartData, this.playbackTime);
   }
 
@@ -1225,15 +1318,20 @@ export class MergerScene implements Scene {
       return;
     }
 
+    // Reset zoom when switching events/detectors
+    resetSpectrogramView();
+
     this.spectrogramComputing = true;
     this.spectrogramLoading.style.display = "flex";
     this.updateSpectrogramVisibility();
 
     try {
-      const strain = await loadStrain(eventName);
+      const detector = mode === "researcher" ? this.activeDetector : undefined;
+      const strain = await loadStrain(eventName, detector);
       const data = await computeSpectrogram(strain, eventName);
       this.spectrogramData = data;
       this.spectrogramLoading.style.display = "none";
+      this.updateSpectrogramZoomPan();
       renderSpectrogram(this.spectrogramCanvas, data, this.playbackTime);
     } catch (err) {
       console.warn("Spectrogram computation failed:", err);
@@ -1448,7 +1546,13 @@ export class MergerScene implements Scene {
     // Clean up strain chart
     this.strainChartPanel.style.display = "none";
     this.strainChartData = null;
+    this.detectorTabs.style.display = "none";
+    this.strainChartPanel.classList.remove("has-tabs");
     invalidateStrainChart();
+    if (this.cleanupZoomPan) {
+      this.cleanupZoomPan();
+      this.cleanupZoomPan = null;
+    }
     if (this.unsubViewMode) {
       this.unsubViewMode();
       this.unsubViewMode = null;

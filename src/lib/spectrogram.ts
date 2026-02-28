@@ -214,16 +214,24 @@ async function buildBaseImage(
 
   if (plotW <= 0 || plotH <= 0 || maxAmplitude === 0) return;
 
-  // Render spectrogram pixels
-  const imgData = ctx.createImageData(timeBins, freqBins);
+  // Compute visible time bin range based on zoom/pan
+  const visStartFrac = panOffset;
+  const visEndFrac = panOffset + 1 / zoomLevel;
+  const visStartBin = Math.floor(visStartFrac * timeBins);
+  const visEndBin = Math.min(timeBins, Math.ceil(visEndFrac * timeBins));
+  const visBins = visEndBin - visStartBin;
+
+  // Render spectrogram pixels (only visible time range)
+  const imgData = ctx.createImageData(visBins, freqBins);
   const pixels = imgData.data;
   for (let fi = 0; fi < freqBins; fi++) {
     const row = freqBins - 1 - fi;
-    for (let tj = 0; tj < timeBins; tj++) {
+    for (let vj = 0; vj < visBins; vj++) {
+      const tj = visStartBin + vj;
       const amp = amplitudes[fi * timeBins + tj];
       const normalized = Math.log1p(amp / maxAmplitude * 100) / Math.log1p(100);
       const ci = Math.round(normalized * 255);
-      const pi = (row * timeBins + tj) * 4;
+      const pi = (row * visBins + vj) * 4;
       pixels[pi] = VIRIDIS_LUT[ci * 3];
       pixels[pi + 1] = VIRIDIS_LUT[ci * 3 + 1];
       pixels[pi + 2] = VIRIDIS_LUT[ci * 3 + 2];
@@ -231,7 +239,7 @@ async function buildBaseImage(
     }
   }
 
-  const specCanvas = new OffscreenCanvas(timeBins, freqBins);
+  const specCanvas = new OffscreenCanvas(visBins, freqBins);
   const specCtx = specCanvas.getContext("2d")!;
   specCtx.putImageData(imgData, 0, 0);
   ctx.imageSmoothingEnabled = true;
@@ -270,16 +278,22 @@ async function buildBaseImage(
   ctx.fillText("Hz", 0, 0);
   ctx.restore();
 
-  // Time axis
+  // Time axis (adjusted for zoom/pan)
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
   ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
   ctx.font = "10px -apple-system, system-ui, sans-serif";
   const duration = data.times[timeBins - 1];
-  const timeStep = duration > 16 ? 8 : duration > 8 ? 4 : 2;
-  for (let t = 0; t <= duration; t += timeStep) {
-    const x = MARGIN_LEFT + (t / duration) * plotW;
-    ctx.fillText(`${t.toFixed(0)}s`, x, displayH - MARGIN_BOTTOM + 6);
+  const visStartTime = visStartFrac * duration;
+  const visEndTime = visEndFrac * duration;
+  const visDuration = visEndTime - visStartTime;
+  const timeStep = visDuration > 16 ? 8 : visDuration > 8 ? 4 : visDuration > 4 ? 2 : visDuration > 1 ? 0.5 : 0.2;
+  // Start from a tick-aligned time
+  const firstTick = Math.ceil(visStartTime / timeStep) * timeStep;
+  for (let t = firstTick; t <= visEndTime; t += timeStep) {
+    const xFrac = (t - visStartTime) / visDuration;
+    const x = MARGIN_LEFT + xFrac * plotW;
+    ctx.fillText(`${t.toFixed(t < 1 || timeStep < 1 ? 1 : 0)}s`, x, displayH - MARGIN_BOTTOM + 6);
   }
 
   // Color bar legend
@@ -300,7 +314,7 @@ async function buildBaseImage(
   ctx.fillText("min", barX + barW + 3, MARGIN_TOP + plotH);
 
   cachedBaseImage = await createImageBitmap(offCanvas);
-  cachedDataId = `${data.eventName}/${data.detector}`;
+  cachedDataId = `${data.eventName}/${data.detector}/${zoomLevel.toFixed(3)}/${panOffset.toFixed(4)}`;
   cachedCanvasW = displayW;
   cachedCanvasH = displayH;
 }
@@ -321,7 +335,7 @@ export function renderSpectrogram(
   const displayW = canvas.clientWidth;
   const displayH = canvas.clientHeight;
 
-  const dataId = `${data.eventName}/${data.detector}`;
+  const dataId = `${data.eventName}/${data.detector}/${zoomLevel.toFixed(3)}/${panOffset.toFixed(4)}`;
 
   // Rebuild base image if data or size changed
   if (!cachedBaseImage || cachedDataId !== dataId || cachedCanvasW !== displayW || cachedCanvasH !== displayH) {
@@ -339,20 +353,138 @@ export function renderSpectrogram(
   ctx.scale(dpr, dpr);
   ctx.drawImage(cachedBaseImage, 0, 0, displayW, displayH);
 
-  // Draw playback cursor
+  // Draw playback cursor (adjusted for zoom/pan)
   if (playbackNorm != null && playbackNorm >= 0 && playbackNorm <= 1) {
     const plotW = displayW - MARGIN_LEFT - MARGIN_RIGHT;
     const plotH = displayH - MARGIN_TOP - MARGIN_BOTTOM;
-    const cursorX = MARGIN_LEFT + playbackNorm * plotW;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([4, 3]);
-    ctx.beginPath();
-    ctx.moveTo(cursorX, MARGIN_TOP);
-    ctx.lineTo(cursorX, MARGIN_TOP + plotH);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    // Map playbackNorm [0..1] through zoom/pan viewport
+    const visStart = panOffset;
+    const visWidth = 1 / zoomLevel;
+    const cursorInView = (playbackNorm - visStart) / visWidth;
+    if (cursorInView >= 0 && cursorInView <= 1) {
+      const cursorX = MARGIN_LEFT + cursorInView * plotW;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(cursorX, MARGIN_TOP);
+      ctx.lineTo(cursorX, MARGIN_TOP + plotH);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
+}
+
+// ─── Zoom / Pan state (Researcher mode) ──────────────────────────────
+
+/** Current zoom level (1 = full view, >1 = zoomed in) */
+let zoomLevel = 1;
+/** Pan offset as fraction of total width [0..1] — left edge of viewport */
+let panOffset = 0;
+
+/**
+ * Get current zoom/pan view state.
+ */
+export function getSpectrogramView(): { zoom: number; pan: number } {
+  return { zoom: zoomLevel, pan: panOffset };
+}
+
+/**
+ * Reset zoom/pan to defaults.
+ */
+export function resetSpectrogramView(): void {
+  zoomLevel = 1;
+  panOffset = 0;
+  // Invalidate cached image so it's redrawn at new zoom
+  cachedBaseImage = null;
+  cachedDataId = null;
+}
+
+/**
+ * Apply zoom delta (positive = zoom in, negative = zoom out).
+ * Zooms toward the given normalized x position within the plot area.
+ */
+export function zoomSpectrogram(delta: number, anchorNorm: number): void {
+  const oldZoom = zoomLevel;
+  zoomLevel = Math.max(1, Math.min(16, zoomLevel * (1 + delta)));
+
+  // Adjust pan to keep the anchor point stable
+  const anchorInData = panOffset + anchorNorm / oldZoom;
+  panOffset = anchorInData - anchorNorm / zoomLevel;
+
+  // Clamp pan
+  const maxPan = 1 - 1 / zoomLevel;
+  panOffset = Math.max(0, Math.min(maxPan, panOffset));
+
+  // Invalidate cache
+  cachedBaseImage = null;
+  cachedDataId = null;
+}
+
+/**
+ * Pan by a delta in normalized coordinates.
+ */
+export function panSpectrogram(deltaNorm: number): void {
+  panOffset += deltaNorm;
+  const maxPan = 1 - 1 / zoomLevel;
+  panOffset = Math.max(0, Math.min(maxPan, panOffset));
+
+  // Invalidate cache
+  cachedBaseImage = null;
+  cachedDataId = null;
+}
+
+/**
+ * Install mouse wheel + drag handlers on a spectrogram canvas for zoom/pan.
+ * Returns a cleanup function to remove listeners.
+ */
+export function installSpectrogramZoomPan(canvas: HTMLCanvasElement): () => void {
+  let dragging = false;
+  let lastX = 0;
+
+  const onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const plotW = rect.width - MARGIN_LEFT - MARGIN_RIGHT;
+    const anchorNorm = Math.max(0, Math.min(1, (x - MARGIN_LEFT) / plotW));
+    const delta = e.deltaY < 0 ? 0.15 : -0.15;
+    zoomSpectrogram(delta, anchorNorm);
+  };
+
+  const onMouseDown = (e: MouseEvent) => {
+    if (zoomLevel <= 1) return;
+    dragging = true;
+    lastX = e.clientX;
+    canvas.style.cursor = "grabbing";
+  };
+
+  const onMouseMove = (e: MouseEvent) => {
+    if (!dragging) return;
+    const rect = canvas.getBoundingClientRect();
+    const plotW = rect.width - MARGIN_LEFT - MARGIN_RIGHT;
+    const dx = e.clientX - lastX;
+    lastX = e.clientX;
+    // Convert pixel drag to normalized pan delta
+    panSpectrogram(-dx / plotW / zoomLevel);
+  };
+
+  const onMouseUp = () => {
+    dragging = false;
+    canvas.style.cursor = zoomLevel > 1 ? "grab" : "";
+  };
+
+  canvas.addEventListener("wheel", onWheel, { passive: false });
+  canvas.addEventListener("mousedown", onMouseDown);
+  window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("mouseup", onMouseUp);
+
+  return () => {
+    canvas.removeEventListener("wheel", onWheel);
+    canvas.removeEventListener("mousedown", onMouseDown);
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+  };
 }
 
 /**
@@ -365,4 +497,5 @@ export function disposeSpectrogramWorker(): void {
   }
   cachedBaseImage = null;
   cachedDataId = null;
+  resetSpectrogramView();
 }
