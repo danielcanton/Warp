@@ -22,18 +22,26 @@ type StrainManifest = Record<string, ManifestEntry>;
 const STRAIN_BASE = "/strain";
 
 let manifestPromise: Promise<StrainManifest> | null = null;
+let manifestUnavailable = false;
 const strainCache = new Map<string, StrainData>();
 
 async function getManifest(): Promise<StrainManifest> {
+  // Once we know strain data isn't deployed, stop retrying
+  if (manifestUnavailable) return {};
+
   if (!manifestPromise) {
     manifestPromise = fetch(`${STRAIN_BASE}/manifest.json`)
       .then((res) => {
-        if (!res.ok) throw new Error(`Strain manifest not found (${res.status})`);
+        if (!res.ok) {
+          manifestUnavailable = true;
+          return {} as StrainManifest;
+        }
         return res.json() as Promise<StrainManifest>;
       })
-      .catch((err) => {
+      .catch(() => {
         manifestPromise = null;
-        throw err;
+        manifestUnavailable = true;
+        return {} as StrainManifest;
       });
   }
   return manifestPromise;

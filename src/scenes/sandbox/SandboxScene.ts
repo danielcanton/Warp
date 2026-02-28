@@ -97,11 +97,10 @@ export class SandboxScene implements Scene {
     this.timeControlsEl.style.display = "flex";
 
     // Hide other scenes' UI
-    document.getElementById("event-info")!.style.display = "none";
-    document.getElementById("event-list")!.style.display = "none";
-    document.getElementById("map-legend")!.style.display = "none";
-    document.getElementById("help-overlay")!.style.display = "none";
-    document.getElementById("ui")!.style.display = "none";
+    for (const id of ["event-info", "event-list", "map-legend", "help-overlay", "ui"]) {
+      const el = document.getElementById(id);
+      if (el) el.style.display = "none";
+    }
 
     // Remove loading screen if present
     const loadingScreen = document.getElementById("loading-screen");

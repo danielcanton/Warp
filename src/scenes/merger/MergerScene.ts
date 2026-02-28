@@ -326,7 +326,8 @@ export class MergerScene implements Scene {
     this.mapTooltip.style.display = "none";
     this.mapLegendEl.style.display = "none";
     this.helpOverlay.style.display = "none";
-    document.getElementById("ui")!.style.display = "flex";
+    const uiEl = document.getElementById("ui");
+    if (uiEl) uiEl.style.display = "flex";
     this.updateSpectrogramVisibility();
     this.updateStrainChartVisibility();
     this.updateExportVisibility();
@@ -1569,6 +1570,7 @@ export class MergerScene implements Scene {
     this.mapTooltip.style.display = "none";
     this.eventListEl.style.display = "none";
     this.aboutOverlay.classList.remove("show");
-    document.getElementById("ui")!.style.display = "none";
+    const uiEl2 = document.getElementById("ui");
+    if (uiEl2) uiEl2.style.display = "none";
   }
 }
