@@ -677,9 +677,24 @@
         .mobile-only { display: block; }
 
         /* Hide heavy panels */
-        #help-overlay,
         #onboarding,
         #map-tooltip { display: none !important; }
+
+        /* Help overlay — mobile fullscreen sheet */
+        #help-overlay {
+          top: 48px; bottom: 80px; left: 12px; right: 12px;
+          min-width: 0; max-width: none;
+          max-height: none;
+          border-radius: 14px;
+          padding: 16px 18px;
+          font-size: 12px;
+          z-index: 35;
+        }
+        #help-overlay h2 { font-size: 16px; margin-bottom: 8px; }
+        .help-intro { font-size: 12px; margin-bottom: 12px; }
+        .help-glossary dt { font-size: 11px; margin-top: 6px; }
+        .help-glossary dd { font-size: 11px; }
+        .help-footer .kbd { display: none; }
 
         /* Compact event info — just name + type + masses */
         #event-info {
@@ -699,7 +714,7 @@
           margin-bottom: 0;
         }
         #event-info h2 { font-size: 16px; }
-        #event-info .help-btn { display: none; }
+        #event-info .help-btn { display: flex; width: 22px; height: 22px; font-size: 11px; margin-top: 0; }
         #event-info .info-divider,
         #event-info .info-detail,
         #event-info .info-catalog { display: none; }
