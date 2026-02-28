@@ -1,0 +1,11 @@
+{
+  "GW150914": {
+    "detectors": [
+      "H1",
+      "L1"
+    ],
+    "duration": 32,
+    "gpsStart": 1126259462.4,
+    "sampleRate": 4096
+  }
+}
