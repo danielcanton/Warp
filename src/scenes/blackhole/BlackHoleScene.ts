@@ -189,10 +189,20 @@ export class BlackHoleScene implements Scene {
       this.bhMaterial.uniforms.uBackground.value = this.videoTexture;
       this.bhMaterial.uniforms.uUseCamera.value = 1.0;
       this.arModeActive = true;
-    } catch (_err) {
-      // Permission denied or no camera — uncheck automatically
+    } catch (err) {
+      console.warn("AR camera failed:", err);
       if (this.arCheckbox) this.arCheckbox.checked = false;
       this.arModeActive = false;
+
+      // Show brief hint so user knows why it failed
+      const hint = this.panelEl?.querySelector(".bh-hint");
+      if (hint) {
+        const msg = (err as Error)?.name === "NotAllowedError"
+          ? "Camera permission denied — check browser settings"
+          : "Camera not available on this device";
+        hint.textContent = msg;
+        setTimeout(() => { hint.textContent = "Drag to orbit. Scroll to zoom."; }, 4000);
+      }
     }
   }
 
