@@ -205,6 +205,46 @@ export class GWAudioEngine {
     }
   }
 
+  /**
+   * Play a spatialized sound at a 3D position using HRTF panning.
+   * Returns the PannerNode for position updates.
+   */
+  playSpatial(
+    buffer: AudioBuffer,
+    position: { x: number; y: number; z: number },
+    options: { loop?: boolean; volume?: number } = {},
+  ): { source: AudioBufferSourceNode; panner: PannerNode } | null {
+    const ctx = this.ensureContext();
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = options.loop ?? false;
+
+    const panner = ctx.createPanner();
+    panner.panningModel = "HRTF";
+    panner.distanceModel = "inverse";
+    panner.refDistance = 1;
+    panner.maxDistance = 100;
+    panner.rolloffFactor = 1;
+    panner.setPosition(position.x, position.y, position.z);
+
+    const gain = ctx.createGain();
+    gain.gain.value = options.volume ?? 0.5;
+
+    source.connect(panner);
+    panner.connect(gain);
+    gain.connect(ctx.destination);
+
+    source.start();
+
+    return { source, panner };
+  }
+
+  /** Get the underlying AudioContext (creates one if needed). */
+  getContext(): AudioContext {
+    return this.ensureContext();
+  }
+
   dispose() {
     this.stop();
     if (this.ctx) {
