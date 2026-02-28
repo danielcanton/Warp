@@ -14,7 +14,7 @@ import { UniverseMap } from "../../lib/universe-map";
 import { VRPanel } from "../../lib/VRPanel";
 import { loadStrain, hasStrainData } from "../../lib/strain";
 import { computeSpectrogram, renderSpectrogram, disposeSpectrogramWorker, type SpectrogramData } from "../../lib/spectrogram";
-import { getViewMode, onViewModeChange } from "../../lib/view-mode";
+import { getViewMode, onViewModeChange, type ViewMode } from "../../lib/view-mode";
 import { performExport } from "../../lib/export";
 import vertexShader from "../../shaders/spacetime.vert.glsl?raw";
 import fragmentShader from "../../shaders/spacetime.frag.glsl?raw";
@@ -266,11 +266,15 @@ export class MergerScene implements Scene {
     // ─── Setup UI event handlers ───
     this.setupEventHandlers(ctx);
 
-    // ─── Spectrogram: subscribe to view mode changes ───
+    // ─── Subscribe to view mode changes for live panel updates ───
     if (!this.unsubViewMode) {
-      this.unsubViewMode = onViewModeChange(() => {
+      this.unsubViewMode = onViewModeChange((mode) => {
         this.updateSpectrogramVisibility();
         this.updateExportVisibility();
+        this.applyInfoPanelModeGating(mode);
+        this.updateInfoPanelValues();
+        this.applyControlsModeGating(mode);
+        this.renderEventList();
       });
     }
 
@@ -302,6 +306,11 @@ export class MergerScene implements Scene {
     document.getElementById("ui")!.style.display = "flex";
     this.updateSpectrogramVisibility();
     this.updateExportVisibility();
+
+    // Apply initial mode gating
+    const initMode = getViewMode();
+    this.applyInfoPanelModeGating(initMode);
+    this.applyControlsModeGating(initMode);
 
     // ─── Load data (only first time) ───
     if (firstInit) {
@@ -567,9 +576,20 @@ export class MergerScene implements Scene {
       const hit = this.universeMap.raycast(this.mouse, camera);
       renderer.domElement.style.cursor = hit ? "pointer" : "default";
       if (hit) {
-        const type = classifyEvent(hit);
-        const dist = hit.luminosity_distance.toFixed(0);
-        this.mapTooltip.innerHTML = `<span class="tooltip-name">${hit.commonName}</span><span class="tooltip-detail">${type} &middot; ${dist} Mpc</span>`;
+        const tooltipMode = getViewMode();
+        let tooltipHTML = `<span class="tooltip-name">${hit.commonName}</span>`;
+        if (tooltipMode !== "explorer") {
+          const type = classifyEvent(hit);
+          const dist = hit.luminosity_distance.toFixed(0);
+          tooltipHTML += `<span class="tooltip-detail">${type} &middot; ${dist} Mpc</span>`;
+        }
+        if (tooltipMode === "researcher") {
+          const snr = hit.network_matched_filter_snr.toFixed(1);
+          const pVal = hit.p_astro;
+          const pStr = pVal >= 0.99 ? ">0.99" : pVal > 0 ? pVal.toFixed(2) : "";
+          tooltipHTML += `<span class="tooltip-detail">SNR ${snr}${pStr ? ` · p<sub>astro</sub>=${pStr}` : ""}</span>`;
+        }
+        this.mapTooltip.innerHTML = tooltipHTML;
         this.mapTooltip.style.display = "block";
         this.mapTooltip.style.left = `${e.clientX + 14}px`;
         this.mapTooltip.style.top = `${e.clientY - 10}px`;
@@ -706,6 +726,70 @@ export class MergerScene implements Scene {
     controls.update();
   }
 
+  // ─── View-mode gating helpers ────────────────────────────────────────
+
+  /** Format a value with ± uncertainty for researcher mode */
+  private formatWithUncertainty(value: number, lower: number, upper: number, decimals: number, unit: string): string {
+    const v = value.toFixed(decimals);
+    const lo = Math.abs(lower).toFixed(decimals);
+    const hi = Math.abs(upper).toFixed(decimals);
+    return `${v} <span class="uncertainty">+${hi}/−${lo}</span> ${unit}`;
+  }
+
+  /** Apply mode-gating to sonification controls */
+  private applyControlsModeGating(mode: ViewMode): void {
+    // Explorer: play/pause only — hide speed button/label
+    this.speedBtn.style.display = mode === "explorer" ? "none" : "";
+    this.speedLabel.style.display = mode === "explorer" ? "none" : "";
+  }
+
+  /** Apply mode-gating to the info panel elements */
+  private applyInfoPanelModeGating(mode: ViewMode): void {
+    // Explorer: hide type badge, divider, all detail rows, catalog
+    const showStudent = mode !== "explorer";
+    this.typeBadgeEl.style.display = showStudent ? "" : "none";
+    const dividers = this.eventInfoEl.querySelectorAll<HTMLElement>(".info-divider");
+    dividers.forEach((d) => (d.style.display = showStudent ? "" : "none"));
+    const details = this.eventInfoEl.querySelectorAll<HTMLElement>(".info-detail");
+    details.forEach((d) => (d.style.display = showStudent ? "" : "none"));
+    const catalog = this.eventInfoEl.querySelector<HTMLElement>(".info-catalog");
+    if (catalog) catalog.style.display = showStudent ? "" : "none";
+  }
+
+  /** Update info panel values to reflect the current mode (uncertainties for researcher) */
+  private updateInfoPanelValues(): void {
+    const event = this.currentEvent;
+    if (!event) return;
+    const mode = getViewMode();
+
+    if (mode === "researcher") {
+      this.massesEl.innerHTML = this.formatWithUncertainty(
+        event.mass_1_source, event.mass_1_source_lower, event.mass_1_source_upper, 1, "M☉"
+      ) + " + " + this.formatWithUncertainty(
+        event.mass_2_source, event.mass_2_source_lower, event.mass_2_source_upper, 1, "M☉"
+      );
+
+      this.distanceEl.innerHTML = this.formatWithUncertainty(
+        event.luminosity_distance, event.luminosity_distance_lower, event.luminosity_distance_upper, 0, "Mpc"
+      );
+
+      this.chirpMassEl.innerHTML = event.chirp_mass_source
+        ? this.formatWithUncertainty(event.chirp_mass_source, event.chirp_mass_source_lower, event.chirp_mass_source_upper, 1, "M☉")
+        : "—";
+
+      this.finalMassEl.innerHTML = event.final_mass_source
+        ? this.formatWithUncertainty(event.final_mass_source, event.final_mass_source_lower, event.final_mass_source_upper, 1, "M☉")
+        : "—";
+    } else {
+      this.massesEl.textContent = `${event.mass_1_source.toFixed(1)} + ${event.mass_2_source.toFixed(1)} M☉`;
+      this.distanceEl.textContent = `${event.luminosity_distance.toFixed(0)} Mpc`;
+      this.chirpMassEl.textContent = event.chirp_mass_source
+        ? `${event.chirp_mass_source.toFixed(1)} M☉` : "—";
+      this.finalMassEl.textContent = event.final_mass_source
+        ? `${event.final_mass_source.toFixed(1)} M☉` : "—";
+    }
+  }
+
   // ─── Event selection ────────────────────────────────────────────────
 
   private selectEvent(event: GWEvent) {
@@ -728,8 +812,6 @@ export class MergerScene implements Scene {
     // Update UI
     this.vrPanel?.setTitle(event.commonName);
     this.eventName.textContent = event.commonName;
-    this.massesEl.textContent = `${event.mass_1_source.toFixed(1)} + ${event.mass_2_source.toFixed(1)} M\u2609`;
-    this.distanceEl.textContent = `${event.luminosity_distance.toFixed(0)} Mpc`;
 
     const type = classifyEvent(event);
     const typeLabels: Record<string, string> = {
@@ -739,12 +821,6 @@ export class MergerScene implements Scene {
     };
     this.typeBadgeEl.textContent = typeLabels[type] ?? type;
     this.typeBadgeEl.className = `type-badge ${type.toLowerCase()}`;
-
-    this.chirpMassEl.textContent = event.chirp_mass_source
-      ? `${event.chirp_mass_source.toFixed(1)} M\u2609` : "\u2014";
-
-    this.finalMassEl.textContent = event.final_mass_source
-      ? `${event.final_mass_source.toFixed(1)} M\u2609` : "\u2014";
 
     if (event.final_mass_source > 0) {
       const radiated = event.mass_1_source + event.mass_2_source - event.final_mass_source;
@@ -770,6 +846,12 @@ export class MergerScene implements Scene {
 
     this.catalogEl.textContent = event.catalog_shortName
       ? `Catalog: ${event.catalog_shortName}` : "";
+
+    // Apply mode-dependent rendering
+    const mode = getViewMode();
+    this.updateInfoPanelValues();
+    this.applyInfoPanelModeGating(mode);
+    this.applyControlsModeGating(mode);
 
     document.querySelectorAll(".event-item").forEach((el) => {
       el.classList.toggle("active", el.getAttribute("data-name") === event.commonName);
@@ -812,13 +894,34 @@ export class MergerScene implements Scene {
       : `${sorted.length} of ${this.events.length} events`;
     this.eventCountEl.textContent = totalLabel;
 
+    const mode = getViewMode();
+
     this.eventListItems.innerHTML = displayed
       .map((e) => {
-        const totalMass = (e.mass_1_source + e.mass_2_source).toFixed(0);
-        return `<div class="event-item" data-name="${e.commonName}">
-          <span>${e.commonName}</span>
-          <span class="mass">${totalMass} M\u2609</span>
-        </div>`;
+        const type = classifyEvent(e);
+        const dist = e.luminosity_distance.toFixed(0);
+        const snr = e.network_matched_filter_snr.toFixed(1);
+        const pVal = e.p_astro;
+        const pStr = pVal >= 0.99 ? ">0.99" : pVal > 0 ? pVal.toFixed(2) : "";
+
+        if (mode === "explorer") {
+          // Explorer: event name only
+          return `<div class="event-item" data-name="${e.commonName}">
+            <span>${e.commonName}</span>
+          </div>`;
+        } else if (mode === "student") {
+          // Student: name + type badge + distance
+          return `<div class="event-item" data-name="${e.commonName}">
+            <span>${e.commonName} <span class="type-badge ${type.toLowerCase()}" style="font-size:9px;padding:0 4px;margin-left:4px">${type}</span></span>
+            <span class="mass">${dist} Mpc</span>
+          </div>`;
+        } else {
+          // Researcher: name + type badge + SNR + p_astro
+          return `<div class="event-item" data-name="${e.commonName}">
+            <span>${e.commonName} <span class="type-badge ${type.toLowerCase()}" style="font-size:9px;padding:0 4px;margin-left:4px">${type}</span></span>
+            <span class="mass">SNR ${snr}${pStr ? ` · p=${pStr}` : ""}</span>
+          </div>`;
+        }
       })
       .join("");
 
