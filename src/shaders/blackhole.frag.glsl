@@ -197,6 +197,8 @@ void main() {
   }
 
   // ─── Shading ────────────────────────────────────────────────────
+  bool usedCamera = false;
+
   if (absorbed) {
     // Black hole shadow — pure black with subtle blue-shifted edge
     float edgeGlow = 0.0;
@@ -208,22 +210,31 @@ void main() {
     float ringGlow = exp(-pow((closest - photonSphere) / (rs * 0.3), 2.0)) * 0.8;
 
     if (uUseCamera > 0.5) {
-      // AR mode: project lensed ray direction back to camera-space UV
+      // AR mode: map the lensed ray direction to screen UV and sample camera
+      // Use simple screen-space mapping — the camera sees roughly what the screen shows
       vec3 localDir = (uInvCameraMatrix * vec4(vel, 0.0)).xyz;
-      float halfFovAR = uFov * 0.5;
-      float aspect = uResolution.x / uResolution.y;
-      vec2 projected = localDir.xy / (-localDir.z * tan(halfFovAR));
-      projected.x /= aspect;
-      vec2 bgUV = projected * 0.5 + 0.5;
 
-      // Only sample camera if ray points forward (toward the scene, not behind camera)
-      if (localDir.z < 0.0 && bgUV.x >= 0.0 && bgUV.x <= 1.0 && bgUV.y >= 0.0 && bgUV.y <= 1.0) {
-        // Flip Y for video texture, mirror X for front-facing camera
-        bgUV.y = 1.0 - bgUV.y;
-        bgUV.x = 1.0 - bgUV.x;
-        vec3 camColor = texture2D(uBackground, bgUV).rgb;
-        finalColor += camColor;
-      } else {
+      if (localDir.z < 0.0) {
+        float halfFovAR = uFov * 0.5;
+        float screenAspect = uResolution.x / uResolution.y;
+        vec2 projected = localDir.xy / (-localDir.z * tan(halfFovAR));
+        projected.x /= screenAspect;
+        vec2 bgUV = projected * 0.5 + 0.5;
+
+        if (bgUV.x >= 0.0 && bgUV.x <= 1.0 && bgUV.y >= 0.0 && bgUV.y <= 1.0) {
+          // Flip Y for video texture, mirror X for front-facing camera
+          bgUV.y = 1.0 - bgUV.y;
+          bgUV.x = 1.0 - bgUV.x;
+          // Camera texture is already in sRGB — read raw values
+          vec3 camColor = texture2D(uBackground, bgUV).rgb;
+          // Convert sRGB to linear so our tone mapping + gamma round-trips correctly
+          camColor = pow(camColor, vec3(2.2));
+          finalColor += camColor;
+          usedCamera = true;
+        }
+      }
+
+      if (!usedCamera) {
         // Outside camera FOV — procedural stars as fallback
         float stars = starField(vel);
         vec3 bgColor = vec3(0.0, 0.002, 0.008);

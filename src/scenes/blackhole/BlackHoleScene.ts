@@ -230,7 +230,6 @@ export class BlackHoleScene implements Scene {
       this.videoTexture = new THREE.VideoTexture(this.videoElement);
       this.videoTexture.minFilter = THREE.LinearFilter;
       this.videoTexture.magFilter = THREE.LinearFilter;
-      this.videoTexture.colorSpace = THREE.SRGBColorSpace;
 
       this.bhMaterial.uniforms.uBackground.value = this.videoTexture;
       this.bhMaterial.uniforms.uUseCamera.value = 1.0;
