@@ -31,7 +31,9 @@ export class BlackHoleScene implements Scene {
   private arModeActive = false;
   private cameraStream: MediaStream | null = null;
   private videoElement: HTMLVideoElement | null = null;
-  private videoTexture: THREE.VideoTexture | null = null;
+  private videoTexture: THREE.CanvasTexture | null = null;
+  private arCanvas: HTMLCanvasElement | null = null;
+  private arCtx: CanvasRenderingContext2D | null = null;
   private arCheckbox: HTMLInputElement | null = null;
   private invCameraMatrix = new THREE.Matrix4();
 
@@ -227,7 +229,17 @@ export class BlackHoleScene implements Scene {
       });
       console.log("AR: video ready", this.videoElement.videoWidth, "x", this.videoElement.videoHeight);
 
-      this.videoTexture = new THREE.VideoTexture(this.videoElement);
+      // Use CanvasTexture instead of VideoTexture — manually blit video frames
+      // to a canvas each frame. VideoTexture doesn't reliably upload to GPU
+      // when used with ShaderMaterial.
+      this.arCanvas = document.createElement("canvas");
+      this.arCanvas.width = this.videoElement.videoWidth;
+      this.arCanvas.height = this.videoElement.videoHeight;
+      this.arCtx = this.arCanvas.getContext("2d")!;
+      // Draw first frame immediately
+      this.arCtx.drawImage(this.videoElement, 0, 0);
+
+      this.videoTexture = new THREE.CanvasTexture(this.arCanvas);
       this.videoTexture.minFilter = THREE.LinearFilter;
       this.videoTexture.magFilter = THREE.LinearFilter;
 
@@ -265,6 +277,8 @@ export class BlackHoleScene implements Scene {
       this.videoTexture.dispose();
       this.videoTexture = null;
     }
+    this.arCanvas = null;
+    this.arCtx = null;
     this.bhMaterial.uniforms.uUseCamera.value = 0.0;
     this.bhMaterial.uniforms.uBackground.value = new THREE.Texture();
     this.arModeActive = false;
@@ -351,9 +365,10 @@ export class BlackHoleScene implements Scene {
     this.elapsed += dt;
     this.bhMaterial.uniforms.uTime.value = this.elapsed;
 
-    // Force video texture upload each frame (ShaderMaterial doesn't auto-update VideoTexture)
-    if (this.videoTexture && this.videoElement && this.videoElement.readyState >= this.videoElement.HAVE_CURRENT_DATA) {
-      this.videoTexture.needsUpdate = true;
+    // Blit video frame to canvas and flag texture for GPU upload
+    if (this.arCtx && this.videoElement && this.videoElement.readyState >= this.videoElement.HAVE_CURRENT_DATA) {
+      this.arCtx.drawImage(this.videoElement, 0, 0);
+      this.videoTexture!.needsUpdate = true;
     }
 
     // Smooth camera interpolation
