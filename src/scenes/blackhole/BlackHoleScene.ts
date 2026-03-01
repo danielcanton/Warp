@@ -351,6 +351,11 @@ export class BlackHoleScene implements Scene {
     this.elapsed += dt;
     this.bhMaterial.uniforms.uTime.value = this.elapsed;
 
+    // Force video texture upload each frame (ShaderMaterial doesn't auto-update VideoTexture)
+    if (this.videoTexture && this.videoElement && this.videoElement.readyState >= this.videoElement.HAVE_CURRENT_DATA) {
+      this.videoTexture.needsUpdate = true;
+    }
+
     // Smooth camera interpolation
     this.spherical.theta += (this.targetSpherical.theta - this.spherical.theta) * 0.08;
     this.spherical.phi += (this.targetSpherical.phi - this.spherical.phi) * 0.08;
