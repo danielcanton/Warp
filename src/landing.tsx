@@ -2,13 +2,16 @@ import { inject } from "@vercel/analytics";
 inject();
 
 import { createRoot } from "react-dom/client";
-import { motion } from "motion/react";
+import { motion, useInView } from "motion/react";
+import { useRef } from "react";
 import GridDistortion from "./components/GridDistortion";
 import DecryptedText from "./components/DecryptedText";
 import GradientText from "./components/GradientText";
 import GlassCTA from "./components/GlassCTA";
 import SplashCursor from "./components/SplashCursor";
 import StarBorder from "./components/StarBorder";
+import SpotlightCard from "./components/SpotlightCard";
+import Counter from "./components/Counter";
 import "./landing.css";
 
 const fadeUp = {
@@ -32,75 +35,143 @@ const viewFadeUp = {
   viewport: { once: true, margin: "-100px" },
 };
 
+// Minimal SVG icons — thin stroke, space/science aesthetic
+const icons = {
+  waveform: (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 16h4l3-10 4 20 4-14 4 8 3-4h6" />
+    </svg>
+  ),
+  audio: (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <path d="M8 12v8M12 8v16M16 10v12M20 6v20M24 12v8" />
+    </svg>
+  ),
+  layers: (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 4L4 10l12 6 12-6L16 4z" />
+      <path d="M4 16l12 6 12-6" />
+      <path d="M4 22l12 6 12-6" />
+    </svg>
+  ),
+  globe: (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="16" cy="16" r="12" />
+      <ellipse cx="16" cy="16" rx="5" ry="12" />
+      <path d="M4 16h24" />
+      <path d="M6 9h20M6 23h20" />
+    </svg>
+  ),
+  play: (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="16" cy="16" r="12" />
+      <path d="M13 11l9 5-9 5V11z" />
+    </svg>
+  ),
+  vr: (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="10" width="26" height="12" rx="4" />
+      <circle cx="11" cy="16" r="3" />
+      <circle cx="21" cy="16" r="3" />
+      <path d="M14 16h4" />
+    </svg>
+  ),
+};
+
 const features = [
   {
-    icon: "🌊",
+    icon: icons.waveform,
     title: "90+ Real Events",
     description:
       "Explore real gravitational wave detections — from binary black holes to neutron star mergers.",
+    spotlight: "rgba(129, 140, 248, 0.15)" as const,
+    hasCounter: true,
   },
   {
-    icon: "🔊",
+    icon: icons.audio,
     title: "Audio Sonification",
     description:
       "Hear spacetime ripple. Each event is converted to audible sound so you can listen to the cosmos.",
+    spotlight: "rgba(192, 132, 252, 0.15)" as const,
   },
   {
-    icon: "🔭",
+    icon: icons.layers,
     title: "3 View Modes",
     description:
-      "Switch between Explorer, Student, and Researcher views — from casual browsing to full data.",
+      "Switch between Explorer, Student, and Researcher — from casual browsing to full data.",
+    spotlight: "rgba(34, 211, 238, 0.15)" as const,
   },
   {
-    icon: "🗺️",
+    icon: icons.globe,
     title: "Universe Map",
     description:
       "See where each event happened in the sky. Zoom, rotate, and explore the gravitational wave catalog.",
+    spotlight: "rgba(129, 140, 248, 0.15)" as const,
   },
   {
-    icon: "🎬",
+    icon: icons.play,
     title: "5 Interactive Scenes",
     description:
       "Watch mergers unfold in real-time 3D — inspiral, merge, and ringdown animated from the waveform.",
+    spotlight: "rgba(192, 132, 252, 0.15)" as const,
   },
   {
-    icon: "🥽",
+    icon: icons.vr,
     title: "WebXR / VR Ready",
     description:
       "Step inside the simulation with any WebXR headset. Gravitational waves all around you.",
+    spotlight: "rgba(34, 211, 238, 0.15)" as const,
   },
 ];
 
 const useCases = [
   {
     heading: "Students",
-    accent: "border-indigo-400/30",
+    accent: "rgba(129, 140, 248, 0.15)",
+    accentBorder: "border-indigo-400/20",
     description:
       "Explore general relativity hands-on. Visualize what textbook equations describe — black hole masses, spin, distance — and build intuition for spacetime curvature.",
   },
   {
     heading: "Educators",
-    accent: "border-purple-400/30",
+    accent: "rgba(192, 132, 252, 0.15)",
+    accentBorder: "border-purple-400/20",
     description:
       "Bring gravitational waves into the classroom. Use real LIGO data to demonstrate wave physics, astronomical scales, and the evidence for merging compact objects.",
   },
   {
     heading: "Researchers",
-    accent: "border-cyan-400/30",
+    accent: "rgba(34, 211, 238, 0.15)",
+    accentBorder: "border-cyan-400/20",
     description:
       "Quickly preview any cataloged event with sonification and 3D waveform playback. Useful for outreach talks, paper illustrations, and sanity-checking parameters.",
   },
 ];
+
+function CounterOnView({ value }: { value: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-100px" });
+  return (
+    <div ref={ref} className="flex items-center gap-1">
+      <Counter
+        value={inView ? value : 0}
+        fontSize={36}
+        textColor="#818cf8"
+        fontWeight="bold"
+        gradientFrom="transparent"
+        gradientTo="transparent"
+      />
+      <span className="text-3xl font-bold text-indigo-400">+</span>
+    </div>
+  );
+}
 
 function Landing() {
   return (
     <div className="bg-black text-white">
       {/* ═══════════════ HERO (existing, confined) ═══════════════ */}
       <section className="relative min-h-screen overflow-hidden">
-        {/* Spacetime grid distortion background */}
         <GridDistortion />
-
-        {/* Fluid simulation overlay — responds to touch on mobile */}
         <SplashCursor
           DENSITY_DISSIPATION={3}
           VELOCITY_DISSIPATION={2}
@@ -109,10 +180,7 @@ function Landing() {
           TRANSPARENT={true}
           SPLAT_FORCE={4000}
         />
-
-        {/* Content overlay */}
         <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6">
-          {/* Logo / Title */}
           <motion.div
             className="mb-4"
             {...fadeUp}
@@ -137,8 +205,6 @@ function Landing() {
               </GradientText>
             </h1>
           </motion.div>
-
-          {/* Tagline */}
           <motion.p
             className="text-base sm:text-lg md:text-xl text-white/50 mb-12 text-center max-w-md font-light tracking-wide"
             {...fadeUp}
@@ -154,8 +220,6 @@ function Landing() {
               animateOn="view"
             />
           </motion.p>
-
-          {/* CTA — StarBorder wrapping GlassCTA */}
           <motion.div
             {...fadeScale}
             transition={{ duration: 0.6, delay: 1.0, ease: "easeOut" }}
@@ -185,13 +249,11 @@ function Landing() {
             </div>
           </motion.div>
         </div>
-
-        {/* Bottom vignette gradient */}
         <div className="absolute bottom-0 left-0 right-0 h-32 bottom-vignette z-[5] pointer-events-none" />
       </section>
 
       {/* ═══════════════ WHAT IS THIS ═══════════════ */}
-      <section className="py-24 px-6">
+      <section className="py-24 sm:py-32 px-6">
         <motion.div
           className="max-w-2xl mx-auto text-center"
           {...viewFadeUp}
@@ -214,7 +276,7 @@ function Landing() {
       </section>
 
       {/* ═══════════════ FEATURES ═══════════════ */}
-      <section className="py-24 px-6">
+      <section className="py-24 sm:py-32 px-6">
         <motion.h2
           className="text-3xl sm:text-4xl font-bold text-center mb-16"
           {...viewFadeUp}
@@ -226,7 +288,6 @@ function Landing() {
           {features.map((f, i) => (
             <motion.div
               key={f.title}
-              className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6"
               {...viewFadeUp}
               transition={{
                 duration: 0.5,
@@ -234,18 +295,32 @@ function Landing() {
                 ease: "easeOut",
               }}
             >
-              <div className="text-3xl mb-3">{f.icon}</div>
-              <h3 className="text-lg font-semibold mb-2">{f.title}</h3>
-              <p className="text-sm text-white/50 leading-relaxed">
-                {f.description}
-              </p>
+              <SpotlightCard
+                className="p-8 h-full"
+                spotlightColor={f.spotlight}
+              >
+                <div className="flex flex-col items-center text-center gap-4">
+                  <div className="text-white/40">{f.icon}</div>
+                  {f.hasCounter ? (
+                    <CounterOnView value={90} />
+                  ) : (
+                    <h3 className="text-lg font-semibold">{f.title}</h3>
+                  )}
+                  {f.hasCounter && (
+                    <h3 className="text-lg font-semibold">Real Events</h3>
+                  )}
+                  <p className="text-sm text-white/45 leading-relaxed">
+                    {f.description}
+                  </p>
+                </div>
+              </SpotlightCard>
             </motion.div>
           ))}
         </div>
       </section>
 
       {/* ═══════════════ USE CASES ═══════════════ */}
-      <section className="py-24 px-6">
+      <section className="py-24 sm:py-32 px-6">
         <motion.h2
           className="text-3xl sm:text-4xl font-bold text-center mb-16"
           {...viewFadeUp}
@@ -257,7 +332,6 @@ function Landing() {
           {useCases.map((uc, i) => (
             <motion.div
               key={uc.heading}
-              className={`bg-white/[0.03] border-l-2 ${uc.accent} rounded-2xl p-6`}
               {...viewFadeUp}
               transition={{
                 duration: 0.5,
@@ -265,10 +339,17 @@ function Landing() {
                 ease: "easeOut",
               }}
             >
-              <h3 className="text-xl font-semibold mb-3">{uc.heading}</h3>
-              <p className="text-sm text-white/50 leading-relaxed">
-                {uc.description}
-              </p>
+              <SpotlightCard
+                className={`p-8 h-full border-t-2 ${uc.accentBorder}`}
+                spotlightColor={uc.accent as `rgba(${number}, ${number}, ${number}, ${number})`}
+              >
+                <div className="flex flex-col items-center text-center gap-3">
+                  <h3 className="text-xl font-semibold">{uc.heading}</h3>
+                  <p className="text-sm text-white/45 leading-relaxed">
+                    {uc.description}
+                  </p>
+                </div>
+              </SpotlightCard>
             </motion.div>
           ))}
         </div>
@@ -303,7 +384,7 @@ function Landing() {
       </section>
 
       {/* ═══════════════ FINAL CTA + FOOTER ═══════════════ */}
-      <section className="py-24 px-6">
+      <section className="py-24 sm:py-32 px-6">
         <div className="flex flex-col items-center gap-8">
           <motion.div
             {...viewFadeUp}
@@ -320,7 +401,6 @@ function Landing() {
             </StarBorder>
           </motion.div>
 
-          {/* GitHub star */}
           <motion.a
             href="https://github.com/danielcanton/warplab"
             target="_blank"
@@ -340,7 +420,6 @@ function Landing() {
             Star on GitHub
           </motion.a>
 
-          {/* Footer */}
           <motion.div
             className="flex flex-col items-center gap-2 pt-8"
             {...viewFadeUp}
