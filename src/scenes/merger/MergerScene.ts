@@ -819,6 +819,7 @@ export class MergerScene implements Scene {
     this.audio.prepare(this.currentWaveform);
     this.playBtn.innerHTML = "&#9654;";
     this.binary.reset();
+    this.binary.setEventType(event);
 
     // Update UI
     this.vrPanel?.setTitle(event.commonName);

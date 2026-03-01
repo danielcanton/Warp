@@ -249,6 +249,7 @@ export class SandboxScene implements Scene {
     this.currentWaveform = generateCustomWaveform(params);
     this.audio.prepare(this.currentWaveform);
     this.updateTexture();
+    this.binary.setEventType(this.toFakeEvent());
   }
 
   private triggerMerge() {

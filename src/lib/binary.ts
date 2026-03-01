@@ -1,5 +1,92 @@
 import * as THREE from "three";
 import type { WaveformData, GWEvent } from "./waveform";
+import { classifyEvent } from "./waveform";
+
+// ─── Fresnel shader for black holes ──────────────────────────────────
+// Dark core with bright edge glow (event horizon silhouette)
+const bhVertexShader = /* glsl */ `
+varying vec3 vNormal;
+varying vec3 vViewDir;
+void main() {
+  vNormal = normalize(normalMatrix * normal);
+  vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+  vViewDir = normalize(-mvPos.xyz);
+  gl_Position = projectionMatrix * mvPos;
+}
+`;
+
+const bhFragmentShader = /* glsl */ `
+uniform vec3 uColor;
+uniform float uGlowIntensity;
+varying vec3 vNormal;
+varying vec3 vViewDir;
+void main() {
+  float fresnel = 1.0 - abs(dot(vNormal, vViewDir));
+  float rim = pow(fresnel, 2.5);
+  // Dark core, bright rim
+  vec3 core = vec3(0.01, 0.01, 0.02);
+  vec3 glow = uColor * rim * (1.5 + uGlowIntensity * 2.0);
+  // Subtle inner gradient
+  float inner = pow(fresnel, 0.8) * 0.08;
+  vec3 finalColor = core + glow + uColor * inner;
+  gl_FragColor = vec4(finalColor, 1.0);
+}
+`;
+
+// ─── Emissive shader for neutron stars ───────────────────────────────
+// Hot glowing surface with pulsing subsurface scattering look
+const nsVertexShader = bhVertexShader; // Same vertex shader
+
+const nsFragmentShader = /* glsl */ `
+uniform vec3 uColor;
+uniform float uGlowIntensity;
+uniform float uTime;
+varying vec3 vNormal;
+varying vec3 vViewDir;
+void main() {
+  float fresnel = 1.0 - abs(dot(vNormal, vViewDir));
+  float rim = pow(fresnel, 2.0);
+  // Hot emissive core — bright center, hotter rim
+  float core = 0.6 + 0.15 * sin(uTime * 8.0); // subtle pulse
+  vec3 hotColor = uColor * core;
+  vec3 rimColor = vec3(0.9, 0.95, 1.0) * rim * (1.0 + uGlowIntensity);
+  vec3 finalColor = hotColor + rimColor;
+  gl_FragColor = vec4(finalColor, 1.0);
+}
+`;
+
+function makeBHMaterial(color: number): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    vertexShader: bhVertexShader,
+    fragmentShader: bhFragmentShader,
+    uniforms: {
+      uColor: { value: new THREE.Color(color) },
+      uGlowIntensity: { value: 0.0 },
+    },
+    transparent: false,
+  });
+}
+
+function makeNSMaterial(color: number): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    vertexShader: nsVertexShader,
+    fragmentShader: nsFragmentShader,
+    uniforms: {
+      uColor: { value: new THREE.Color(color) },
+      uGlowIntensity: { value: 0.0 },
+      uTime: { value: 0.0 },
+    },
+    transparent: false,
+  });
+}
+
+// Color palette per object type
+const COLORS = {
+  bh1: 0x818cf8,  // indigo (black hole primary)
+  bh2: 0xf472b6,  // pink (black hole secondary)
+  ns1: 0x22d3ee,  // cyan (neutron star primary)
+  ns2: 0x38bdf8,  // sky blue (neutron star secondary)
+};
 
 /**
  * Visual representation of a binary system (two objects orbiting and merging).
@@ -26,19 +113,16 @@ export class BinarySystem {
   private obj1Glow: THREE.PointLight;
   private obj2Glow: THREE.PointLight;
 
-  constructor() {
-    // Object materials — compact objects as glowing spheres
-    const mat1 = new THREE.MeshBasicMaterial({
-      color: 0x818cf8, // indigo
-      transparent: true,
-    });
-    const mat2 = new THREE.MeshBasicMaterial({
-      color: 0xf472b6, // pink
-      transparent: true,
-    });
+  private elapsed = 0;
+  private currentType = "BBH";
 
-    this.obj1 = new THREE.Mesh(new THREE.SphereGeometry(0.12, 24, 24), mat1);
-    this.obj2 = new THREE.Mesh(new THREE.SphereGeometry(0.1, 24, 24), mat2);
+  constructor() {
+    // Default to black hole materials (updated per event via setEventType)
+    const mat1 = makeBHMaterial(COLORS.bh1);
+    const mat2 = makeBHMaterial(COLORS.bh2);
+
+    this.obj1 = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), mat1);
+    this.obj2 = new THREE.Mesh(new THREE.SphereGeometry(0.1, 32, 32), mat2);
 
     // Orbital trails
     const trailMat1 = new THREE.LineBasicMaterial({
@@ -99,6 +183,47 @@ export class BinarySystem {
   }
 
   /**
+   * Update materials to match the event type (BBH, BNS, NSBH).
+   */
+  setEventType(event: GWEvent) {
+    const type = classifyEvent(event);
+    if (type === this.currentType) return;
+    this.currentType = type;
+
+    const oldMat1 = this.obj1.material as THREE.ShaderMaterial;
+    const oldMat2 = this.obj2.material as THREE.ShaderMaterial;
+    oldMat1.dispose();
+    oldMat2.dispose();
+
+    const trailMat1 = this.trail1.material as THREE.LineBasicMaterial;
+    const trailMat2 = this.trail2.material as THREE.LineBasicMaterial;
+
+    if (type === "BBH") {
+      this.obj1.material = makeBHMaterial(COLORS.bh1);
+      this.obj2.material = makeBHMaterial(COLORS.bh2);
+      trailMat1.color.set(COLORS.bh1);
+      trailMat2.color.set(COLORS.bh2);
+      this.obj1Glow.color.set(COLORS.bh1);
+      this.obj2Glow.color.set(COLORS.bh2);
+    } else if (type === "BNS") {
+      this.obj1.material = makeNSMaterial(COLORS.ns1);
+      this.obj2.material = makeNSMaterial(COLORS.ns2);
+      trailMat1.color.set(COLORS.ns1);
+      trailMat2.color.set(COLORS.ns2);
+      this.obj1Glow.color.set(COLORS.ns1);
+      this.obj2Glow.color.set(COLORS.ns2);
+    } else {
+      // NSBH: obj1 (heavier) is BH, obj2 (lighter) is NS
+      this.obj1.material = makeBHMaterial(COLORS.bh1);
+      this.obj2.material = makeNSMaterial(COLORS.ns2);
+      trailMat1.color.set(COLORS.bh1);
+      trailMat2.color.set(COLORS.ns2);
+      this.obj1Glow.color.set(COLORS.bh1);
+      this.obj2Glow.color.set(COLORS.ns2);
+    }
+  }
+
+  /**
    * Update the binary system for the current playback time.
    * @param t - normalized time [0, 1]
    * @param waveform - current waveform data
@@ -107,6 +232,9 @@ export class BinarySystem {
   update(t: number, waveform: WaveformData, event: GWEvent) {
     const mergerNorm = waveform.peakIndex / waveform.hPlus.length;
     const massRatio = event.mass_1_source / event.mass_2_source;
+
+    // Track elapsed time for NS pulse animation
+    this.elapsed += 1 / 60; // approximate dt
 
     // Size objects proportional to mass
     const scale1 = 0.8 + (massRatio / (1 + massRatio)) * 0.4;
@@ -146,6 +274,14 @@ export class BinarySystem {
       this.obj1Glow.intensity = glowIntensity;
       this.obj2Glow.intensity = glowIntensity;
 
+      // Update shader uniforms
+      const mat1 = this.obj1.material as THREE.ShaderMaterial;
+      const mat2 = this.obj2.material as THREE.ShaderMaterial;
+      mat1.uniforms.uGlowIntensity.value = glowIntensity;
+      mat2.uniforms.uGlowIntensity.value = glowIntensity;
+      if (mat1.uniforms.uTime) mat1.uniforms.uTime.value = this.elapsed;
+      if (mat2.uniforms.uTime) mat2.uniforms.uTime.value = this.elapsed;
+
       // Update trails
       this.trailPositions1.push(
         new THREE.Vector3(x1, this.group.position.y, z1)
@@ -171,6 +307,8 @@ export class BinarySystem {
       this.obj2.visible = false;
       this.obj1Glow.intensity = 0;
       this.obj2Glow.intensity = 0;
+      (this.obj1.material as THREE.ShaderMaterial).uniforms.uGlowIntensity.value = 0;
+      (this.obj2.material as THREE.ShaderMaterial).uniforms.uGlowIntensity.value = 0;
 
       // Show merged object
       this.mergedObj.position.set(0, 0, 0);
