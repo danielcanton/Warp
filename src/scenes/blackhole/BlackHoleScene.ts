@@ -197,9 +197,19 @@ export class BlackHoleScene implements Scene {
       this.videoElement.muted = true;
       await this.videoElement.play();
 
+      // Wait for the video to actually have a decoded frame
+      await new Promise<void>((resolve) => {
+        if (this.videoElement!.videoWidth > 0) {
+          resolve();
+        } else {
+          this.videoElement!.addEventListener("loadeddata", () => resolve(), { once: true });
+        }
+      });
+
       this.videoTexture = new THREE.VideoTexture(this.videoElement);
       this.videoTexture.minFilter = THREE.LinearFilter;
       this.videoTexture.magFilter = THREE.LinearFilter;
+      this.videoTexture.colorSpace = THREE.SRGBColorSpace;
 
       this.bhMaterial.uniforms.uBackground.value = this.videoTexture;
       this.bhMaterial.uniforms.uUseCamera.value = 1.0;
