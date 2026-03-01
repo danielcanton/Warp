@@ -64,11 +64,23 @@ export async function fetchEventCatalog(): Promise<GWEvent[]> {
   const data = await res.json();
 
   // Catalog priority: later catalogs have better parameter estimates
+  // Keys must match GWOSC "catalog.shortName" values exactly
   const catalogPriority: Record<string, number> = {
-    "GWTC-1": 1,
-    "GWTC-2": 2,
-    "GWTC-2.1": 3,
-    "GWTC-3": 4,
+    "O1_O2-Preliminary": 1,
+    "Initial_LIGO_Virgo": 1,
+    "GWTC-1-marginal": 2,
+    "GWTC-1-confident": 3,
+    "GWTC-2": 4,
+    "GWTC-2.1-marginal": 5,
+    "GWTC-2.1-auxiliary": 5,
+    "GWTC-2.1-confident": 6,
+    "GWTC-3-marginal": 7,
+    "GWTC-3-confident": 8,
+    "O3_Discovery_Papers": 8,
+    "O3_IMBH_marginal": 7,
+    "IAS-O3a": 5,
+    "GWTC-4.0": 9,
+    "O4_Discovery_Papers": 9,
   };
 
   const deduped = new Map<string, Record<string, unknown>>();
@@ -82,7 +94,8 @@ export async function fetchEventCatalog(): Promise<GWEvent[]> {
     if (existing) {
       const existingPri = catalogPriority[(existing["catalog.shortName"] as string) ?? ""] ?? 0;
       const newPri = catalogPriority[(e["catalog.shortName"] as string) ?? ""] ?? 0;
-      if (newPri > existingPri) {
+      // Prefer higher-priority catalog, or if tied prefer the one with mass data
+      if (newPri > existingPri || (newPri === existingPri && !existing.mass_1_source && e.mass_1_source)) {
         deduped.set(name, e);
       }
     } else {

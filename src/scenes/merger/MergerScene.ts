@@ -1069,7 +1069,9 @@ export class MergerScene implements Scene {
     }
 
     this.tourNameEl.textContent = this.activeTour.name;
-    this.tourStepCounter.textContent = `${this.activeTourStep + 1} of ${this.activeTour.steps.length}`;
+    const availableSteps = this.activeTour.steps.filter((s) => this.events.some((e) => e.commonName === s.event)).length;
+    const currentAvailableIdx = this.activeTour.steps.slice(0, this.activeTourStep + 1).filter((s) => this.events.some((e) => e.commonName === s.event)).length;
+    this.tourStepCounter.textContent = `${currentAvailableIdx} of ${availableSteps}`;
     this.tourEventName.textContent = step.event;
     this.tourDescription.textContent = step.description;
     this.tourPrevBtn.disabled = this.activeTourStep === 0;
@@ -1317,27 +1319,22 @@ export class MergerScene implements Scene {
   }
 
   private async loadSpectrogram(eventName: string) {
-    console.log("[spectrogram] loadSpectrogram called:", eventName, "computing:", this.spectrogramComputing);
     if (this.spectrogramComputing) return;
     const mode = getViewMode();
-    console.log("[spectrogram] mode:", mode);
     if (mode === "explorer") return;
 
     const detector = mode === "researcher" ? this.activeDetector : "H1";
-    console.log("[spectrogram] detector:", detector);
 
     // Reset zoom when switching events/detectors
     resetSpectrogramView();
 
     // 1. Try pre-computed spectrogram first (instant, no strain needed)
     const precomputed = await loadPrecomputed(eventName, detector);
-    console.log("[spectrogram] precomputed result:", precomputed ? "loaded" : "null");
     if (precomputed) {
       this.spectrogramData = precomputed;
       this.spectrogramLoading.style.display = "none";
       this.updateSpectrogramVisibility();
       this.updateSpectrogramZoomPan();
-      console.log("[spectrogram] panel display:", this.spectrogramPanel.style.display, "canvas size:", this.spectrogramCanvas.clientWidth, "x", this.spectrogramCanvas.clientHeight);
       // Wait for layout to settle — canvas needs non-zero dimensions
       this.renderSpectrogramWhenReady(precomputed);
       return;
@@ -1345,7 +1342,6 @@ export class MergerScene implements Scene {
 
     // 2. Fall back to strain-based computation
     const hasData = await hasStrainData(eventName);
-    console.log("[spectrogram] hasStrainData:", hasData);
     if (!hasData) {
       this.spectrogramData = null;
       this.spectrogramPanel.style.display = "none";
