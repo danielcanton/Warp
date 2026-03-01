@@ -3,19 +3,28 @@ import type { Scene, SceneContext } from "../types";
 import { getViewMode, onViewModeChange, type ViewMode } from "../../lib/view-mode";
 import { blackholeEquations } from "../../lib/equation-data";
 import { buildEquationsSection, updateEquationValues, removeEquationsSection } from "../../lib/equations";
+import { VRPanel } from "../../lib/VRPanel";
 import vertexShader from "../../shaders/blackhole.vert.glsl?raw";
 import fragmentShader from "../../shaders/blackhole.frag.glsl?raw";
+import vrVertexShader from "../../shaders/blackhole-vr.vert.glsl?raw";
+import vrFragmentShader from "../../shaders/blackhole-vr.frag.glsl?raw";
 
 export class BlackHoleScene implements Scene {
   readonly id = "blackhole";
   readonly label = "Black Hole";
-  readonly supportsXR = false; // Fullscreen quad doesn't work in VR yet
+  readonly supportsXR = true;
 
   private ctx!: SceneContext;
   private quad!: THREE.Mesh;
   private bhMaterial!: THREE.ShaderMaterial;
   private orbitCamera!: THREE.PerspectiveCamera; // Independent camera for orbiting
   private panelEl: HTMLElement | null = null;
+
+  // VR mode — inverted sphere skybox
+  private vrSphere!: THREE.Mesh;
+  private vrMaterial!: THREE.ShaderMaterial;
+  private vrPanel: VRPanel | null = null;
+  private wasPresenting = false;
 
   // Interaction state
   private isDragging = false;
@@ -50,7 +59,7 @@ export class BlackHoleScene implements Scene {
     scene.fog = null;
 
     if (firstInit) {
-      // ─── Fullscreen quad ───
+      // ─── Fullscreen quad (desktop) ───
       const geometry = new THREE.PlaneGeometry(2, 2);
 
       this.orbitCamera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 500);
@@ -78,9 +87,33 @@ export class BlackHoleScene implements Scene {
       this.quad = new THREE.Mesh(geometry, this.bhMaterial);
       this.quad.frustumCulled = false;
       scene.add(this.quad);
+
+      // ─── Inverted sphere (VR skybox) ───
+      const sphereGeo = new THREE.IcosahedronGeometry(50, 5);
+      // Invert normals so the shader renders on inside faces
+      sphereGeo.scale(-1, 1, 1);
+
+      this.vrMaterial = new THREE.ShaderMaterial({
+        vertexShader: vrVertexShader,
+        fragmentShader: vrFragmentShader,
+        uniforms: {
+          uTime: { value: 0 },
+          uMass: { value: this.mass },
+          uShowDisk: { value: 1.0 },
+          uCameraPosVR: { value: new THREE.Vector3() },
+        },
+        side: THREE.BackSide,
+        depthWrite: false,
+      });
+
+      this.vrSphere = new THREE.Mesh(sphereGeo, this.vrMaterial);
+      this.vrSphere.frustumCulled = false;
+      this.vrSphere.visible = false;
+      scene.add(this.vrSphere);
     } else {
-      // Re-add quad to scene on re-entry
+      // Re-add meshes to scene on re-entry
       scene.add(this.quad);
+      scene.add(this.vrSphere);
     }
 
     // ─── Disable OrbitControls — we handle camera ourselves ───
@@ -108,6 +141,11 @@ export class BlackHoleScene implements Scene {
 
     this.setupInteraction(ctx);
 
+    // ─── VR panel ───
+    if (ctx.xrManager && !this.vrPanel) {
+      this.setupVRPanel(ctx);
+    }
+
     // Subscribe to view mode changes for equations
     if (!this.unsubViewMode) {
       this.unsubViewMode = onViewModeChange((mode) => {
@@ -127,6 +165,113 @@ export class BlackHoleScene implements Scene {
     this.orbitCamera.position.setFromSpherical(this.spherical);
     this.orbitCamera.lookAt(0, 0, 0);
     this.orbitCamera.updateMatrixWorld();
+  }
+
+  // ─── VR Panel ──────────────────────────────────────────────────────
+
+  private setupVRPanel(ctx: SceneContext) {
+    const xr = ctx.xrManager!;
+    this.vrPanel = new VRPanel(1.4, 0.5);
+    this.vrPanel.setTitle("Black Hole");
+
+    // 3 buttons in a row
+    const btnY = 0.55;
+    const btnH = 0.35;
+    const btnW = 0.30;
+    const gap = 0.03;
+    const startX = 0.04;
+
+    // Mass button — cycles through preset values
+    const massValues = [0.5, 1.0, 1.5, 2.5, 4.0];
+    let massIdx = 2; // start at 1.5
+    this.vrPanel.addButton({
+      label: `Mass: ${this.mass}`,
+      x: startX,
+      y: btnY,
+      w: btnW,
+      h: btnH,
+      onClick: () => {
+        massIdx = (massIdx + 1) % massValues.length;
+        this.mass = massValues[massIdx];
+        this.bhMaterial.uniforms.uMass.value = this.mass;
+        this.vrMaterial.uniforms.uMass.value = this.mass;
+        this.vrPanel?.updateButton(0, `Mass: ${this.mass}`);
+        this.updateEquationValuesForMass();
+        // Sync DOM slider if present
+        const slider = this.panelEl?.querySelector("#bh-mass") as HTMLInputElement | null;
+        if (slider) {
+          slider.value = String(this.mass * 100);
+          const valEl = this.panelEl?.querySelector("#bh-mass-val");
+          if (valEl) valEl.innerHTML = `${this.mass.toFixed(1)} r<sub>s</sub>`;
+        }
+      },
+    });
+
+    // Disk toggle
+    this.vrPanel.addButton({
+      label: this.showDisk ? "Disk: ON" : "Disk: OFF",
+      x: startX + btnW + gap,
+      y: btnY,
+      w: btnW,
+      h: btnH,
+      onClick: () => {
+        this.showDisk = !this.showDisk;
+        this.bhMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
+        this.vrMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
+        this.vrPanel?.updateButton(1, this.showDisk ? "Disk: ON" : "Disk: OFF");
+        // Sync DOM checkbox
+        const cb = this.panelEl?.querySelector("#bh-disk") as HTMLInputElement | null;
+        if (cb) cb.checked = this.showDisk;
+      },
+    });
+
+    // AR toggle (disabled in VR — label only)
+    this.vrPanel.addButton({
+      label: "AR: N/A",
+      x: startX + (btnW + gap) * 2,
+      y: btnY,
+      w: btnW,
+      h: btnH,
+      onClick: () => {
+        // AR not available in VR mode — no-op
+      },
+    });
+
+    xr.registerPanel(this.vrPanel);
+
+    xr.onSessionStart = () => {
+      if (this.vrPanel) {
+        this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
+        ctx.scene.add(this.vrPanel.mesh);
+      }
+    };
+
+    xr.onSessionEnd = () => {
+      if (this.vrPanel) {
+        ctx.scene.remove(this.vrPanel.mesh);
+      }
+    };
+
+    // If already in VR (scene switch mid-session), show panel immediately
+    if (xr.isPresenting && this.vrPanel) {
+      this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
+      ctx.scene.add(this.vrPanel.mesh);
+    }
+  }
+
+  // ─── Desktop / VR mode switching ──────────────────────────────────
+
+  private switchToVR() {
+    this.quad.visible = false;
+    this.vrSphere.visible = true;
+    // Sync VR material uniforms
+    this.vrMaterial.uniforms.uMass.value = this.mass;
+    this.vrMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
+  }
+
+  private switchToDesktop() {
+    this.vrSphere.visible = false;
+    this.quad.visible = true;
   }
 
   private buildPanel() {
@@ -165,6 +310,7 @@ export class BlackHoleScene implements Scene {
       this.mass = parseInt(massSlider.value) / 100;
       massVal.innerHTML = `${this.mass.toFixed(1)} r<sub>s</sub>`;
       this.bhMaterial.uniforms.uMass.value = this.mass;
+      this.vrMaterial.uniforms.uMass.value = this.mass;
       // Update equation computed values live
       this.updateEquationValuesForMass();
     });
@@ -174,6 +320,7 @@ export class BlackHoleScene implements Scene {
     diskCheckbox.addEventListener("change", () => {
       this.showDisk = diskCheckbox.checked;
       this.bhMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
+      this.vrMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
     });
 
     // AR mode toggle
@@ -366,6 +513,7 @@ export class BlackHoleScene implements Scene {
   update(dt: number, _elapsed: number): void {
     this.elapsed += dt;
     this.bhMaterial.uniforms.uTime.value = this.elapsed;
+    this.vrMaterial.uniforms.uTime.value = this.elapsed;
 
     // Blit video frame to canvas and flag texture for GPU upload
     if (this.arCtx && this.videoElement && this.videoElement.readyState >= this.videoElement.HAVE_CURRENT_DATA) {
@@ -373,30 +521,49 @@ export class BlackHoleScene implements Scene {
       this.videoTexture!.needsUpdate = true;
     }
 
-    // Smooth camera interpolation
-    this.spherical.theta += (this.targetSpherical.theta - this.spherical.theta) * 0.08;
-    this.spherical.phi += (this.targetSpherical.phi - this.spherical.phi) * 0.08;
-    this.spherical.radius += (this.targetSpherical.radius - this.spherical.radius) * 0.08;
-
-    // Slow auto-rotation when not dragging (disabled in AR mode)
-    if (!this.isDragging && !this.arModeActive) {
-      this.targetSpherical.theta += dt * 0.03;
+    // ─── VR / Desktop mode switching ───
+    const isPresenting = this.ctx.renderer.xr.isPresenting;
+    if (isPresenting !== this.wasPresenting) {
+      if (isPresenting) {
+        this.switchToVR();
+      } else {
+        this.switchToDesktop();
+      }
+      this.wasPresenting = isPresenting;
     }
 
-    this.updateOrbitCamera();
-    this.bhMaterial.uniforms.uCameraMatrix.value = this.orbitCamera.matrixWorld;
+    // In VR, pass the XR camera position for proper stereo parallax
+    if (isPresenting) {
+      const xrCamera = this.ctx.renderer.xr.getCamera();
+      this.vrMaterial.uniforms.uCameraPosVR.value.copy(xrCamera.position);
+    }
 
-    // Update inverse camera matrix for AR mode
-    this.invCameraMatrix.copy(this.orbitCamera.matrixWorld).invert();
-    this.bhMaterial.uniforms.uInvCameraMatrix.value = this.invCameraMatrix;
+    // Smooth camera interpolation (desktop only)
+    if (!isPresenting) {
+      this.spherical.theta += (this.targetSpherical.theta - this.spherical.theta) * 0.08;
+      this.spherical.phi += (this.targetSpherical.phi - this.spherical.phi) * 0.08;
+      this.spherical.radius += (this.targetSpherical.radius - this.spherical.radius) * 0.08;
 
-    // Half-resolution on mobile for performance
-    const isMobile = window.innerWidth < 768;
-    const scale = isMobile ? 0.5 : 1.0;
-    this.bhMaterial.uniforms.uResolution.value.set(
-      window.innerWidth * scale,
-      window.innerHeight * scale,
-    );
+      // Slow auto-rotation when not dragging (disabled in AR mode)
+      if (!this.isDragging && !this.arModeActive) {
+        this.targetSpherical.theta += dt * 0.03;
+      }
+
+      this.updateOrbitCamera();
+      this.bhMaterial.uniforms.uCameraMatrix.value = this.orbitCamera.matrixWorld;
+
+      // Update inverse camera matrix for AR mode
+      this.invCameraMatrix.copy(this.orbitCamera.matrixWorld).invert();
+      this.bhMaterial.uniforms.uInvCameraMatrix.value = this.invCameraMatrix;
+
+      // Half-resolution on mobile for performance
+      const isMobile = window.innerWidth < 768;
+      const scale = isMobile ? 0.5 : 1.0;
+      this.bhMaterial.uniforms.uResolution.value.set(
+        window.innerWidth * scale,
+        window.innerHeight * scale,
+      );
+    }
   }
 
   onResize(w: number, h: number): void {
@@ -449,6 +616,14 @@ export class BlackHoleScene implements Scene {
     this.boundHandlers = [];
 
     this.ctx.scene.remove(this.quad);
+    this.ctx.scene.remove(this.vrSphere);
+
+    if (this.vrPanel) {
+      this.ctx.xrManager?.unregisterPanel(this.vrPanel);
+      this.ctx.scene.remove(this.vrPanel.mesh);
+      this.vrPanel.dispose();
+      this.vrPanel = null;
+    }
 
     if (this.panelEl?.parentNode) {
       this.panelEl.parentNode.removeChild(this.panelEl);
