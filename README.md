@@ -8,89 +8,144 @@ An interactive gravitational wave visualizer built with Three.js and WebGL. Ever
 
 ## What is this?
 
-WarpLab lets you explore gravitational wave events — the ripples in spacetime produced when black holes and neutron stars collide. You can:
+WarpLab lets you explore gravitational wave events — the ripples in spacetime produced when black holes and neutron stars collide. Four interactive scenes cover different aspects of gravitational physics:
 
-- **Watch mergers in 3D** — two compact objects spiral inward on a deforming spacetime grid, rendered with custom GLSL shaders
-- **Hear the chirp** — audio sonification maps the gravitational waveform into human hearing range, synced to the visual playback
-- **Explore the universe map** — a 3D scatter plot of all 90+ confirmed events at their cosmological distances, with Earth at the center
-- **Learn the physics** — an educational help overlay explains every parameter in plain English
+- **Merger** — watch real binary mergers on a deforming spacetime grid with audio sonification
+- **Sandbox** — build your own binary system, tweak masses and spins, and trigger a custom merger
+- **Black Hole** — orbit a ray-traced Schwarzschild black hole with accretion disk and AR mode
+- **N-Body** — gravitational simulator with presets, collision detection, and orbit trails
 
 ## Features
 
-- Real-time spacetime deformation with vertex displacement shaders
-- Physically-motivated inspiral-merger-ringdown waveform generation
-- Web Audio API sonification tracking instantaneous frequency and amplitude
+### Merger scene
 - 90+ real events from GWTC-1, GWTC-2, GWTC-2.1, and GWTC-3 catalogs
-- Event filtering (BBH / BNS / NSBH), sorting (SNR / mass / distance / date), and search
-- URL deep links (`?event=GW150914`)
+- Real-time spacetime deformation with custom GLSL vertex shaders
+- Audio sonification mapping gravitational wave frequency to sound
+- 3D universe map showing all events at cosmological distances
+- Guided tours ("Greatest Hits", "Record Breakers", "Neutron Stars")
+- Event filtering (BBH / BNS / NSBH), sorting, and search
+- URL deep links (`?event=GW150914&mode=researcher`)
+
+### Black hole scene
+- Full-screen ray-marched Schwarzschild black hole
+- Togglable accretion disk and AR camera mode
+- Independent orbit camera with smooth interpolation
+
+### Sandbox & N-Body
+- Custom binary parameters with live waveform preview
+- N-body gravitational simulator with presets and placement tools
+- Orbit trails, reference grid, and collision physics
+
+### Three view modes
+- **Explorer** — clean, minimal interface for casual browsing
+- **Student** — parameter labels, KaTeX-rendered physics equations, and pedagogical detail
+- **Researcher** — full data with 90% confidence intervals, computed equation values, and data export
+
+### Export (researcher mode)
+Downloads a ZIP bundle containing:
+- `parameters.json` / `parameters.csv` — full event data with uncertainties
+- `waveform_template.csv` — synthetic IMRPhenom waveform arrays
+- `notebook.ipynb` — Jupyter notebook that fetches real strain from GWOSC
+- `CITATION.bib` — BibTeX for GWOSC, catalog paper, and WarpLab
+
+### Platform support
+- WebXR / VR ready (Merger + Sandbox scenes)
+- Embeddable via iframe (`?embed=true`)
+- Responsive mobile layout
 - First-visit onboarding hints
-- Cinematic intro zoom animation
-- WebXR-ready (VR button)
+- PWA with offline support
 
-## Tech Stack
+## Keyboard shortcuts
 
-- **Three.js** — 3D rendering, orbit controls, points system for universe map
-- **Custom GLSL shaders** — spacetime grid deformation, additive-blended event dots
-- **Web Audio API** — real-time chirp synthesis from waveform physics
-- **postprocessing** — bloom and tone mapping
-- **React** — landing page (Vite multi-page app)
+| Key | Action |
+|-----|--------|
+| `Space` | Play / Pause |
+| `S` | Cycle playback speed |
+| `M` | Toggle universe map |
+| `H` | Toggle help overlay |
+| `P` | Take screenshot |
+| `/` | Focus search input |
+| `Esc` | Close overlay |
+
+## Tech stack
+
+- **Three.js** — 3D rendering, orbit controls, universe map
+- **Custom GLSL** — spacetime grid deformation, black hole ray marching
+- **Web Audio API** — real-time chirp synthesis
+- **KaTeX** — LaTeX equation rendering (lazy-loaded)
+- **postprocessing** — bloom and ACES tone mapping
+- **React** — landing page only (Vite multi-page app)
 - **Tailwind CSS v4** — landing page styling
 - **TypeScript** — end to end
-- **Vite** — build tooling
+- **Vite** — build tooling, code splitting, PWA plugin
 
-## Project Structure
+## Project structure
 
 ```
 src/
-├── main.ts                  # App entry — scene, controls, UI, render loop
-├── landing.tsx              # React landing page
-├── landing.css              # Tailwind imports
+├── main.ts                     # App entry — renderer, controls, UI, render loop
+├── landing.tsx                 # React landing page
 ├── lib/
-│   ├── waveform.ts          # GWOSC API client, waveform generation, event types
-│   ├── binary.ts            # Binary orbit system (inspiral + merger physics)
-│   ├── audio.ts             # Gravitational wave sonification engine
-│   └── universe-map.ts      # 3D scatter plot of all events
+│   ├── waveform.ts             # GWOSC API client, waveform generation
+│   ├── waveform-generator.ts   # IMRPhenom waveform synthesis
+│   ├── binary.ts               # Binary orbit system (inspiral + merger)
+│   ├── audio.ts                # Gravitational wave sonification
+│   ├── universe-map.ts         # 3D event scatter plot
+│   ├── view-mode.ts            # Explorer / Student / Researcher system
+│   ├── equations.ts            # Lazy KaTeX loader + equation DOM builder
+│   ├── equation-data.ts        # Physics equation definitions per scene
+│   ├── export.ts               # ZIP export (JSON, CSV, notebook, BibTeX)
+│   ├── SceneManager.ts         # Scene lifecycle + tab switching
+│   └── tours.ts                # Guided tour sequences
+├── scenes/
+│   ├── merger/MergerScene.ts   # Binary merger visualization
+│   ├── sandbox/SandboxPanel.ts # Custom binary parameter panel
+│   ├── blackhole/BlackHoleScene.ts  # Ray-traced black hole
+│   └── nbody/NBodyScene.ts     # N-body gravitational simulator
 ├── shaders/
-│   ├── spacetime.vert.glsl  # Vertex shader — grid deformation from binary masses
-│   └── spacetime.frag.glsl  # Fragment shader — grid lines, glow, distance fade
-└── components/
-    ├── SplashCursor.tsx      # WebGL2 fluid simulation cursor effect
-    ├── DecryptedText.tsx     # Scramble-to-reveal text animation
-    └── GlassCTA.tsx          # Glass pill button with cursor spotlight
+│   ├── spacetime.vert.glsl     # Grid deformation from binary masses
+│   ├── spacetime.frag.glsl     # Grid lines, glow, distance fade
+│   ├── blackhole.vert.glsl     # Fullscreen quad vertex shader
+│   └── blackhole.frag.glsl     # Schwarzschild ray marching
+└── components/                 # React components (landing page)
+    ├── SplashCursor.tsx
+    ├── DecryptedText.tsx
+    └── GlassCTA.tsx
 ```
 
-## Getting Started
+## Getting started
 
 ```bash
-# Clone
 git clone https://github.com/danielcanton/warplab.git
-cd Warp
-
-# Install
+cd warplab
 npm install
-
-# Dev server
-npm run dev
-
-# Build
-npm run build
+npm run dev     # Dev server at localhost:5173
+npm run build   # Production build to dist/
 ```
 
-## Data Source
+## URL parameters
 
-All event data is fetched live from the [Gravitational Wave Open Science Center (GWOSC)](https://gwosc.org/) API. The waveforms are synthetic approximations based on the detected parameters — not the raw detector strain data.
+| Parameter | Values | Default |
+|-----------|--------|---------|
+| `scene` | `merger`, `sandbox`, `blackhole`, `nbody` | `merger` |
+| `mode` | `explorer`, `student`, `researcher` | `explorer` |
+| `embed` | `true` | `false` |
+| `event` | any event name (e.g. `GW150914`) | first by SNR |
+
+## Data source
+
+All event data is fetched live from the [Gravitational Wave Open Science Center (GWOSC)](https://gwosc.org/) API. The waveforms are synthetic IMRPhenom approximations based on detected parameters — not raw detector strain.
 
 ## Contributing
 
 Contributions welcome! Some areas that could use help:
 
-- **Real waveform data** — integrate actual NR/surrogate waveforms from GWOSC strain files
-- **More physics** — gravitational lensing visualization, tidal deformation for neutron stars
-- **Mobile optimization** — touch controls, responsive layout improvements
-- **Accessibility** — screen reader support, keyboard navigation for all controls
-- **New visualizations** — dark matter halos, cosmic web structure, pulsar timing arrays
+- **Tidal deformation** — neutron star matter effects during BNS mergers
+- **Accessibility** — screen reader support, keyboard navigation improvements
+- **Mobile UX** — touch gesture refinements, responsive panel layouts
+- **New scenes** — pulsar timing arrays, cosmic web structure
 
-Open an issue or submit a PR. No contribution is too small.
+Open an issue or submit a PR.
 
 ## License
 
