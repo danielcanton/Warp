@@ -210,36 +210,29 @@ void main() {
     float ringGlow = exp(-pow((closest - photonSphere) / (rs * 0.3), 2.0)) * 0.8;
 
     if (uUseCamera > 0.5) {
-      // AR mode: map the lensed ray direction to screen UV and sample camera
-      // Use simple screen-space mapping — the camera sees roughly what the screen shows
+      // AR mode: sample camera feed with gravitational lensing
+      // Map the lensed ray direction back to screen-space UV
       vec3 localDir = (uInvCameraMatrix * vec4(vel, 0.0)).xyz;
+      float halfFovAR = uFov * 0.5;
+      float screenAspect = uResolution.x / uResolution.y;
 
+      // Project lensed direction to UV — fallback to original vUv if ray bends behind camera
+      vec2 bgUV;
       if (localDir.z < 0.0) {
-        float halfFovAR = uFov * 0.5;
-        float screenAspect = uResolution.x / uResolution.y;
         vec2 projected = localDir.xy / (-localDir.z * tan(halfFovAR));
         projected.x /= screenAspect;
-        vec2 bgUV = projected * 0.5 + 0.5;
-
-        if (bgUV.x >= 0.0 && bgUV.x <= 1.0 && bgUV.y >= 0.0 && bgUV.y <= 1.0) {
-          // Flip Y for video texture, mirror X for front-facing camera
-          bgUV.y = 1.0 - bgUV.y;
-          bgUV.x = 1.0 - bgUV.x;
-          // Camera texture is already in sRGB — read raw values
-          vec3 camColor = texture2D(uBackground, bgUV).rgb;
-          // Convert sRGB to linear so our tone mapping + gamma round-trips correctly
-          camColor = pow(camColor, vec3(2.2));
-          finalColor += camColor;
-          usedCamera = true;
-        }
+        bgUV = clamp(projected * 0.5 + 0.5, 0.0, 1.0);
+      } else {
+        bgUV = vUv;
       }
 
-      if (!usedCamera) {
-        // Outside camera FOV — procedural stars as fallback
-        float stars = starField(vel);
-        vec3 bgColor = vec3(0.0, 0.002, 0.008);
-        finalColor += bgColor + vec3(0.9, 0.92, 1.0) * stars;
-      }
+      // Flip for front-facing camera
+      bgUV.y = 1.0 - bgUV.y;
+      bgUV.x = 1.0 - bgUV.x;
+
+      vec3 camColor = texture2D(uBackground, bgUV).rgb;
+      finalColor += camColor;
+      usedCamera = true;
     } else {
       // Standard mode: procedural star field lensed through curved spacetime
       float stars = starField(vel);
@@ -257,11 +250,13 @@ void main() {
   float photonRing = exp(-pow((impactParam - rs * 2.6) / (rs * 0.15), 2.0)) * 0.3;
   finalColor += vec3(1.0, 0.9, 0.7) * photonRing;
 
-  // Tone mapping (simple Reinhard)
-  finalColor = finalColor / (1.0 + finalColor);
-
-  // Gamma correction
-  finalColor = pow(finalColor, vec3(1.0 / 2.2));
+  if (!usedCamera) {
+    // Tone mapping (simple Reinhard) — only for procedural content
+    finalColor = finalColor / (1.0 + finalColor);
+    // Gamma correction
+    finalColor = pow(finalColor, vec3(1.0 / 2.2));
+  }
+  // Camera pixels skip tone mapping — they're already display-ready sRGB
 
   gl_FragColor = vec4(finalColor, 1.0);
 }
