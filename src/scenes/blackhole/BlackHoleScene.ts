@@ -68,6 +68,7 @@ export class BlackHoleScene implements Scene {
           uFov: { value: THREE.MathUtils.degToRad(60) },
           uBackground: { value: new THREE.Texture() },
           uUseCamera: { value: 0.0 },
+          uMirrorX: { value: 1.0 },
           uInvCameraMatrix: { value: new THREE.Matrix4() },
         },
         depthWrite: false,
@@ -238,6 +239,12 @@ export class BlackHoleScene implements Scene {
       this.videoTexture = new THREE.CanvasTexture(this.arCanvas);
       this.videoTexture.minFilter = THREE.LinearFilter;
       this.videoTexture.magFilter = THREE.LinearFilter;
+
+      // Detect if front-facing camera — only mirror X for selfie cameras
+      const track = this.cameraStream.getVideoTracks()[0];
+      const settings = track?.getSettings?.();
+      const isFront = settings?.facingMode === "user";
+      this.bhMaterial.uniforms.uMirrorX.value = isFront ? 1.0 : 0.0;
 
       this.bhMaterial.uniforms.uBackground.value = this.videoTexture;
       this.bhMaterial.uniforms.uUseCamera.value = 1.0;

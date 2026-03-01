@@ -16,6 +16,7 @@ uniform float uFov;            // camera FOV in radians
 // AR mode — camera feed as background
 uniform sampler2D uBackground; // Camera feed texture (or empty)
 uniform float uUseCamera;      // 0.0 = procedural stars, 1.0 = camera feed
+uniform float uMirrorX;        // 1.0 = mirror X (front camera), 0.0 = no mirror (rear)
 uniform mat4 uInvCameraMatrix; // Inverse of uCameraMatrix (computed in JS)
 
 const float PI = 3.14159265359;
@@ -229,8 +230,10 @@ void main() {
       } else {
         bgUV = vUv;
       }
-      // Mirror X for front-facing camera
-      bgUV.x = 1.0 - bgUV.x;
+      // Mirror X only for front-facing (selfie) cameras
+      if (uMirrorX > 0.5) {
+        bgUV.x = 1.0 - bgUV.x;
+      }
 
       vec3 camColor = texture2D(uBackground, bgUV).rgb;
       // Add disk colors accumulated during ray march + ring effects
