@@ -229,8 +229,8 @@ void main() {
       } else {
         bgUV = vUv;
       }
-      // Flip for front-facing camera
-      bgUV = vec2(1.0 - bgUV.x, 1.0 - bgUV.y);
+      // Mirror X for front-facing camera
+      bgUV.x = 1.0 - bgUV.x;
 
       vec3 camColor = texture2D(uBackground, bgUV).rgb;
       // Add disk colors accumulated during ray march + ring effects
