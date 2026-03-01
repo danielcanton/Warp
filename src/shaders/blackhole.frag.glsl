@@ -197,50 +197,64 @@ void main() {
   }
 
   // ─── Shading ────────────────────────────────────────────────────
-  bool usedCamera = false;
 
-  if (absorbed) {
-    // Black hole shadow — pure black with subtle blue-shifted edge
-    float edgeGlow = 0.0;
-    finalColor += vec3(0.0, 0.0, edgeGlow);
-  } else if (hitBackground) {
-    // Einstein ring glow — brighten rays that passed close to the photon sphere
-    float closest = length(cross(ro - bhPos, vel));  // impact parameter approximation
+  // Einstein ring glow (for non-absorbed rays)
+  float ringGlow = 0.0;
+  if (!absorbed) {
+    float closest = length(cross(ro - bhPos, vel));
     float photonSphere = rs * 1.5;
-    float ringGlow = exp(-pow((closest - photonSphere) / (rs * 0.3), 2.0)) * 0.8;
+    ringGlow = exp(-pow((closest - photonSphere) / (rs * 0.3), 2.0)) * 0.8;
+  }
 
-    if (uUseCamera > 0.5) {
-      // DEBUG: hardcoded magenta to test if this code path is reached at all
-      finalColor = vec3(1.0, 0.0, 1.0);
-      usedCamera = true;
+  // Photon ring
+  float impactParam = length(cross(ro - bhPos, rd));
+  float photonRing = exp(-pow((impactParam - rs * 2.6) / (rs * 0.15), 2.0)) * 0.3;
+
+  // ─── AR mode: camera background with black hole shadow ─────────
+  if (uUseCamera > 0.5) {
+    if (absorbed) {
+      // Black hole shadow — pure black
+      gl_FragColor = vec4(finalColor + vec3(1.0, 0.9, 0.7) * photonRing, 1.0);
     } else {
-      // Standard mode: procedural star field lensed through curved spacetime
-      float stars = starField(vel);
-      vec3 bgColor = vec3(0.0, 0.002, 0.008); // deep space blue-black
-      vec3 starColor = vec3(0.9, 0.92, 1.0) * stars;
-      finalColor += bgColor + starColor;
-    }
+      // Background pixel — sample camera feed
+      // Map lensed ray direction to screen UV
+      vec3 localDir = (uInvCameraMatrix * vec4(vel, 0.0)).xyz;
+      vec2 bgUV;
+      if (localDir.z < 0.0) {
+        float halfFovAR = uFov * 0.5;
+        float screenAspect = uResolution.x / uResolution.y;
+        vec2 projected = localDir.xy / (-localDir.z * tan(halfFovAR));
+        projected.x /= screenAspect;
+        bgUV = clamp(projected * 0.5 + 0.5, 0.0, 1.0);
+      } else {
+        bgUV = vUv;
+      }
+      // Flip for front-facing camera
+      bgUV = vec2(1.0 - bgUV.x, 1.0 - bgUV.y);
 
+      vec3 camColor = texture2D(uBackground, bgUV).rgb;
+      // Add disk colors accumulated during ray march + ring effects
+      vec3 arColor = camColor + finalColor + vec3(0.6, 0.7, 1.0) * ringGlow + vec3(1.0, 0.9, 0.7) * photonRing;
+      gl_FragColor = vec4(arColor, 1.0);
+    }
+    return;
+  }
+
+  // ─── Standard mode: procedural star background ─────────────────
+  if (!absorbed && (hitBackground || true)) {
+    float stars = starField(vel);
+    vec3 bgColor = vec3(0.0, 0.002, 0.008);
+    vec3 starColor = vec3(0.9, 0.92, 1.0) * stars;
+    finalColor += bgColor + starColor;
     finalColor += vec3(0.6, 0.7, 1.0) * ringGlow;
   }
 
-  // ─── Photon ring — accumulation of light near the photon sphere ─
-  // This creates the bright ring visible in "Interstellar" imagery
-  float impactParam = length(cross(ro - bhPos, rd));
-  float photonRing = exp(-pow((impactParam - rs * 2.6) / (rs * 0.15), 2.0)) * 0.3;
   finalColor += vec3(1.0, 0.9, 0.7) * photonRing;
 
-  if (!usedCamera) {
-    // Tone mapping (simple Reinhard) — only for procedural content
-    finalColor = finalColor / (1.0 + finalColor);
-    // Gamma correction
-    finalColor = pow(finalColor, vec3(1.0 / 2.2));
-  }
-  // DEBUG: override EVERYTHING when AR is on — if screen turns magenta, uniform works
-  if (uUseCamera > 0.5) {
-    gl_FragColor = vec4(1.0, 0.0, 1.0, 1.0);
-    return;
-  }
+  // Tone mapping (Reinhard)
+  finalColor = finalColor / (1.0 + finalColor);
+  // Gamma correction
+  finalColor = pow(finalColor, vec3(1.0 / 2.2));
 
   gl_FragColor = vec4(finalColor, 1.0);
 }
