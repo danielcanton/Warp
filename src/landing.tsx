@@ -168,7 +168,7 @@ function CounterOnView({ value }: { value: number }) {
 
 function Landing() {
   return (
-    <div className="bg-black text-white">
+    <div className="w-full bg-black text-white">
       {/* ═══════════════ HERO (existing, confined) ═══════════════ */}
       <section className="relative min-h-screen overflow-hidden">
         <GridDistortion />
