@@ -246,6 +246,15 @@ export class BlackHoleScene implements Scene {
       this.bhMaterial.uniforms.uBackground.value = this.videoTexture;
       this.bhMaterial.uniforms.uUseCamera.value = 1.0;
       this.arModeActive = true;
+
+      // Debug: show small camera preview to verify video feed
+      this.videoElement.style.cssText = "position:fixed;bottom:10px;right:10px;width:160px;height:120px;z-index:9999;border:2px solid lime;border-radius:4px;";
+      document.body.appendChild(this.videoElement);
+
+      // Debug: read canvas pixels to verify data
+      const px = this.arCtx!.getImageData(320, 240, 1, 1).data;
+      console.log("AR: canvas pixel at center:", px[0], px[1], px[2], px[3]);
+      console.log("AR: texture uuid:", this.videoTexture.uuid, "needsUpdate:", this.videoTexture.needsUpdate);
       console.log("AR: active");
     } catch (err) {
       console.warn("AR camera failed:", err);
@@ -270,6 +279,7 @@ export class BlackHoleScene implements Scene {
       this.cameraStream = null;
     }
     if (this.videoElement) {
+      if (this.videoElement.parentNode) this.videoElement.parentNode.removeChild(this.videoElement);
       this.videoElement.srcObject = null;
       this.videoElement = null;
     }

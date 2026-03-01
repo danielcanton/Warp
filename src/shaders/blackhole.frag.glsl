@@ -231,7 +231,9 @@ void main() {
       bgUV.x = 1.0 - bgUV.x;
 
       vec3 camColor = texture2D(uBackground, bgUV).rgb;
-      finalColor += camColor;
+      // DEBUG: show UV as color so we can tell if texture or UV is the problem
+      // Red = bgUV.x, Green = bgUV.y, Blue = texture brightness
+      finalColor += vec3(bgUV.x, bgUV.y, camColor.r + camColor.g + camColor.b);
       usedCamera = true;
     } else {
       // Standard mode: procedural star field lensed through curved spacetime
