@@ -29,15 +29,27 @@ void main() {
   vec2 uv = vUv;
   vec4 offset = texture2D(uDataTexture, vUv);
 
-  // Subtle ambient drift so the grid feels alive even without mouse
-  float drift = 0.003 * sin(time * 0.4 + vUv.x * 6.0) + 0.002 * cos(time * 0.3 + vUv.y * 5.0);
+  // Stronger ambient drift — visible breathing effect
+  float drift = 0.008 * sin(time * 0.4 + vUv.x * 6.0) + 0.006 * cos(time * 0.3 + vUv.y * 5.0);
   uv.x += drift;
-  uv.y += 0.003 * cos(time * 0.35 + vUv.x * 4.0);
+  uv.y += 0.006 * cos(time * 0.35 + vUv.x * 4.0);
+
+  // Gravitational wave pulse — radial distortion from center every ~4s
+  vec2 center = vUv - 0.5;
+  float dist = length(center);
+  float wave = sin(dist * 20.0 - time * 1.6) * exp(-dist * 3.0);
+  float pulse = 0.012 * wave * (0.5 + 0.5 * sin(time * 0.8));
+  uv += normalize(center + 0.0001) * pulse;
+
+  // Pulsing central glow — subtle alpha oscillation
+  float glow = 0.06 * exp(-dist * 4.0) * (0.5 + 0.5 * sin(time * 0.6));
 
   // Mouse-driven distortion
   uv -= 0.02 * offset.rg;
 
-  gl_FragColor = texture2D(uTexture, uv);
+  vec4 color = texture2D(uTexture, uv);
+  color.rgb += vec3(0.35, 0.25, 0.75) * glow;
+  gl_FragColor = color;
 }
 `;
 
@@ -117,12 +129,13 @@ function createGridTexture(): THREE.CanvasTexture {
 }
 
 const GridDistortion: React.FC<GridDistortionProps> = ({
-  grid = 34,
+  grid: gridProp,
   mouse = 0.15,
   strength = 0.25,
   relaxation = 0.9,
   className = ''
 }) => {
+  const grid = gridProp ?? (typeof window !== 'undefined' && window.innerWidth < 768 ? 20 : 34);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

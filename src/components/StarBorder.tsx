@@ -17,8 +17,9 @@ export default function StarBorder({
   children,
   onClick,
 }: StarBorderProps) {
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <button
+    <Tag
       className={`relative inline-block overflow-hidden rounded-[20px] cursor-pointer ${className}`}
       style={{ padding: `${thickness}px 0` }}
       onClick={onClick}
@@ -37,9 +38,9 @@ export default function StarBorder({
           animationDuration: speed,
         }}
       />
-      <div className="relative z-[1] bg-gradient-to-b from-black to-gray-900 border border-gray-800 text-white text-center text-base py-5 px-12 rounded-[20px]">
+      <div className="relative z-[1] bg-gradient-to-b from-black to-gray-900 border border-gray-800 text-white text-center text-base rounded-[20px]">
         {children}
       </div>
-    </button>
+    </Tag>
   );
 }
