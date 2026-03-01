@@ -9,6 +9,7 @@ import {
   makeAtmosphereMaterial,
   makeTrailMaterial,
 } from "../../shaders/fresnel";
+import { VRPanel } from "../../lib/VRPanel";
 
 // ─── Collision particle system ─────────────────────────────────────
 const PARTICLE_COUNT = 50;
@@ -33,13 +34,19 @@ const MAX_TRAIL = 300;
 export class NBodyScene implements Scene {
   readonly id = "nbody";
   readonly label = "N-Body";
-  readonly supportsXR = false;
+  readonly supportsXR = true;
 
   private ctx!: SceneContext;
   private group = new THREE.Group();
   private stars!: THREE.Points;
   private gridHelper!: THREE.GridHelper;
   private panel!: NBodyPanel;
+  private vrPanel: VRPanel | null = null;
+  private vrPlacing = false;
+  private vrPlacePosition: THREE.Vector3 | null = null;
+  private vrVelocityArrow: THREE.ArrowHelper | null = null;
+  private vrGhostSphere: THREE.Mesh | null = null;
+  private currentPresetIndex = 0;
 
   private system = new NBodySystem();
   private bodyMeshes = new Map<string, THREE.Group>();
@@ -120,6 +127,11 @@ export class NBodyScene implements Scene {
     }
 
     this.setupInteraction(ctx);
+
+    // VR Panel
+    if (ctx.xrManager && !this.vrPanel) {
+      this.setupVRPanel(ctx);
+    }
 
     if (firstInit) {
       this.loadPreset(0);
@@ -560,6 +572,194 @@ export class NBodyScene implements Scene {
     }
   }
 
+  // ─── VR Panel ─────────────────────────────────────────────────
+
+  private setupVRPanel(ctx: SceneContext) {
+    const xr = ctx.xrManager!;
+    this.vrPanel = new VRPanel(1.4, 0.9);
+    this.vrPanel.setTitle("N-Body Sandbox");
+
+    const btnY = 0.45;
+    const btnH = 0.22;
+    const btnW = 0.175;
+    const gap = 0.015;
+    const startX = 0.03;
+
+    // Row 1: Play/Pause, Speed, Preset cycle, Clear
+    this.vrPanel.addButton({
+      label: this.isPlaying ? "\u23F8" : "\u25B6",
+      x: startX, y: btnY, w: btnW, h: btnH,
+      onClick: () => {
+        this.isPlaying = !this.isPlaying;
+        this.panel.setPlaying(this.isPlaying);
+        this.vrPanel?.updateButton(0, this.isPlaying ? "\u23F8" : "\u25B6");
+      },
+    });
+
+    this.vrPanel.addButton({
+      label: `${this.speed}x`,
+      x: startX + (btnW + gap), y: btnY, w: btnW, h: btnH,
+      onClick: () => {
+        const speeds = [0.1, 0.25, 0.5, 1, 2, 5, 10];
+        const idx = speeds.indexOf(this.speed);
+        this.speed = speeds[(idx + 1) % speeds.length];
+        this.vrPanel?.updateButton(1, `${this.speed}x`);
+      },
+    });
+
+    this.vrPanel.addButton({
+      label: presets[this.currentPresetIndex].name,
+      x: startX + (btnW + gap) * 2, y: btnY, w: btnW * 1.6, h: btnH,
+      onClick: () => {
+        this.currentPresetIndex = (this.currentPresetIndex + 1) % presets.length;
+        this.loadPreset(this.currentPresetIndex);
+        this.vrPanel?.updateButton(2, presets[this.currentPresetIndex].name);
+      },
+    });
+
+    this.vrPanel.addButton({
+      label: "Clear",
+      x: startX + (btnW + gap) * 2 + btnW * 1.6 + gap, y: btnY, w: btnW, h: btnH,
+      onClick: () => {
+        this.clearVisuals();
+        this.system.clear();
+      },
+    });
+
+    // Row 2: Body type placement buttons + collision toggle
+    const row2Y = 0.72;
+
+    this.vrPanel.addButton({
+      label: "\u2729 Star",
+      x: startX, y: row2Y, w: btnW, h: btnH,
+      onClick: () => this.enterVRPlacementMode("star", 1.0),
+    });
+
+    this.vrPanel.addButton({
+      label: "\u25CF Planet",
+      x: startX + (btnW + gap), y: row2Y, w: btnW, h: btnH,
+      onClick: () => this.enterVRPlacementMode("planet", 0.1),
+    });
+
+    this.vrPanel.addButton({
+      label: "\u26AB BH",
+      x: startX + (btnW + gap) * 2, y: row2Y, w: btnW, h: btnH,
+      onClick: () => this.enterVRPlacementMode("blackhole", 5.0),
+    });
+
+    this.vrPanel.addButton({
+      label: this.system.collisionsEnabled ? "Coll: ON" : "Coll: OFF",
+      x: startX + (btnW + gap) * 3, y: row2Y, w: btnW * 1.2, h: btnH,
+      onClick: () => {
+        this.system.collisionsEnabled = !this.system.collisionsEnabled;
+        this.vrPanel?.updateButton(7, this.system.collisionsEnabled ? "Coll: ON" : "Coll: OFF");
+      },
+    });
+
+    xr.registerPanel(this.vrPanel);
+
+    xr.onSessionStart = () => {
+      if (this.vrPanel) {
+        this.vrPanel.positionInFront(ctx.camera, 2.5, -0.3);
+        ctx.scene.add(this.vrPanel.mesh);
+      }
+    };
+
+    xr.onSessionEnd = () => {
+      if (this.vrPanel) ctx.scene.remove(this.vrPanel.mesh);
+      this.exitVRPlacementMode();
+    };
+
+    // If already in VR (scene switch mid-session)
+    if (xr.isPresenting && this.vrPanel) {
+      this.vrPanel.positionInFront(ctx.camera, 2.5, -0.3);
+      ctx.scene.add(this.vrPanel.mesh);
+    }
+
+    // Controller placement hooks
+    xr.onControllerSelectStart = (origin, direction) => {
+      if (!this.vrPlacing) return false;
+
+      // Raycast against ground plane
+      const ray = new THREE.Ray(origin, direction);
+      const hit = new THREE.Vector3();
+      if (!ray.intersectPlane(this.groundPlane, hit)) return true;
+
+      this.vrPlacePosition = hit.clone();
+
+      // Show ghost sphere at placement point
+      const color = this.placeType === "blackhole" ? 0x6633aa :
+        this.placeType === "star" ? 0xffdd33 : 0x4488ff;
+      this.vrGhostSphere = new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 16, 16),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5 }),
+      );
+      this.vrGhostSphere.position.copy(hit);
+      this.group.add(this.vrGhostSphere);
+
+      return true; // consume — don't teleport
+    };
+
+    xr.onControllerSelectEnd = (origin, direction) => {
+      if (!this.vrPlacing || !this.vrPlacePosition) return;
+
+      // Raycast to get release position for velocity
+      const ray = new THREE.Ray(origin, direction);
+      const hit = new THREE.Vector3();
+      const velocity = new THREE.Vector3();
+
+      if (ray.intersectPlane(this.groundPlane, hit)) {
+        velocity.subVectors(hit, this.vrPlacePosition).multiplyScalar(0.5);
+        velocity.y = 0;
+      }
+
+      const body = this.system.addBody({
+        mass: this.placeMass,
+        position: this.vrPlacePosition,
+        velocity,
+        type: this.placeType,
+      });
+
+      if (body) {
+        this.bodyMeshes.set(body.id, this.createBodyMesh(body));
+        this.trailLines.set(body.id, this.createTrailLine(body));
+      }
+
+      // Clean up ghost + arrow
+      if (this.vrGhostSphere) {
+        this.group.remove(this.vrGhostSphere);
+        this.vrGhostSphere = null;
+      }
+      if (this.vrVelocityArrow) {
+        this.group.remove(this.vrVelocityArrow);
+        this.vrVelocityArrow = null;
+      }
+      this.vrPlacePosition = null;
+      // Stay in placement mode for rapid placement
+    };
+  }
+
+  private enterVRPlacementMode(type: BodyType, mass: number) {
+    this.vrPlacing = true;
+    this.placeType = type;
+    this.placeMass = mass;
+    this.vrPanel?.setLines(["Point at ground + pull trigger to place", `Placing: ${type} (mass ${mass})`]);
+  }
+
+  private exitVRPlacementMode() {
+    this.vrPlacing = false;
+    if (this.vrGhostSphere) {
+      this.group.remove(this.vrGhostSphere);
+      this.vrGhostSphere = null;
+    }
+    if (this.vrVelocityArrow) {
+      this.group.remove(this.vrVelocityArrow);
+      this.vrVelocityArrow = null;
+    }
+    this.vrPlacePosition = null;
+    this.vrPanel?.setLines([]);
+  }
+
   update(dt: number, _elapsed: number): void {
     this.elapsed += dt;
 
@@ -687,6 +887,41 @@ export class NBodyScene implements Scene {
       }
     }
 
+    // Update VR velocity arrow during drag
+    if (this.vrPlacing && this.vrPlacePosition && this.ctx.xrManager?.isPresenting) {
+      // Read controller ray from renderer.xr
+      const session = this.ctx.renderer.xr.getSession();
+      if (session) {
+        for (let i = 0; i < 2; i++) {
+          const controller = this.ctx.renderer.xr.getController(i);
+          if (!controller) continue;
+          const tempMatrix = new THREE.Matrix4().identity().extractRotation(controller.matrixWorld);
+          const origin = new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
+          const direction = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix);
+          const ray = new THREE.Ray(origin, direction);
+          const hit = new THREE.Vector3();
+          if (ray.intersectPlane(this.groundPlane, hit)) {
+            const dir = new THREE.Vector3().subVectors(hit, this.vrPlacePosition);
+            const length = dir.length();
+
+            if (this.vrVelocityArrow) {
+              this.group.remove(this.vrVelocityArrow);
+              this.vrVelocityArrow = null;
+            }
+
+            if (length > 0.1) {
+              this.vrVelocityArrow = new THREE.ArrowHelper(
+                dir.clone().normalize(), this.vrPlacePosition, length,
+                0x00ff88, 0.2, 0.12,
+              );
+              this.group.add(this.vrVelocityArrow);
+            }
+            break; // use first active controller
+          }
+        }
+      }
+    }
+
     // Smooth camera target toward center of mass
     const com = this.system.getCenterOfMass();
     this.cameraTarget.lerp(com, 0.02);
@@ -708,6 +943,19 @@ export class NBodyScene implements Scene {
 
   dispose(): void {
     this.exitPlacementMode();
+    this.exitVRPlacementMode();
+
+    // Clean up VR panel
+    if (this.vrPanel) {
+      this.ctx.xrManager?.unregisterPanel(this.vrPanel);
+      this.ctx.scene.remove(this.vrPanel.mesh);
+      this.vrPanel.dispose();
+      this.vrPanel = null;
+    }
+    if (this.ctx.xrManager) {
+      this.ctx.xrManager.onControllerSelectStart = null;
+      this.ctx.xrManager.onControllerSelectEnd = null;
+    }
 
     for (const { el, type, fn } of this.boundHandlers) {
       el.removeEventListener(type, fn);

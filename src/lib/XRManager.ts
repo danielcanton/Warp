@@ -31,6 +31,10 @@ export class XRManager {
   // Callbacks
   onSessionStart: (() => void) | null = null;
   onSessionEnd: (() => void) | null = null;
+  /** Scene-level hook: fires on trigger press. Return true to consume (skip teleport). */
+  onControllerSelectStart: ((origin: THREE.Vector3, direction: THREE.Vector3) => boolean) | null = null;
+  /** Scene-level hook: fires on trigger release. */
+  onControllerSelectEnd: ((origin: THREE.Vector3, direction: THREE.Vector3) => void) | null = null;
 
   constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene) {
     this.renderer = renderer;
@@ -95,6 +99,7 @@ export class XRManager {
       this.scene.add(this.controller1);
 
       (this.controller1 as unknown as EventTarget).addEventListener("selectstart", () => this.onSelect(this.controller1!));
+      (this.controller1 as unknown as EventTarget).addEventListener("selectend", () => this.onSelectEnd(this.controller1!));
     }
 
     if (this.controller2) {
@@ -102,6 +107,7 @@ export class XRManager {
       this.scene.add(this.controller2);
 
       (this.controller2 as unknown as EventTarget).addEventListener("selectstart", () => this.onSelect(this.controller2!));
+      (this.controller2 as unknown as EventTarget).addEventListener("selectend", () => this.onSelectEnd(this.controller2!));
     }
 
     // Teleport target marker
@@ -145,6 +151,13 @@ export class XRManager {
       }
     }
 
+    // Scene-level select hook
+    if (this.onControllerSelectStart) {
+      const origin = this.raycaster.ray.origin.clone();
+      const direction = this.raycaster.ray.direction.clone();
+      if (this.onControllerSelectStart(origin, direction)) return;
+    }
+
     // Teleport: raycast against ground plane
     const hit = new THREE.Vector3();
     if (this.raycaster.ray.intersectPlane(this.groundPlane, hit)) {
@@ -153,6 +166,17 @@ export class XRManager {
         if (this.teleportTarget) this.teleportTarget.visible = false;
       }
     }
+  }
+
+  private onSelectEnd(controller: THREE.Group) {
+    if (!this.onControllerSelectEnd) return;
+    this.tempMatrix.identity().extractRotation(controller.matrixWorld);
+    this.raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+    this.raycaster.ray.direction.set(0, 0, -1).applyMatrix4(this.tempMatrix);
+    this.onControllerSelectEnd(
+      this.raycaster.ray.origin.clone(),
+      this.raycaster.ray.direction.clone(),
+    );
   }
 
   /** Register a VRPanel for ray interaction. */
