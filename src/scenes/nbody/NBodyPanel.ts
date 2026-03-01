@@ -1,4 +1,7 @@
 import { presets } from "./presets";
+import { getViewMode, onViewModeChange, type ViewMode } from "../../lib/view-mode";
+import { nbodyEquations } from "../../lib/equation-data";
+import { buildEquationsSection, removeEquationsSection } from "../../lib/equations";
 
 export type BodyType = "star" | "planet" | "blackhole";
 
@@ -25,10 +28,16 @@ export class NBodyPanel {
   private speeds = [0.1, 0.25, 0.5, 1, 2, 5, 10, 100, 1000];
   private speedIndex = 3; // start at 1x
   private isPlaying = true;
+  private unsubViewMode: (() => void) | null = null;
 
   constructor(callbacks: NBodyPanelCallbacks) {
     this.callbacks = callbacks;
     this.element = this.build();
+    // Equations: initial + subscribe to mode changes
+    this.ensureEquationsSection(getViewMode());
+    this.unsubViewMode = onViewModeChange((mode) => {
+      this.ensureEquationsSection(mode);
+    });
   }
 
   private build(): HTMLElement {
@@ -192,7 +201,19 @@ export class NBodyPanel {
     }
   }
 
+  private async ensureEquationsSection(mode: ViewMode): Promise<void> {
+    removeEquationsSection(this.element);
+    if (mode === "explorer") return;
+
+    const section = await buildEquationsSection(nbodyEquations, mode);
+    if (section) this.element.appendChild(section);
+  }
+
   dispose() {
+    if (this.unsubViewMode) {
+      this.unsubViewMode();
+      this.unsubViewMode = null;
+    }
     if (this.element.parentNode) {
       this.element.parentNode.removeChild(this.element);
     }

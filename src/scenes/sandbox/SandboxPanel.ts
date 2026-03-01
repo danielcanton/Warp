@@ -1,4 +1,7 @@
 import type { BinaryParams } from "../../lib/waveform-generator";
+import { getViewMode, onViewModeChange, type ViewMode } from "../../lib/view-mode";
+import { mergerEquations } from "../../lib/equation-data";
+import { buildEquationsSection, updateEquationValues, removeEquationsSection } from "../../lib/equations";
 
 type OnChangeCallback = (params: BinaryParams) => void;
 type OnMergeCallback = () => void;
@@ -11,6 +14,7 @@ export class SandboxPanel {
   private onChange: OnChangeCallback;
   private onMerge: OnMergeCallback;
 
+  private unsubViewMode: (() => void) | null = null;
   private m1Slider!: HTMLInputElement;
   private m2Slider!: HTMLInputElement;
   private chi1Slider!: HTMLInputElement;
@@ -26,6 +30,11 @@ export class SandboxPanel {
     this.onChange = onChange;
     this.onMerge = onMerge;
     this.element = this.build();
+    // Equations: initial + subscribe to mode changes
+    this.ensureEquationsSection(getViewMode());
+    this.unsubViewMode = onViewModeChange((mode) => {
+      this.ensureEquationsSection(mode);
+    });
   }
 
   private build(): HTMLElement {
@@ -97,6 +106,8 @@ export class SandboxPanel {
     this.chi2Value.textContent = params.chi2.toFixed(2);
     this.distValue.textContent = `${params.distance.toFixed(0)} Mpc`;
     this.onChange(params);
+    // Update equation computed values live
+    this.updateEquationValuesFromSliders();
   }
 
   getParams(): BinaryParams {
@@ -110,7 +121,30 @@ export class SandboxPanel {
     };
   }
 
+  private getEquationValues(): Record<string, number> {
+    const p = this.getParams();
+    return { m1: p.m1, m2: p.m2, distance: p.distance, finalMass: 0 };
+  }
+
+  private async ensureEquationsSection(mode: ViewMode): Promise<void> {
+    removeEquationsSection(this.element);
+    if (mode === "explorer") return;
+
+    const section = await buildEquationsSection(mergerEquations, mode, this.getEquationValues());
+    if (section) this.element.appendChild(section);
+  }
+
+  private updateEquationValuesFromSliders(): void {
+    const section = this.element.querySelector<HTMLElement>(".info-equations");
+    if (!section) return;
+    updateEquationValues(section, mergerEquations, this.getEquationValues());
+  }
+
   dispose() {
+    if (this.unsubViewMode) {
+      this.unsubViewMode();
+      this.unsubViewMode = null;
+    }
     if (this.element.parentNode) {
       this.element.parentNode.removeChild(this.element);
     }

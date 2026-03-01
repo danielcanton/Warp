@@ -12,11 +12,10 @@ import { GWAudioEngine } from "../../lib/audio";
 import { BinarySystem } from "../../lib/binary";
 import { UniverseMap } from "../../lib/universe-map";
 import { VRPanel } from "../../lib/VRPanel";
-import { loadStrain, hasStrainData, getAvailableDetectors, whiten } from "../../lib/strain";
-import { computeSpectrogram, loadPrecomputed, renderSpectrogram, disposeSpectrogramWorker, installSpectrogramZoomPan, resetSpectrogramView, type SpectrogramData } from "../../lib/spectrogram";
-import { prepareChartData, renderStrainChart, invalidateStrainChart, type StrainChartData } from "../../lib/strain-chart";
 import { getViewMode, onViewModeChange, type ViewMode } from "../../lib/view-mode";
 import { performExport } from "../../lib/export";
+import { mergerEquations } from "../../lib/equation-data";
+import { buildEquationsSection, updateEquationValues, removeEquationsSection } from "../../lib/equations";
 import vertexShader from "../../shaders/spacetime.vert.glsl?raw";
 import fragmentShader from "../../shaders/spacetime.frag.glsl?raw";
 
@@ -167,27 +166,7 @@ export class MergerScene implements Scene {
   // VR panel
   private vrPanel: VRPanel | null = null;
 
-  // Spectrogram
-  private spectrogramPanel!: HTMLElement;
-  private spectrogramCanvas!: HTMLCanvasElement;
-  private spectrogramLoading!: HTMLElement;
-  private spectrogramData: SpectrogramData | null = null;
-  private spectrogramComputing = false;
   private unsubViewMode: (() => void) | null = null;
-
-  // Strain chart
-  private strainChartPanel!: HTMLElement;
-  private strainChartCanvas!: HTMLCanvasElement;
-  private strainChartData: StrainChartData | null = null;
-
-  // Detector tabs & whitening (Researcher mode)
-  private detectorTabs!: HTMLElement;
-  private detectorTabBtns!: NodeListOf<HTMLButtonElement>;
-  private whitenToggle!: HTMLButtonElement;
-  private activeDetector = "H1";
-  private isWhitened = false;
-  private availableDetectors: string[] = [];
-  private cleanupZoomPan: (() => void) | null = null;
 
   // Intro animation
   private introProgress = 0;
@@ -251,15 +230,6 @@ export class MergerScene implements Scene {
       this.exportBtn = document.getElementById("export-btn")!;
       this.exportBtnLabel = document.getElementById("export-btn-label")!;
       this.exportToast = document.getElementById("export-toast")!;
-      this.spectrogramPanel = document.getElementById("spectrogram-panel")!;
-      this.spectrogramCanvas = document.getElementById("spectrogram-canvas") as HTMLCanvasElement;
-      this.spectrogramLoading = document.getElementById("spectrogram-loading")!;
-      this.strainChartPanel = document.getElementById("strain-chart-panel")!;
-      this.strainChartCanvas = document.getElementById("strain-chart-canvas") as HTMLCanvasElement;
-      this.detectorTabs = document.getElementById("detector-tabs")!;
-      this.detectorTabBtns = document.querySelectorAll<HTMLButtonElement>(".detector-tab");
-      this.whitenToggle = document.getElementById("whiten-toggle") as HTMLButtonElement;
-
       this.tourToggleBtn = document.getElementById("tour-toggle")!;
       this.tourMenu = document.getElementById("tour-menu")!;
       this.tourMenuItems = document.getElementById("tour-menu-items")!;
@@ -289,24 +259,12 @@ export class MergerScene implements Scene {
     // ─── Subscribe to view mode changes for live panel updates ───
     if (!this.unsubViewMode) {
       this.unsubViewMode = onViewModeChange((mode) => {
-        this.updateSpectrogramVisibility();
-        this.updateStrainChartVisibility();
-        this.updateDetectorTabsVisibility();
-        this.updateSpectrogramZoomPan();
         this.updateExportVisibility();
         this.applyInfoPanelModeGating(mode);
         this.updateInfoPanelValues();
         this.applyControlsModeGating(mode);
         this.renderEventList();
-        // Load spectrogram/strain if switching to a mode that needs them
-        if (mode !== "explorer" && this.currentEvent) {
-          if (!this.spectrogramData) {
-            this.loadSpectrogram(this.currentEvent.commonName);
-          }
-          if (!this.strainChartData) {
-            this.loadStrainChart(this.currentEvent);
-          }
-        }
+        this.ensureEquationsSection(mode);
       });
     }
 
@@ -337,8 +295,6 @@ export class MergerScene implements Scene {
     this.helpOverlay.style.display = "none";
     const uiEl = document.getElementById("ui");
     if (uiEl) uiEl.style.display = "flex";
-    this.updateSpectrogramVisibility();
-    this.updateStrainChartVisibility();
     this.updateExportVisibility();
 
     // Apply initial mode gating
@@ -716,29 +672,6 @@ export class MergerScene implements Scene {
       if (e.code === "Slash") { e.preventDefault(); this.searchInput.focus(); }
     }) as EventListener);
 
-    // Detector tab clicks (Researcher mode)
-    this.detectorTabBtns.forEach((btn) => {
-      this.addHandler(btn, "click", () => {
-        if (btn.disabled) return;
-        const det = btn.dataset.detector!;
-        this.activeDetector = det;
-        this.detectorTabBtns.forEach((b) => b.classList.toggle("active", b.dataset.detector === det));
-        if (this.currentEvent) {
-          this.loadStrainChart(this.currentEvent);
-          this.loadSpectrogram(this.currentEvent.commonName);
-        }
-      });
-    });
-
-    // Whitening toggle (Researcher mode)
-    this.addHandler(this.whitenToggle, "click", () => {
-      this.isWhitened = !this.isWhitened;
-      this.whitenToggle.textContent = this.isWhitened ? "Whitened" : "Raw";
-      this.whitenToggle.classList.toggle("active", this.isWhitened);
-      if (this.currentEvent) {
-        this.loadStrainChart(this.currentEvent);
-      }
-    });
   }
 
   // ─── View mode ──────────────────────────────────────────────────────
@@ -760,8 +693,6 @@ export class MergerScene implements Scene {
       this.mapLegendEl.style.display = "none";
       this.mapToggleBtn.textContent = "Universe Map";
       this.mapTooltip.style.display = "none";
-      this.updateSpectrogramVisibility();
-      this.updateStrainChartVisibility();
       this.updateExportVisibility();
     } else {
       this.eventViewGroup.visible = false;
@@ -780,7 +711,6 @@ export class MergerScene implements Scene {
       this.helpOverlay.style.display = "none";
       this.mapLegendEl.style.display = "block";
       this.mapToggleBtn.textContent = "Back to Event";
-      this.spectrogramPanel.style.display = "none";
     }
     controls.update();
   }
@@ -813,6 +743,28 @@ export class MergerScene implements Scene {
     details.forEach((d) => (d.style.display = showStudent ? "" : "none"));
     const catalog = this.eventInfoEl.querySelector<HTMLElement>(".info-catalog");
     if (catalog) catalog.style.display = showStudent ? "" : "none";
+  }
+
+  /** Build or rebuild the equations section inside the info panel */
+  private async ensureEquationsSection(mode: ViewMode): Promise<void> {
+    const panelBody = this.eventInfoEl.querySelector<HTMLElement>(".panel-body");
+    if (!panelBody) return;
+
+    // Remove existing equations
+    removeEquationsSection(panelBody);
+
+    if (mode === "explorer" || !this.currentEvent) return;
+
+    const event = this.currentEvent;
+    const values: Record<string, number> = {
+      m1: event.mass_1_source,
+      m2: event.mass_2_source,
+      distance: event.luminosity_distance,
+      finalMass: event.final_mass_source ?? 0,
+    };
+
+    const section = await buildEquationsSection(mergerEquations, mode, values);
+    if (section) panelBody.appendChild(section);
   }
 
   /** Update info panel values to reflect the current mode (uncertainties for researcher) */
@@ -912,6 +864,9 @@ export class MergerScene implements Scene {
     this.applyInfoPanelModeGating(mode);
     this.applyControlsModeGating(mode);
 
+    // Update equations with current event values
+    this.ensureEquationsSection(mode);
+
     document.querySelectorAll(".event-item").forEach((el) => {
       el.classList.toggle("active", el.getAttribute("data-name") === event.commonName);
     });
@@ -920,11 +875,6 @@ export class MergerScene implements Scene {
     url.searchParams.set("event", event.commonName);
     history.replaceState(null, "", url.toString());
 
-    // Load spectrogram if in student/researcher mode
-    this.loadSpectrogram(event.commonName);
-
-    // Load strain chart if in student/researcher mode
-    this.loadStrainChart(event);
   }
 
   // ─── Event list ─────────────────────────────────────────────────────
@@ -1197,95 +1147,6 @@ export class MergerScene implements Scene {
 
   // ─── Spectrogram ────────────────────────────────────────────────────
 
-  private updateSpectrogramVisibility() {
-    const mode = getViewMode();
-    const shouldShow = mode !== "explorer" && this.viewMode === "event";
-    this.spectrogramPanel.style.display = shouldShow ? "block" : "none";
-  }
-
-  // ─── Strain Chart ───────────────────────────────────────────────────
-
-  private updateStrainChartVisibility() {
-    const mode = getViewMode();
-    const shouldShow = mode !== "explorer" && this.viewMode === "event" && this.strainChartData != null;
-    this.strainChartPanel.style.display = shouldShow ? "block" : "none";
-  }
-
-  private updateDetectorTabsVisibility() {
-    const mode = getViewMode();
-    const show = mode === "researcher" && this.viewMode === "event" && this.strainChartData?.hasStrain;
-    this.detectorTabs.style.display = show ? "flex" : "none";
-    this.strainChartPanel.classList.toggle("has-tabs", !!show);
-  }
-
-  private updateSpectrogramZoomPan() {
-    const mode = getViewMode();
-    if (mode === "researcher" && !this.cleanupZoomPan) {
-      this.cleanupZoomPan = installSpectrogramZoomPan(this.spectrogramCanvas);
-    } else if (mode !== "researcher" && this.cleanupZoomPan) {
-      this.cleanupZoomPan();
-      this.cleanupZoomPan = null;
-      resetSpectrogramView();
-    }
-  }
-
-  private async updateDetectorTabStates(eventName: string) {
-    this.availableDetectors = await getAvailableDetectors(eventName);
-    this.detectorTabBtns.forEach((btn) => {
-      const det = btn.dataset.detector!;
-      const available = this.availableDetectors.includes(det);
-      btn.disabled = !available;
-      btn.title = available ? det : `${det} (N/A)`;
-      if (!available && btn.classList.contains("active")) {
-        btn.classList.remove("active");
-      }
-    });
-    // If active detector is not available, switch to first available
-    if (!this.availableDetectors.includes(this.activeDetector)) {
-      this.activeDetector = this.availableDetectors[0] ?? "H1";
-      this.detectorTabBtns.forEach((b) =>
-        b.classList.toggle("active", b.dataset.detector === this.activeDetector)
-      );
-    }
-  }
-
-  private async loadStrainChart(event: GWEvent) {
-    const mode = getViewMode();
-    if (mode === "explorer" || !this.currentWaveform) return;
-
-    // Update detector availability for this event
-    await this.updateDetectorTabStates(event.commonName);
-
-    const detector = mode === "researcher" ? this.activeDetector : undefined;
-
-    let strain: import("../../lib/strain").StrainData | null = null;
-    try {
-      const has = await hasStrainData(event.commonName);
-      if (has) {
-        strain = await loadStrain(event.commonName, detector);
-      }
-    } catch {
-      // Strain unavailable — will show template only
-    }
-
-    // Apply whitening if enabled (researcher mode only)
-    if (strain && this.isWhitened && mode === "researcher") {
-      const whitened = whiten(strain.data, strain.sampleRate);
-      strain = { ...strain, data: whitened };
-    }
-
-    invalidateStrainChart();
-    this.strainChartData = prepareChartData(this.currentWaveform, strain, event);
-    // Annotate with detector and whitening state
-    if (strain) {
-      this.strainChartData.detector = strain.detector;
-      this.strainChartData.whitened = this.isWhitened && mode === "researcher";
-    }
-    this.updateStrainChartVisibility();
-    this.updateDetectorTabsVisibility();
-    renderStrainChart(this.strainChartCanvas, this.strainChartData, this.playbackTime);
-  }
-
   // ─── Export ──────────────────────────────────────────────────────────
 
   private updateExportVisibility() {
@@ -1316,72 +1177,6 @@ export class MergerScene implements Scene {
         this.exportToast.classList.remove("show");
       }, 800);
     }
-  }
-
-  private async loadSpectrogram(eventName: string) {
-    if (this.spectrogramComputing) return;
-    const mode = getViewMode();
-    if (mode === "explorer") return;
-
-    const detector = mode === "researcher" ? this.activeDetector : "H1";
-
-    // Reset zoom when switching events/detectors
-    resetSpectrogramView();
-
-    // 1. Try pre-computed spectrogram first (instant, no strain needed)
-    const precomputed = await loadPrecomputed(eventName, detector);
-    if (precomputed) {
-      this.spectrogramData = precomputed;
-      this.spectrogramLoading.style.display = "none";
-      this.updateSpectrogramVisibility();
-      this.updateSpectrogramZoomPan();
-      // Wait for layout to settle — canvas needs non-zero dimensions
-      this.renderSpectrogramWhenReady(precomputed);
-      return;
-    }
-
-    // 2. Fall back to strain-based computation
-    const hasData = await hasStrainData(eventName);
-    if (!hasData) {
-      this.spectrogramData = null;
-      this.spectrogramPanel.style.display = "none";
-      return;
-    }
-
-    this.spectrogramComputing = true;
-    this.spectrogramLoading.style.display = "flex";
-    this.updateSpectrogramVisibility();
-
-    try {
-      const det = mode === "researcher" ? this.activeDetector : undefined;
-      const strain = await loadStrain(eventName, det);
-      const data = await computeSpectrogram(strain, eventName);
-      this.spectrogramData = data;
-      this.spectrogramLoading.style.display = "none";
-      this.updateSpectrogramZoomPan();
-      this.renderSpectrogramWhenReady(data);
-    } catch (err) {
-      console.warn("Spectrogram computation failed:", err);
-      this.spectrogramData = null;
-      this.spectrogramPanel.style.display = "none";
-    } finally {
-      this.spectrogramComputing = false;
-    }
-  }
-
-  /**
-   * Retry rendering spectrogram until the canvas has non-zero dimensions.
-   * Panels transitioning from display:none need a few frames to layout.
-   */
-  private renderSpectrogramWhenReady(data: SpectrogramData, attempts = 0) {
-    if (attempts > 10) return; // give up after ~10 frames
-    requestAnimationFrame(() => {
-      if (this.spectrogramCanvas.clientWidth > 0 && this.spectrogramCanvas.clientHeight > 0) {
-        renderSpectrogram(this.spectrogramCanvas, data, this.playbackTime);
-      } else {
-        this.renderSpectrogramWhenReady(data, attempts + 1);
-      }
-    });
   }
 
   // ─── Intro zoom ─────────────────────────────────────────────────────
@@ -1530,15 +1325,6 @@ export class MergerScene implements Scene {
         this.timeLabel.textContent = `${(this.playbackTime * this.currentWaveform.duration).toFixed(2)}s`;
       }
 
-      // Update spectrogram cursor
-      if (this.spectrogramData && this.spectrogramPanel.style.display !== "none") {
-        renderSpectrogram(this.spectrogramCanvas, this.spectrogramData, this.playbackTime);
-      }
-
-      // Update strain chart cursor
-      if (this.strainChartData && this.strainChartPanel.style.display !== "none") {
-        renderStrainChart(this.strainChartCanvas, this.strainChartData, this.playbackTime);
-      }
     } else {
       this.ctx.bloom.intensity = 1.8;
     }
@@ -1581,25 +1367,10 @@ export class MergerScene implements Scene {
     // Clean up export
     this.exportBtn.classList.remove("visible");
 
-    // Clean up spectrogram
-    this.spectrogramPanel.style.display = "none";
-    this.spectrogramData = null;
-
-    // Clean up strain chart
-    this.strainChartPanel.style.display = "none";
-    this.strainChartData = null;
-    this.detectorTabs.style.display = "none";
-    this.strainChartPanel.classList.remove("has-tabs");
-    invalidateStrainChart();
-    if (this.cleanupZoomPan) {
-      this.cleanupZoomPan();
-      this.cleanupZoomPan = null;
-    }
     if (this.unsubViewMode) {
       this.unsubViewMode();
       this.unsubViewMode = null;
     }
-    disposeSpectrogramWorker();
 
     // Hide all merger-specific UI
     this.eventInfoEl.style.display = "none";

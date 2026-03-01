@@ -1,5 +1,8 @@
 import * as THREE from "three";
 import type { Scene, SceneContext } from "../types";
+import { getViewMode, onViewModeChange, type ViewMode } from "../../lib/view-mode";
+import { blackholeEquations } from "../../lib/equation-data";
+import { buildEquationsSection, updateEquationValues, removeEquationsSection } from "../../lib/equations";
 import vertexShader from "../../shaders/blackhole.vert.glsl?raw";
 import fragmentShader from "../../shaders/blackhole.frag.glsl?raw";
 
@@ -34,6 +37,7 @@ export class BlackHoleScene implements Scene {
 
   private boundHandlers: { el: EventTarget; type: string; fn: EventListener }[] = [];
   private initialized = false;
+  private unsubViewMode: (() => void) | null = null;
 
   async init(ctx: SceneContext): Promise<void> {
     this.ctx = ctx;
@@ -101,6 +105,16 @@ export class BlackHoleScene implements Scene {
 
     this.setupInteraction(ctx);
 
+    // Subscribe to view mode changes for equations
+    if (!this.unsubViewMode) {
+      this.unsubViewMode = onViewModeChange((mode) => {
+        this.ensureEquationsSection(mode);
+      });
+    }
+
+    // Initial equations render
+    this.ensureEquationsSection(getViewMode());
+
     if (firstInit) {
       this.initialized = true;
     }
@@ -148,6 +162,8 @@ export class BlackHoleScene implements Scene {
       this.mass = parseInt(massSlider.value) / 100;
       massVal.innerHTML = `${this.mass.toFixed(1)} r<sub>s</sub>`;
       this.bhMaterial.uniforms.uMass.value = this.mass;
+      // Update equation computed values live
+      this.updateEquationValuesForMass();
     });
 
     // Disk toggle
@@ -342,8 +358,39 @@ export class BlackHoleScene implements Scene {
     return this.panelEl;
   }
 
+  /** Convert slider mass (r_s scale) to solar masses for equation display */
+  private getMassSolarMasses(): number {
+    // The slider goes 50–500 mapped to 0.5–5.0 r_s.
+    // For equation display, treat the slider value as solar masses (×10 for a reasonable BH).
+    // mass field = r_s scale (0.5 to 5.0). Map to ~5–50 M☉ for realistic equations.
+    return this.mass * 10;
+  }
+
+  private async ensureEquationsSection(mode: ViewMode): Promise<void> {
+    if (!this.panelEl) return;
+    removeEquationsSection(this.panelEl);
+
+    if (mode === "explorer") return;
+
+    const values = { mass: this.getMassSolarMasses() };
+    const section = await buildEquationsSection(blackholeEquations, mode, values);
+    if (section) this.panelEl.appendChild(section);
+  }
+
+  private updateEquationValuesForMass(): void {
+    if (!this.panelEl) return;
+    const section = this.panelEl.querySelector<HTMLElement>(".info-equations");
+    if (!section) return;
+    updateEquationValues(section, blackholeEquations, { mass: this.getMassSolarMasses() });
+  }
+
   dispose(): void {
     this.stopCameraFeed();
+
+    if (this.unsubViewMode) {
+      this.unsubViewMode();
+      this.unsubViewMode = null;
+    }
 
     for (const { el, type, fn } of this.boundHandlers) {
       el.removeEventListener(type, fn);

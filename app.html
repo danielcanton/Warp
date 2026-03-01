@@ -926,6 +926,43 @@
         gap: 6px;
       }
 
+      /* ─── Equations Section (Student/Researcher) ─── */
+      .info-equations {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .equation-block {
+        margin-bottom: 8px;
+      }
+      .equation-block:last-child {
+        margin-bottom: 0;
+      }
+      .equation-label {
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.35);
+        margin-bottom: 2px;
+        line-height: 1.3;
+      }
+      .equation-math {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.85);
+        overflow-x: auto;
+        padding: 2px 0;
+      }
+      .equation-value {
+        font-size: 11px;
+        color: rgba(165, 180, 252, 0.7);
+        font-variant-numeric: tabular-nums;
+        margin-top: 1px;
+      }
+      /* KaTeX dark-theme overrides */
+      .info-equations .katex { color: rgba(255, 255, 255, 0.85); font-size: 0.95em; }
+      .info-equations .katex .mord { color: rgba(255, 255, 255, 0.85); }
+      .info-equations .katex .mrel { color: rgba(165, 180, 252, 0.9); }
+      .info-equations .katex .mop { color: rgba(255, 255, 255, 0.7); }
+      .info-equations .katex .mfrac .frac-line { border-color: rgba(255, 255, 255, 0.4); }
+
       /* ── Events toggle button (mobile only) ── */
       .mobile-only { display: none; }
 
@@ -959,8 +996,6 @@
         padding: 6px 14px;
         border-radius: 20px;
       }
-      body.embed #spectrogram-panel { display: none !important; }
-      body.embed #strain-chart-panel { display: none !important; }
       /* Embed: scene selector hidden (scene chosen via ?scene= param) */
       body.embed #scene-selector { display: none !important; }
       /* Embed: compact panels for non-merger scenes */
@@ -1039,6 +1074,7 @@
         #event-info .info-divider,
         #event-info .info-detail,
         #event-info .info-catalog { display: none; }
+        .info-equations { display: none; }
         .type-badge { margin-bottom: 0; font-size: 10px; padding: 1px 6px; }
 
         /* Event list — mobile overlay (hidden by default, toggled via JS) */
@@ -1125,26 +1161,6 @@
         .tour-event-name { font-size: 15px; }
         .tour-description { font-size: 12px; }
 
-        /* Spectrogram — compact on mobile */
-        #spectrogram-panel {
-          bottom: 70px;
-          right: 8px;
-          left: auto;
-          width: calc(100vw - 16px);
-          height: 134px;
-          border-radius: 10px;
-        }
-
-        /* Strain chart — compact on mobile */
-        #strain-chart-panel {
-          bottom: 212px;
-          right: 8px;
-          left: auto;
-          width: calc(100vw - 16px);
-          height: 124px;
-          border-radius: 10px;
-        }
-
         /* About overlay — mobile friendly */
         #about-overlay { padding: 16px; }
         .about-card {
@@ -1159,80 +1175,6 @@
         .loading-title { font-size: 20px; }
       }
 
-      /* ─── Spectrogram Panel ─── */
-      #spectrogram-panel {
-        position: fixed;
-        bottom: 80px;
-        right: 16px;
-        z-index: 9;
-        width: min(420px, calc(100vw - 32px));
-        height: 164px;
-        border-radius: 10px;
-        overflow: hidden;
-        display: none;
-        background: rgba(0, 0, 0, 0.25);
-        backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-      }
-      #spectrogram-panel .panel-body {
-        height: calc(100% - 25px);
-        position: relative;
-        display: flex;
-        flex-direction: column;
-      }
-      #spectrogram-panel canvas {
-        width: 100%;
-        flex: 1;
-        min-height: 0;
-        display: block;
-      }
-      #spectrogram-loading {
-        position: absolute;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 12px;
-        color: rgba(255, 255, 255, 0.4);
-        letter-spacing: 0.04em;
-      }
-      #spectrogram-loading .loading-ring {
-        width: 16px;
-        height: 16px;
-        border-width: 1.5px;
-        margin-right: 8px;
-        margin-bottom: 0;
-      }
-
-      /* ─── Strain Chart Panel ─── */
-      #strain-chart-panel {
-        position: fixed;
-        bottom: 252px;
-        left: 16px;
-        z-index: 9;
-        width: min(420px, calc(100vw - 32px));
-        height: 154px;
-        border-radius: 10px;
-        overflow: hidden;
-        display: none;
-        background: rgba(0, 0, 0, 0.25);
-        backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-      }
-      #strain-chart-panel.has-tabs {
-        height: 184px;
-      }
-      #strain-chart-panel .panel-body {
-        height: calc(100% - 25px);
-        display: flex;
-        flex-direction: column;
-      }
-      #strain-chart-panel canvas {
-        width: 100%;
-        flex: 1;
-        min-height: 0;
-        display: block;
-      }
 
       /* ─── Draggable Panel Header ─── */
       .panel-header {
@@ -1300,7 +1242,6 @@
       .panel-minimized .panel-body { max-height: 0 !important; opacity: 0; overflow: hidden; }
       .panel-minimized { min-height: auto !important; height: auto !important; }
       .panel-minimized canvas { display: none; }
-      .panel-minimized #spectrogram-loading { display: none; }
       .panel-dragging {
         opacity: 0.85;
         transition: none !important;
@@ -1322,62 +1263,6 @@
         height: 3px;
         border-radius: 2px;
         background: rgba(255, 255, 255, 0.2);
-      }
-
-      /* ─── Detector Tabs (Researcher mode) ─── */
-      #detector-tabs {
-        display: flex;
-        align-items: center;
-        gap: 2px;
-        padding: 4px 8px;
-        background: rgba(0, 0, 0, 0.4);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      }
-      .detector-tab {
-        background: transparent;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 6px;
-        color: rgba(255, 255, 255, 0.5);
-        font-size: 11px;
-        font-family: -apple-system, system-ui, sans-serif;
-        padding: 2px 10px;
-        cursor: pointer;
-        transition: all 0.15s;
-        letter-spacing: 0.03em;
-      }
-      .detector-tab:hover:not(:disabled) {
-        color: rgba(255, 255, 255, 0.8);
-        border-color: rgba(255, 255, 255, 0.3);
-      }
-      .detector-tab.active {
-        background: rgba(56, 189, 248, 0.2);
-        border-color: rgba(56, 189, 248, 0.5);
-        color: rgba(56, 189, 248, 0.95);
-      }
-      .detector-tab:disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
-      }
-      .whiten-btn {
-        margin-left: auto;
-        background: transparent;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 6px;
-        color: rgba(255, 255, 255, 0.5);
-        font-size: 10px;
-        font-family: -apple-system, system-ui, sans-serif;
-        padding: 2px 8px;
-        cursor: pointer;
-        transition: all 0.15s;
-      }
-      .whiten-btn:hover {
-        color: rgba(255, 255, 255, 0.8);
-        border-color: rgba(255, 255, 255, 0.3);
-      }
-      .whiten-btn.active {
-        background: rgba(167, 139, 250, 0.2);
-        border-color: rgba(167, 139, 250, 0.5);
-        color: rgba(167, 139, 250, 0.95);
       }
 
       /* ─── View Mode Gear ─── */
@@ -1993,40 +1878,6 @@
           </select>
         </div>
         <div id="event-list-items"></div>
-      </div>
-    </div>
-
-    <!-- Spectrogram (Student/Researcher modes only) -->
-    <div id="spectrogram-panel" class="glass">
-      <div class="panel-header" data-drag-target="spectrogram-panel">
-        <span class="panel-header-title">Spectrogram</span>
-        <div class="panel-header-grip"></div>
-        <button class="panel-minimize-btn" data-minimize-target="spectrogram-panel" title="Minimize">&#8722;</button>
-      </div>
-      <div class="panel-body">
-        <canvas id="spectrogram-canvas"></canvas>
-        <div id="spectrogram-loading">
-          <div class="loading-ring"></div>
-          Computing spectrogram...
-        </div>
-      </div>
-    </div>
-
-    <!-- Strain overlay chart (Student/Researcher modes only) -->
-    <div id="strain-chart-panel" class="glass">
-      <div class="panel-header" data-drag-target="strain-chart-panel">
-        <span class="panel-header-title">Strain</span>
-        <div class="panel-header-grip"></div>
-        <button class="panel-minimize-btn" data-minimize-target="strain-chart-panel" title="Minimize">&#8722;</button>
-      </div>
-      <div class="panel-body">
-        <div id="detector-tabs" style="display:none;">
-          <button class="detector-tab active" data-detector="H1">H1</button>
-          <button class="detector-tab" data-detector="L1">L1</button>
-          <button class="detector-tab" data-detector="V1">V1</button>
-          <button id="whiten-toggle" class="whiten-btn" title="Toggle whitened strain">Raw</button>
-        </div>
-        <canvas id="strain-chart-canvas"></canvas>
       </div>
     </div>
 

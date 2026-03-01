@@ -1,7 +1,7 @@
 /**
  * Data export module for WarpLab.
  * Generates ZIP bundles with event parameters, waveform data,
- * spectrogram screenshots, Jupyter notebooks, and BibTeX citations.
+ * Jupyter notebooks, and BibTeX citations.
  */
 
 import type { GWEvent, WaveformData } from "./waveform";
@@ -468,7 +468,6 @@ Catalog: ${event.catalog_shortName}
 - **parameters.json** — Full event parameters with uncertainties (JSON)
 - **parameters.csv** — Same parameters in tabular CSV format
 - **waveform_template.csv** — Synthetic IMRPhenom waveform: h+(t) and h×(t) arrays
-- **spectrogram.png** — Q-transform spectrogram screenshot from WarpLab
 - **notebook.ipynb** — Jupyter notebook that fetches real strain from GWOSC and reproduces the analysis
 - **CITATION.bib** — BibTeX citations for GWOSC, the catalog paper, and WarpLab
 
@@ -494,20 +493,6 @@ If you use this data in academic work, please cite the sources in CITATION.bib.
 ---
 Exported from WarpLab (https://warplab.app)
 `;
-}
-
-// ─── Spectrogram capture ───────────────────────────────────────────
-
-export function captureSpectrogram(): Promise<Blob | null> {
-  const canvas = document.getElementById("spectrogram-canvas") as HTMLCanvasElement | null;
-  if (!canvas || canvas.width === 0) return Promise.resolve(null);
-
-  return new Promise((resolve) => {
-    canvas.toBlob(
-      (blob) => resolve(blob),
-      "image/png",
-    );
-  });
 }
 
 // ─── Export orchestration ──────────────────────────────────────────
@@ -542,12 +527,6 @@ export async function performExport(options: ExportOptions): Promise<void> {
 
   if (waveform) {
     zip.file("waveform_template.csv", generateWaveformCSV(waveform));
-  }
-
-  // Spectrogram screenshot
-  const specBlob = await captureSpectrogram();
-  if (specBlob) {
-    zip.file("spectrogram.png", specBlob);
   }
 
   zip.file("notebook.ipynb", generateNotebook(event));
