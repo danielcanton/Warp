@@ -3,6 +3,32 @@ import type { Scene, SceneContext } from "../types";
 import { NBodySystem, type Body } from "./NBodySystem";
 import { presets } from "./presets";
 import { NBodyPanel, type BodyType } from "./NBodyPanel";
+import {
+  makeBHMaterial,
+  makeNSMaterial,
+  makeAtmosphereMaterial,
+  makeTrailMaterial,
+} from "../../shaders/fresnel";
+
+// ─── Collision particle system ─────────────────────────────────────
+const PARTICLE_COUNT = 50;
+
+interface CollisionParticle {
+  position: THREE.Vector3;
+  velocity: THREE.Vector3;
+  opacity: number;
+}
+
+interface CollisionEffect {
+  particles: CollisionParticle[];
+  mesh: THREE.Points;
+  age: number;
+  baseColor: THREE.Color;
+  bloomDecay: number; // remaining bloom spike time
+}
+
+// Pre-allocated trail constants
+const MAX_TRAIL = 300;
 
 export class NBodyScene implements Scene {
   readonly id = "nbody";
@@ -18,12 +44,13 @@ export class NBodyScene implements Scene {
   private system = new NBodySystem();
   private bodyMeshes = new Map<string, THREE.Group>();
   private trailLines = new Map<string, THREE.Line>();
-  private flashEffects: { mesh: THREE.Mesh; age: number }[] = [];
+  private collisionEffects: CollisionEffect[] = [];
 
   private isPlaying = true;
   private speed = 1.0;
   private showTrails = true;
   private showGrid = false;
+  private elapsed = 0;
 
   // Placement state
   private placing = false;
@@ -151,44 +178,39 @@ export class NBodyScene implements Scene {
       this.group.remove(line);
     }
     this.trailLines.clear();
-    for (const flash of this.flashEffects) {
-      this.group.remove(flash.mesh);
+    for (const effect of this.collisionEffects) {
+      this.group.remove(effect.mesh);
     }
-    this.flashEffects = [];
+    this.collisionEffects = [];
   }
 
   private createBodyMesh(body: Body): THREE.Group {
     const bodyGroup = new THREE.Group();
 
     if (body.type === "blackhole") {
-      // Dark sphere + purple glow ring
+      // Fresnel shader: dark core + purple rim glow
       const sphere = new THREE.Mesh(
         new THREE.SphereGeometry(body.radius, 32, 32),
-        new THREE.MeshBasicMaterial({ color: 0x0a0a1a }),
+        makeBHMaterial(0x8844cc),
       );
+      sphere.userData.isShaderBody = true;
       bodyGroup.add(sphere);
-
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(body.radius * 1.3, body.radius * 1.8, 64),
-        new THREE.MeshBasicMaterial({
-          color: 0x8844cc, transparent: true, opacity: 0.6, side: THREE.DoubleSide,
-        }),
-      );
-      ring.rotation.x = -Math.PI / 2;
-      bodyGroup.add(ring);
 
       const glow = new THREE.PointLight(0x6633aa, 1, body.radius * 8);
       bodyGroup.add(glow);
     } else if (body.type === "star") {
+      // Fresnel emissive shader with pulse
       const sphere = new THREE.Mesh(
         new THREE.SphereGeometry(body.radius, 24, 24),
-        new THREE.MeshBasicMaterial({ color: body.color }),
+        makeNSMaterial(body.color.getHex()),
       );
+      sphere.userData.isShaderBody = true;
       bodyGroup.add(sphere);
+
       const light = new THREE.PointLight(body.color.getHex(), 0.8, body.radius * 10);
       bodyGroup.add(light);
     } else {
-      // Planet — lit material
+      // Planet — MeshStandardMaterial + atmosphere shell
       const sphere = new THREE.Mesh(
         new THREE.SphereGeometry(body.radius, 20, 20),
         new THREE.MeshStandardMaterial({
@@ -196,6 +218,13 @@ export class NBodyScene implements Scene {
         }),
       );
       bodyGroup.add(sphere);
+
+      // Atmosphere rim
+      const atmo = new THREE.Mesh(
+        new THREE.SphereGeometry(body.radius * 1.15, 20, 20),
+        makeAtmosphereMaterial(body.color.getHex()),
+      );
+      bodyGroup.add(atmo);
     }
 
     bodyGroup.position.copy(body.position);
@@ -204,12 +233,17 @@ export class NBodyScene implements Scene {
   }
 
   private createTrailLine(body: Body): THREE.Line {
-    const material = new THREE.LineBasicMaterial({
-      color: body.type === "blackhole" ? 0x6633aa : body.color,
-      transparent: true,
-      opacity: 0.35,
-    });
+    const colorHex = body.type === "blackhole" ? 0x6633aa : body.color.getHex();
+    const material = makeTrailMaterial(colorHex);
+
+    // Pre-allocate fixed-size buffers
+    const positions = new Float32Array(MAX_TRAIL * 3);
+    const alphas = new Float32Array(MAX_TRAIL);
     const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("aAlpha", new THREE.BufferAttribute(alphas, 1));
+    geometry.setDrawRange(0, 0); // nothing to draw yet
+
     const line = new THREE.Line(geometry, material);
     line.visible = this.showTrails;
     this.group.add(line);
@@ -242,17 +276,71 @@ export class NBodyScene implements Scene {
     }
   }
 
-  private spawnCollisionFlash(position: THREE.Vector3) {
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.1, 0.4, 64),
-      new THREE.MeshBasicMaterial({
-        color: 0xffffff, transparent: true, opacity: 0.9, side: THREE.DoubleSide,
-      }),
-    );
-    ring.position.copy(position);
-    ring.rotation.x = -Math.PI / 2;
-    this.group.add(ring);
-    this.flashEffects.push({ mesh: ring, age: 0 });
+  private spawnCollisionEffect(position: THREE.Vector3, color: THREE.Color) {
+    const particles: CollisionParticle[] = [];
+    const positions = new Float32Array(PARTICLE_COUNT * 3);
+    const colors = new Float32Array(PARTICLE_COUNT * 3);
+    const sizes = new Float32Array(PARTICLE_COUNT);
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      // Random direction
+      const dir = new THREE.Vector3(
+        Math.random() * 2 - 1,
+        Math.random() * 2 - 1,
+        Math.random() * 2 - 1,
+      ).normalize();
+      const speed = 2 + Math.random() * 6;
+
+      particles.push({
+        position: position.clone(),
+        velocity: dir.multiplyScalar(speed),
+        opacity: 1.0,
+      });
+
+      positions[i * 3] = position.x;
+      positions[i * 3 + 1] = position.y;
+      positions[i * 3 + 2] = position.z;
+
+      // Per-particle color variation
+      const hsl = { h: 0, s: 0, l: 0 };
+      color.getHSL(hsl);
+      const varied = new THREE.Color().setHSL(
+        hsl.h + (Math.random() - 0.5) * 0.1,
+        Math.min(1, hsl.s + (Math.random() - 0.5) * 0.2),
+        Math.min(1, hsl.l + Math.random() * 0.3),
+      );
+      colors[i * 3] = varied.r;
+      colors[i * 3 + 1] = varied.g;
+      colors[i * 3 + 2] = varied.b;
+
+      sizes[i] = 0.08 + Math.random() * 0.12;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
+
+    const material = new THREE.PointsMaterial({
+      size: 0.1,
+      vertexColors: true,
+      transparent: true,
+      opacity: 1.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      sizeAttenuation: true,
+    });
+
+    const mesh = new THREE.Points(geometry, material);
+    this.group.add(mesh);
+
+    this.collisionEffects.push({
+      particles,
+      mesh,
+      age: 0,
+      baseColor: color.clone(),
+      bloomDecay: 0.15, // 150ms bloom spike
+    });
   }
 
   // ─── Placement mode ────────────────────────────────────────────
@@ -473,6 +561,8 @@ export class NBodyScene implements Scene {
   }
 
   update(dt: number, _elapsed: number): void {
+    this.elapsed += dt;
+
     // Track body count before step to detect collisions
     const prevCount = this.system.bodies.length;
     const prevPositions = new Map<string, THREE.Vector3>();
@@ -490,7 +580,7 @@ export class NBodyScene implements Scene {
       // Find merged bodies (new IDs not in previous set)
       for (const body of this.system.bodies) {
         if (!prevPositions.has(body.id)) {
-          this.spawnCollisionFlash(body.position);
+          this.spawnCollisionEffect(body.position, body.color);
         }
       }
     }
@@ -498,48 +588,102 @@ export class NBodyScene implements Scene {
     // Sync meshes (handles additions/removals from collisions)
     this.syncMeshes();
 
-    // Update mesh positions
+    // Update mesh positions and shader uniforms
     for (const body of this.system.bodies) {
       const meshGroup = this.bodyMeshes.get(body.id);
       if (meshGroup) {
         meshGroup.position.copy(body.position);
+
+        // Update shader uniforms for Fresnel bodies
+        const mainMesh = meshGroup.children[0] as THREE.Mesh;
+        if (mainMesh?.userData.isShaderBody) {
+          const mat = mainMesh.material as THREE.ShaderMaterial;
+          if (mat.uniforms.uTime) {
+            mat.uniforms.uTime.value = this.elapsed;
+          }
+          // Mass-based glow intensity
+          const glowIntensity = Math.min(body.mass * 0.5, 2.0);
+          if (mat.uniforms.uGlowIntensity) {
+            mat.uniforms.uGlowIntensity.value = glowIntensity;
+          }
+        }
       }
 
-      // Update trail line
+      // Update trail line (zero-allocation path)
       if (this.showTrails) {
         const line = this.trailLines.get(body.id);
         if (line && body.trail.length >= 2) {
-          // Read trail in order from ring buffer
-          const ordered: THREE.Vector3[] = [];
+          const geom = line.geometry;
+          const posAttr = geom.getAttribute("position") as THREE.BufferAttribute;
+          const alphaAttr = geom.getAttribute("aAlpha") as THREE.BufferAttribute;
+          const posArray = posAttr.array as Float32Array;
+          const alphaArray = alphaAttr.array as Float32Array;
+
           const len = body.trail.length;
-          if (len < 300) {
-            // Buffer not full yet — just use sequential
-            for (let i = 0; i < len; i++) ordered.push(body.trail[i]);
+          let writeIdx = 0;
+
+          if (len < MAX_TRAIL) {
+            // Buffer not full — sequential
+            for (let i = 0; i < len; i++) {
+              const p = body.trail[i];
+              posArray[writeIdx * 3] = p.x;
+              posArray[writeIdx * 3 + 1] = p.y;
+              posArray[writeIdx * 3 + 2] = p.z;
+              alphaArray[writeIdx] = (i / len) * 0.6; // 0 at tail → 0.6 at head
+              writeIdx++;
+            }
           } else {
             // Ring buffer — read from trailIndex (oldest) forward
             for (let i = 0; i < len; i++) {
-              ordered.push(body.trail[(body.trailIndex + i) % len]);
+              const p = body.trail[(body.trailIndex + i) % len];
+              posArray[writeIdx * 3] = p.x;
+              posArray[writeIdx * 3 + 1] = p.y;
+              posArray[writeIdx * 3 + 2] = p.z;
+              alphaArray[writeIdx] = (i / len) * 0.6;
+              writeIdx++;
             }
           }
-          const geom = new THREE.BufferGeometry().setFromPoints(ordered);
-          line.geometry.dispose();
-          line.geometry = geom;
+
+          posAttr.needsUpdate = true;
+          alphaAttr.needsUpdate = true;
+          geom.setDrawRange(0, writeIdx);
         }
       }
     }
 
-    // Update flash effects
-    for (let i = this.flashEffects.length - 1; i >= 0; i--) {
-      const flash = this.flashEffects[i];
-      flash.age += dt;
-      const progress = flash.age / 0.5; // 0.5s duration
+    // Update collision particle effects
+    for (let i = this.collisionEffects.length - 1; i >= 0; i--) {
+      const effect = this.collisionEffects[i];
+      effect.age += dt;
+      effect.bloomDecay = Math.max(0, effect.bloomDecay - dt);
+
+      const progress = effect.age / 1.0; // 1s duration
       if (progress >= 1) {
-        this.group.remove(flash.mesh);
-        this.flashEffects.splice(i, 1);
+        this.group.remove(effect.mesh);
+        effect.mesh.geometry.dispose();
+        (effect.mesh.material as THREE.PointsMaterial).dispose();
+        this.collisionEffects.splice(i, 1);
       } else {
-        const scale = 1 + progress * 15;
-        flash.mesh.scale.setScalar(scale);
-        (flash.mesh.material as THREE.MeshBasicMaterial).opacity = (1 - progress) * 0.9;
+        const posAttr = effect.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+        const posArray = posAttr.array as Float32Array;
+
+        for (let j = 0; j < PARTICLE_COUNT; j++) {
+          const p = effect.particles[j];
+          // Decelerate
+          p.velocity.multiplyScalar(0.96);
+          p.position.addScaledVector(p.velocity, dt);
+
+          posArray[j * 3] = p.position.x;
+          posArray[j * 3 + 1] = p.position.y;
+          posArray[j * 3 + 2] = p.position.z;
+        }
+
+        posAttr.needsUpdate = true;
+
+        // Fade opacity
+        const mat = effect.mesh.material as THREE.PointsMaterial;
+        const bloomBoost = effect.bloomDecay > 0 ? 1.5 : 0;
+        mat.opacity = (1 - progress) * (1.0 + bloomBoost);
       }
     }
 
