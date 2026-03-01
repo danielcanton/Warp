@@ -17,6 +17,7 @@ import { MergerScene } from "./scenes/merger/MergerScene";
 import { SandboxScene } from "./scenes/sandbox/SandboxScene";
 import { BlackHoleScene } from "./scenes/blackhole/BlackHoleScene";
 import { NBodyScene } from "./scenes/nbody/NBodyScene";
+import { CosmologyScene } from "./scenes/cosmology/CosmologyScene";
 import type { SceneContext } from "./scenes/types";
 import { initViewMode, setViewMode, onViewModeChange } from "./lib/view-mode";
 import type { ViewMode } from "./lib/view-mode";
@@ -111,6 +112,7 @@ sceneManager.register(new MergerScene());
 sceneManager.register(new SandboxScene());
 sceneManager.register(new BlackHoleScene());
 sceneManager.register(new NBodyScene());
+sceneManager.register(new CosmologyScene());
 
 // ─── URL Parameters: embed mode & scene selection ────────────────────
 const params = new URLSearchParams(window.location.search);
