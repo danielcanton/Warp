@@ -185,11 +185,31 @@ export class BlackHoleScene implements Scene {
   }
 
   private async startCameraFeed() {
+    const hint = this.panelEl?.querySelector(".bh-hint");
+
+    // Check for camera API availability (requires HTTPS or localhost)
+    if (!navigator.mediaDevices?.getUserMedia) {
+      console.warn("AR: getUserMedia not available (requires HTTPS)");
+      if (this.arCheckbox) this.arCheckbox.checked = false;
+      if (hint) {
+        hint.textContent = "Camera requires HTTPS connection";
+        setTimeout(() => { hint.textContent = "Drag to orbit. Scroll to zoom."; }, 4000);
+      }
+      return;
+    }
+
     try {
       // Try rear camera first (mobile), fall back to any camera (laptop)
-      this.cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      }).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
+      console.log("AR: requesting camera...");
+      try {
+        this.cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+        });
+      } catch {
+        console.log("AR: rear camera failed, trying any camera...");
+        this.cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+      console.log("AR: camera stream acquired", this.cameraStream.getVideoTracks()[0]?.label);
 
       this.videoElement = document.createElement("video");
       this.videoElement.srcObject = this.cameraStream;
@@ -205,6 +225,7 @@ export class BlackHoleScene implements Scene {
           this.videoElement!.addEventListener("loadeddata", () => resolve(), { once: true });
         }
       });
+      console.log("AR: video ready", this.videoElement.videoWidth, "x", this.videoElement.videoHeight);
 
       this.videoTexture = new THREE.VideoTexture(this.videoElement);
       this.videoTexture.minFilter = THREE.LinearFilter;
@@ -214,13 +235,12 @@ export class BlackHoleScene implements Scene {
       this.bhMaterial.uniforms.uBackground.value = this.videoTexture;
       this.bhMaterial.uniforms.uUseCamera.value = 1.0;
       this.arModeActive = true;
+      console.log("AR: active");
     } catch (err) {
       console.warn("AR camera failed:", err);
       if (this.arCheckbox) this.arCheckbox.checked = false;
       this.arModeActive = false;
 
-      // Show brief hint so user knows why it failed
-      const hint = this.panelEl?.querySelector(".bh-hint");
       if (hint) {
         const msg = (err as Error)?.name === "NotAllowedError"
           ? "Camera permission denied — check browser settings"
