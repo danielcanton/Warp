@@ -70,4 +70,9 @@ export class SceneManager {
   get currentId(): string | null {
     return this.activeScene?.id ?? null;
   }
+
+  /** Iterate registered scenes (for building mobile tabs, etc.) */
+  getScenes(): IterableIterator<import("../scenes/types").Scene> {
+    return this.scenes.values();
+  }
 }

@@ -163,6 +163,171 @@ document.addEventListener("click", (e) => {
 // Sync UI when mode changes programmatically
 onViewModeChange(updateModeUI);
 
+// ─── Mobile Bar & Menu ───────────────────────────────────────────────
+
+if (window.innerWidth <= 768) {
+  const mobileBar = document.getElementById("mobile-bar")!;
+  const mobileTabs = document.getElementById("mobile-tabs")!;
+  const hamburgerBtn = document.getElementById("mobile-hamburger")!;
+  const mobileMenu = document.getElementById("mobile-menu")!;
+  const menuGrid = mobileMenu.querySelector(".mobile-menu-grid")!;
+  const backdrop = document.getElementById("mobile-menu-backdrop")!;
+  const infoSheet = document.getElementById("mobile-info-sheet")!;
+  const sheetHandle = infoSheet.querySelector(".sheet-handle")!;
+
+  // Show mobile bar
+  mobileBar.style.display = "flex";
+
+  // ── Populate scene tabs ──
+  function buildMobileTabs() {
+    mobileTabs.innerHTML = "";
+    for (const s of sceneManager.getScenes()) {
+      const btn = document.createElement("button");
+      btn.className = "mobile-tab" + (sceneManager.currentId === s.id ? " active" : "");
+      btn.textContent = s.label;
+      btn.dataset.sceneId = s.id;
+      btn.addEventListener("click", () => {
+        sceneManager.switchScene(s.id);
+        mobileTabs.querySelectorAll(".mobile-tab").forEach((t) =>
+          t.classList.toggle("active", (t as HTMLElement).dataset.sceneId === s.id)
+        );
+        // Show info sheet only in merger scene
+        if (s.id === "merger") {
+          infoSheet.classList.add("sheet-peek");
+        } else {
+          infoSheet.classList.remove("sheet-peek", "sheet-expanded");
+        }
+      });
+      mobileTabs.appendChild(btn);
+    }
+  }
+  buildMobileTabs();
+
+  // ── Hamburger toggle ──
+  function closeMenu() {
+    mobileMenu.classList.remove("mobile-menu-open");
+    backdrop.classList.remove("visible");
+  }
+
+  hamburgerBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = mobileMenu.classList.toggle("mobile-menu-open");
+    backdrop.classList.toggle("visible", isOpen);
+  });
+  backdrop.addEventListener("click", closeMenu);
+
+  // ── Menu items ──
+  const menuItems: { icon: string; label: string; action: () => void }[] = [
+    {
+      icon: "▶", label: "Play",
+      action: () => { document.getElementById("play-btn")?.click(); closeMenu(); },
+    },
+    {
+      icon: "⏲", label: "Speed",
+      action: () => { document.getElementById("speed-btn")?.click(); closeMenu(); },
+    },
+    {
+      icon: "☰", label: "Events",
+      action: () => { document.getElementById("events-toggle")?.click(); closeMenu(); },
+    },
+    {
+      icon: "🗺", label: "Map",
+      action: () => { document.getElementById("map-toggle")?.click(); closeMenu(); },
+    },
+    {
+      icon: "📷", label: "Screenshot",
+      action: () => { document.getElementById("screenshot-btn")?.click(); closeMenu(); },
+    },
+    {
+      icon: "🎯", label: "Tours",
+      action: () => { document.getElementById("tour-toggle")?.click(); closeMenu(); },
+    },
+  ];
+
+  for (const item of menuItems) {
+    const btn = document.createElement("button");
+    btn.className = "mobile-menu-item";
+    btn.innerHTML = `<span class="menu-icon">${item.icon}</span>${item.label}`;
+    btn.addEventListener("click", item.action);
+    menuGrid.appendChild(btn);
+  }
+
+  // ── Info sheet gesture ──
+  let sheetStartY = 0;
+  let sheetStartTranslate = 0;
+  let isDraggingSheet = false;
+
+  function getSheetTranslateY(): number {
+    const style = getComputedStyle(infoSheet);
+    const matrix = new DOMMatrix(style.transform);
+    return matrix.m42;
+  }
+
+  sheetHandle.addEventListener("touchstart", (e) => {
+    const touch = (e as TouchEvent).touches[0];
+    sheetStartY = touch.clientY;
+    sheetStartTranslate = getSheetTranslateY();
+    isDraggingSheet = true;
+    infoSheet.style.transition = "none";
+  });
+
+  sheetHandle.addEventListener("touchmove", (e) => {
+    if (!isDraggingSheet) return;
+    e.preventDefault();
+    const touch = (e as TouchEvent).touches[0];
+    const dy = touch.clientY - sheetStartY;
+    const newY = Math.max(0, sheetStartTranslate + dy);
+    infoSheet.style.transform = `translateY(${newY}px)`;
+  }, { passive: false });
+
+  sheetHandle.addEventListener("touchend", (e) => {
+    if (!isDraggingSheet) return;
+    isDraggingSheet = false;
+    infoSheet.style.transition = "";
+    infoSheet.style.transform = "";
+
+    const touch = (e as TouchEvent).changedTouches[0];
+    const dy = touch.clientY - sheetStartY;
+
+    if (infoSheet.classList.contains("sheet-expanded")) {
+      // Swiping down from expanded → peek or hide
+      if (dy > 60) {
+        infoSheet.classList.remove("sheet-expanded");
+        infoSheet.classList.add("sheet-peek");
+      } else {
+        // snap back to expanded
+        infoSheet.classList.add("sheet-expanded");
+      }
+    } else if (infoSheet.classList.contains("sheet-peek")) {
+      // Swiping up from peek → expanded
+      if (dy < -40) {
+        infoSheet.classList.remove("sheet-peek");
+        infoSheet.classList.add("sheet-expanded");
+      } else if (dy > 40) {
+        // Swiping down from peek → hide
+        infoSheet.classList.remove("sheet-peek");
+      }
+    }
+  });
+
+  // Tap on handle toggles peek ↔ expanded
+  sheetHandle.addEventListener("click", () => {
+    if (infoSheet.classList.contains("sheet-expanded")) {
+      infoSheet.classList.remove("sheet-expanded");
+      infoSheet.classList.add("sheet-peek");
+    } else if (infoSheet.classList.contains("sheet-peek")) {
+      infoSheet.classList.remove("sheet-peek");
+      infoSheet.classList.add("sheet-expanded");
+    }
+  });
+
+  // Show sheet in peek mode if starting on merger scene
+  if (startScene === "merger") {
+    // Delay slightly to let MergerScene populate
+    requestAnimationFrame(() => infoSheet.classList.add("sheet-peek"));
+  }
+}
+
 // ─── Render Loop ─────────────────────────────────────────────────────
 
 const clock = new THREE.Clock();

@@ -135,6 +135,12 @@ export class MergerScene implements Scene {
   private exportBtnLabel!: HTMLElement;
   private exportToast!: HTMLElement;
 
+  // Mobile info sheet elements
+  private sheetEventName: HTMLElement | null = null;
+  private sheetTypeBadge: HTMLElement | null = null;
+  private sheetFullContent: HTMLElement | null = null;
+  private mobileInfoSheet: HTMLElement | null = null;
+
   // Filter/sort state
   private activeTypeFilter = "all";
   private activeSortKey = "snr";
@@ -241,6 +247,12 @@ export class MergerScene implements Scene {
       this.tourPrevBtn = document.getElementById("tour-prev-btn") as HTMLButtonElement;
       this.tourNextBtn = document.getElementById("tour-next-btn") as HTMLButtonElement;
       this.tourExitBtn = document.getElementById("tour-exit-btn")!;
+
+      // Mobile info sheet (may not exist on desktop)
+      this.sheetEventName = document.getElementById("sheet-event-name");
+      this.sheetTypeBadge = document.getElementById("sheet-type-badge");
+      this.sheetFullContent = document.querySelector(".sheet-full-content");
+      this.mobileInfoSheet = document.getElementById("mobile-info-sheet");
     }
 
     // ─── Build 3D objects (only first time — re-add on subsequent inits) ───
@@ -801,6 +813,49 @@ export class MergerScene implements Scene {
     }
   }
 
+  /** Update the mobile info sheet with current event data */
+  private updateMobileSheet(event: GWEvent, type: string): void {
+    if (!this.sheetEventName) return;
+
+    this.sheetEventName.textContent = event.commonName;
+
+    if (this.sheetTypeBadge) {
+      const typeLabels: Record<string, string> = {
+        BBH: "BBH", BNS: "BNS", NSBH: "NSBH",
+      };
+      this.sheetTypeBadge.textContent = typeLabels[type] ?? type;
+      this.sheetTypeBadge.className = `type-badge ${type.toLowerCase()}`;
+    }
+
+    if (this.sheetFullContent) {
+      const radiated = event.final_mass_source > 0
+        ? (event.mass_1_source + event.mass_2_source - event.final_mass_source)
+        : 0;
+
+      const rows: [string, string][] = [
+        ["Masses", `${event.mass_1_source.toFixed(1)} + ${event.mass_2_source.toFixed(1)} M\u2609`],
+        ["Distance", `${event.luminosity_distance.toFixed(0)} Mpc`],
+        ["Chirp mass", event.chirp_mass_source ? `${event.chirp_mass_source.toFixed(1)} M\u2609` : "\u2014"],
+        ["Final mass", event.final_mass_source ? `${event.final_mass_source.toFixed(1)} M\u2609` : "\u2014"],
+        ["Energy radiated", radiated > 0 ? `${radiated.toFixed(1)} M\u2609` : "\u2014"],
+        ["Eff. spin", event.chi_eff != null ? (event.chi_eff >= 0 ? "+" : "") + event.chi_eff.toFixed(2) : "\u2014"],
+        ["Redshift", event.redshift?.toFixed(3) ?? "\u2014"],
+        ["SNR", event.network_matched_filter_snr.toFixed(1)],
+        ["Confidence", event.p_astro > 0 ? (event.p_astro >= 0.99 ? "> 0.99" : event.p_astro.toFixed(2)) : "\u2014"],
+      ];
+
+      this.sheetFullContent.innerHTML = rows
+        .map(([p, v]) => `<div class="sheet-row"><span class="sheet-param">${p}</span><span class="sheet-value">${v}</span></div>`)
+        .join("");
+    }
+
+    // Auto-peek on new event
+    if (this.mobileInfoSheet && window.innerWidth <= 768) {
+      this.mobileInfoSheet.classList.remove("sheet-expanded");
+      this.mobileInfoSheet.classList.add("sheet-peek");
+    }
+  }
+
   // ─── Event selection ────────────────────────────────────────────────
 
   private selectEvent(event: GWEvent) {
@@ -867,6 +922,9 @@ export class MergerScene implements Scene {
 
     // Update equations with current event values
     this.ensureEquationsSection(mode);
+
+    // ─── Populate mobile info sheet ───
+    this.updateMobileSheet(event, type);
 
     document.querySelectorAll(".event-item").forEach((el) => {
       el.classList.toggle("active", el.getAttribute("data-name") === event.commonName);

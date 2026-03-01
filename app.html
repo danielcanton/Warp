@@ -1181,6 +1181,218 @@
 
         /* Loading screen */
         .loading-title { font-size: 20px; }
+
+        /* ── Hide desktop elements replaced by mobile bar ── */
+        #scene-selector { display: none !important; }
+        #ui { display: none !important; }
+        #event-info { display: none !important; }
+
+        /* ── Mobile Nav Bar ── */
+        #mobile-bar {
+          position: fixed;
+          bottom: 0; left: 0; right: 0;
+          height: 48px;
+          padding-bottom: env(safe-area-inset-bottom, 0px);
+          z-index: 40;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: rgba(10, 10, 20, 0.85);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        #mobile-tabs {
+          flex: 1;
+          display: flex;
+          justify-content: center;
+          gap: 2px;
+          padding: 0 8px;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+        }
+        #mobile-tabs::-webkit-scrollbar { display: none; }
+        .mobile-tab {
+          padding: 6px 10px;
+          font-size: 10px;
+          font-weight: 500;
+          letter-spacing: 0.04em;
+          color: rgba(255, 255, 255, 0.45);
+          background: none;
+          border: 1px solid transparent;
+          border-radius: 8px;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: all 0.15s ease;
+          font-family: inherit;
+        }
+        .mobile-tab.active {
+          color: #a5b4fc;
+          background: rgba(99, 102, 241, 0.15);
+          border-color: rgba(99, 102, 241, 0.3);
+        }
+        .mobile-ham-btn {
+          width: 44px; height: 44px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 22px;
+          color: rgba(255, 255, 255, 0.6);
+          background: none; border: none;
+          cursor: pointer;
+          flex-shrink: 0;
+          font-family: inherit;
+        }
+
+        /* ── Hamburger Menu ── */
+        #mobile-menu {
+          position: fixed;
+          bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+          right: 12px;
+          z-index: 41;
+          display: none;
+          background: rgba(10, 10, 20, 0.92);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 14px;
+          padding: 10px;
+        }
+        #mobile-menu.mobile-menu-open { display: block; }
+        .mobile-menu-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 4px;
+        }
+        .mobile-menu-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+          padding: 10px 14px;
+          font-size: 10px;
+          font-weight: 500;
+          color: rgba(255, 255, 255, 0.6);
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          border-radius: 10px;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: all 0.15s ease;
+          font-family: inherit;
+          min-width: 72px;
+        }
+        .mobile-menu-item:active {
+          background: rgba(99, 102, 241, 0.15);
+        }
+        .mobile-menu-item .menu-icon {
+          font-size: 18px;
+          line-height: 1;
+        }
+        #mobile-menu-backdrop {
+          display: none;
+          position: fixed;
+          inset: 0;
+          z-index: 39;
+        }
+        #mobile-menu-backdrop.visible { display: block; }
+
+        /* ── Time controls above mobile bar ── */
+        #time-controls {
+          bottom: calc(48px + env(safe-area-inset-bottom, 0px)) !important;
+          left: 0 !important; right: 0 !important;
+          border-radius: 0 !important;
+          padding: 6px 12px !important;
+          height: 36px;
+          box-sizing: border-box;
+          z-index: 38;
+        }
+        .ctrl-btn { width: 28px !important; height: 28px !important; font-size: 12px !important; }
+
+        /* ── Info Sheet ── */
+        #mobile-info-sheet {
+          position: fixed;
+          bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+          left: 0; right: 0;
+          z-index: 37;
+          background: rgba(10, 10, 20, 0.92);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 16px 16px 0 0;
+          transform: translateY(100%);
+          transition: transform 0.3s ease-out;
+          max-height: 60vh;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+        }
+        #mobile-info-sheet.sheet-peek {
+          transform: translateY(calc(100% - 44px));
+        }
+        #mobile-info-sheet.sheet-expanded {
+          transform: translateY(0);
+        }
+        .sheet-handle {
+          height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          flex-shrink: 0;
+        }
+        .sheet-grip {
+          width: 36px; height: 4px;
+          border-radius: 2px;
+          background: rgba(255, 255, 255, 0.25);
+        }
+        .sheet-peek-content {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 0 16px 10px;
+          font-size: 14px;
+          font-weight: 600;
+          color: rgba(255, 255, 255, 0.85);
+        }
+        .sheet-peek-content .type-badge {
+          font-size: 9px;
+          margin-bottom: 0;
+        }
+        .sheet-full-content {
+          padding: 0 16px 16px;
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.6);
+          line-height: 1.6;
+        }
+        .sheet-full-content .sheet-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 4px 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+        .sheet-full-content .sheet-param {
+          color: rgba(255, 255, 255, 0.4);
+        }
+        .sheet-full-content .sheet-value {
+          color: rgba(255, 255, 255, 0.8);
+          font-weight: 500;
+        }
+
+        /* ── Scene panels above mobile bar ── */
+        #sandbox-panel,
+        #blackhole-panel,
+        #nbody-panel,
+        #cosmology-panel {
+          bottom: calc(48px + env(safe-area-inset-bottom, 0px)) !important;
+        }
+
+        /* ── Event list adjusted for mobile bar ── */
+        #event-list { bottom: calc(48px + env(safe-area-inset-bottom, 0px)) !important; }
+
+        /* ── Tour + Help above bar ── */
+        #tour-menu { bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important; }
+        #tour-overlay { bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important; }
+        #help-overlay { bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important; }
+        #map-legend { bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important; }
       }
 
 
@@ -1757,42 +1969,23 @@
 
       /* ─── Mobile overrides for new panels ─── */
       @media (max-width: 768px) {
-        #scene-selector {
-          top: auto;
-          bottom: 84px;
-          left: 12px;
-          right: 12px;
-          transform: none;
-          justify-content: center;
-          border-radius: 14px;
-          padding: 4px 8px;
-          z-index: 25;
-        }
-        .scene-tab {
-          padding: 5px 10px;
-          font-size: 10px;
-          white-space: nowrap;
-        }
-        #view-mode-dropdown {
-          top: auto;
-          bottom: 38px;
-        }
+        #scene-selector { display: none !important; }
         #sandbox-panel {
-          top: auto; bottom: 134px;
+          top: auto; bottom: calc(48px + env(safe-area-inset-bottom, 0px));
           left: 12px; right: 12px;
           max-width: none; min-width: 0;
           border-radius: 14px;
           padding: 12px 16px;
         }
         #blackhole-panel {
-          top: auto; bottom: 134px;
+          top: auto; bottom: calc(48px + env(safe-area-inset-bottom, 0px));
           left: 12px; right: 12px;
           max-width: none; min-width: 0;
           border-radius: 14px;
           padding: 12px 16px;
         }
         #nbody-panel {
-          top: auto; bottom: 134px;
+          top: auto; bottom: calc(48px + env(safe-area-inset-bottom, 0px));
           left: 12px; right: 12px;
           max-width: none; min-width: 0;
           border-radius: 14px;
@@ -1805,7 +1998,7 @@
         #nbody-panel.nb-collapsed .nb-collapsible { display: none; }
         #nbody-panel .nb-info { font-size: 9px; }
         #cosmology-panel {
-          top: auto; bottom: 134px;
+          top: auto; bottom: calc(48px + env(safe-area-inset-bottom, 0px));
           left: 12px; right: 12px;
           max-width: none; min-width: 0;
           border-radius: 14px;
@@ -1815,6 +2008,79 @@
         #cosmology-panel .cos-expand-btn { display: inline-block; }
         #cosmology-panel .cos-section { margin-bottom: 6px; padding-bottom: 6px; }
         #cosmology-panel.cos-collapsed .cos-collapsible { display: none; }
+      }
+
+      /* ─── Desktop: hide mobile-only elements ─── */
+      #mobile-bar,
+      #mobile-menu,
+      #mobile-menu-backdrop,
+      #mobile-info-sheet { display: none; }
+
+      /* ─── Landscape sidebar layout ─── */
+      @media (max-width: 768px) and (orientation: landscape) {
+        #mobile-bar {
+          bottom: auto; top: 0; left: 0; right: auto;
+          width: 48px; height: 100%;
+          flex-direction: column;
+          padding-top: env(safe-area-inset-top, 0px);
+          padding-bottom: env(safe-area-inset-bottom, 0px);
+          border-top: none;
+          border-right: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        #mobile-tabs {
+          flex-direction: column;
+          gap: 2px;
+          padding: 8px 0;
+          overflow-x: visible;
+          overflow-y: auto;
+        }
+        .mobile-tab {
+          font-size: 9px;
+          padding: 8px 4px;
+          writing-mode: horizontal-tb;
+        }
+        .mobile-ham-btn {
+          margin-top: auto;
+        }
+        #mobile-menu {
+          bottom: 12px;
+          left: 56px;
+          right: auto;
+        }
+        #time-controls {
+          left: 48px !important; right: 0 !important;
+          bottom: 0 !important;
+          height: 36px;
+          border-radius: 0 !important;
+        }
+        #mobile-info-sheet {
+          bottom: auto; top: 0;
+          left: 48px; right: auto;
+          width: 280px; height: 100%;
+          max-height: 100vh;
+          border-radius: 0 16px 16px 0;
+          border-top: none;
+          border-right: 1px solid rgba(255, 255, 255, 0.08);
+          transform: translateX(-100%);
+        }
+        #mobile-info-sheet.sheet-peek {
+          transform: translateX(calc(-100% + 44px));
+        }
+        #mobile-info-sheet.sheet-expanded {
+          transform: translateX(0);
+        }
+        #sandbox-panel,
+        #blackhole-panel,
+        #nbody-panel,
+        #cosmology-panel {
+          left: 60px !important; bottom: 12px !important; right: 12px !important;
+        }
+        #event-list {
+          left: 60px !important;
+        }
+        #help-overlay {
+          left: 60px !important;
+        }
       }
     </style>
   </head>
@@ -2066,6 +2332,30 @@
       <button class="ui-btn" id="tour-toggle" title="Guided tours (T)">Tours</button>
       <button class="ui-btn mobile-only" id="events-toggle">Events</button>
       <button class="ui-btn" id="vr-button" title="Enter VR" style="display:none;">Enter VR</button>
+    </div>
+
+    <!-- Mobile Nav Bar -->
+    <div id="mobile-bar">
+      <div id="mobile-tabs"></div>
+      <button id="mobile-hamburger" class="mobile-ham-btn">&equiv;</button>
+    </div>
+
+    <!-- Mobile Hamburger Menu (popover above bar) -->
+    <div id="mobile-menu">
+      <div class="mobile-menu-grid">
+        <!-- Populated by JS: Play, Speed, Events, Tours, Screenshot, Map, VR -->
+      </div>
+    </div>
+    <div id="mobile-menu-backdrop"></div>
+
+    <!-- Mobile Info Sheet (swipe up) -->
+    <div id="mobile-info-sheet">
+      <div class="sheet-handle"><div class="sheet-grip"></div></div>
+      <div class="sheet-peek-content">
+        <span id="sheet-event-name"></span>
+        <span id="sheet-type-badge" class="type-badge"></span>
+      </div>
+      <div class="sheet-full-content"></div>
     </div>
 
     <!-- Onboarding Hints (first visit) -->
