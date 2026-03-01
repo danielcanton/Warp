@@ -210,30 +210,8 @@ void main() {
     float ringGlow = exp(-pow((closest - photonSphere) / (rs * 0.3), 2.0)) * 0.8;
 
     if (uUseCamera > 0.5) {
-      // AR mode: sample camera feed with gravitational lensing
-      // Map the lensed ray direction back to screen-space UV
-      vec3 localDir = (uInvCameraMatrix * vec4(vel, 0.0)).xyz;
-      float halfFovAR = uFov * 0.5;
-      float screenAspect = uResolution.x / uResolution.y;
-
-      // Project lensed direction to UV — fallback to original vUv if ray bends behind camera
-      vec2 bgUV;
-      if (localDir.z < 0.0) {
-        vec2 projected = localDir.xy / (-localDir.z * tan(halfFovAR));
-        projected.x /= screenAspect;
-        bgUV = clamp(projected * 0.5 + 0.5, 0.0, 1.0);
-      } else {
-        bgUV = vUv;
-      }
-
-      // Flip for front-facing camera
-      bgUV.y = 1.0 - bgUV.y;
-      bgUV.x = 1.0 - bgUV.x;
-
-      vec3 camColor = texture2D(uBackground, bgUV).rgb;
-      // DEBUG: show UV as color so we can tell if texture or UV is the problem
-      // Red = bgUV.x, Green = bgUV.y, Blue = texture brightness
-      finalColor += vec3(bgUV.x, bgUV.y, camColor.r + camColor.g + camColor.b);
+      // DEBUG: hardcoded magenta to test if this code path is reached at all
+      finalColor = vec3(1.0, 0.0, 1.0);
       usedCamera = true;
     } else {
       // Standard mode: procedural star field lensed through curved spacetime
