@@ -236,7 +236,11 @@ void main() {
     // Gamma correction
     finalColor = pow(finalColor, vec3(1.0 / 2.2));
   }
-  // Camera pixels skip tone mapping — they're already display-ready sRGB
+  // DEBUG: override EVERYTHING when AR is on — if screen turns magenta, uniform works
+  if (uUseCamera > 0.5) {
+    gl_FragColor = vec4(1.0, 0.0, 1.0, 1.0);
+    return;
+  }
 
   gl_FragColor = vec4(finalColor, 1.0);
 }
