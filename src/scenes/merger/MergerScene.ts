@@ -12,6 +12,7 @@ import { GWAudioEngine } from "../../lib/audio";
 import { BinarySystem } from "../../lib/binary";
 import { UniverseMap } from "../../lib/universe-map";
 import { VRPanel } from "../../lib/VRPanel";
+import { VRTutorial } from "../../lib/vr-tutorial";
 import { getViewMode, onViewModeChange, type ViewMode } from "../../lib/view-mode";
 import { performExport } from "../../lib/export";
 import { mergerEquations } from "../../lib/equation-data";
@@ -175,8 +176,7 @@ export class MergerScene implements Scene {
 
   // VR panel
   private vrPanel: VRPanel | null = null;
-  private vrTutorial: VRPanel | null = null;
-  private vrTutorialTimeout: ReturnType<typeof setTimeout> | null = null;
+  private vrTutorial: VRTutorial | null = null;
 
   private unsubViewMode: (() => void) | null = null;
 
@@ -428,8 +428,8 @@ export class MergerScene implements Scene {
 
     xr.registerPanel(this.vrPanel);
 
-    // ─── VR Tutorial panel (informational, not registered for ray interaction) ───
-    this.vrTutorial = new VRPanel(1.0, 0.6);
+    // ─── VR Tutorial (shared across all scenes) ───
+    this.vrTutorial = new VRTutorial();
 
     xr.onSessionStart = () => {
       if (this.vrPanel) {
@@ -438,16 +438,12 @@ export class MergerScene implements Scene {
         ctx.scene.add(this.vrPanel.mesh);
       }
       // Delay tutorial until XR camera has a valid pose (needs at least 1 frame)
-      setTimeout(() => this.showVRTutorial(), 200);
+      setTimeout(() => this.vrTutorial?.show(ctx.camera, ctx.scene), 200);
     };
 
     // Menu press → dismiss tutorial or toggle panel
     xr.onMenuPress = () => {
-      // If tutorial is visible, dismiss it instead of toggling menu
-      if (this.vrTutorial?.visible) {
-        this.dismissVRTutorial();
-        return;
-      }
+      if (this.vrTutorial?.dismiss()) return;
       if (!this.vrPanel) return;
       this.vrPanel.toggle();
       if (this.vrPanel.visible) {
@@ -460,15 +456,7 @@ export class MergerScene implements Scene {
       if (this.vrPanel) {
         ctx.scene.remove(this.vrPanel.mesh);
       }
-      // Clean up tutorial
-      if (this.vrTutorialTimeout) {
-        clearTimeout(this.vrTutorialTimeout);
-        this.vrTutorialTimeout = null;
-      }
-      if (this.vrTutorial) {
-        this.vrTutorial.hide();
-        ctx.scene.remove(this.vrTutorial.mesh);
-      }
+      this.vrTutorial?.hide(ctx.scene);
     };
 
     // If already in VR (scene switch mid-session), add to scene but hidden
@@ -476,60 +464,6 @@ export class MergerScene implements Scene {
       this.vrPanel.hide();
       ctx.scene.add(this.vrPanel.mesh);
     }
-  }
-
-  private showVRTutorial() {
-    if (!this.vrTutorial) return;
-
-    const seen = localStorage.getItem("warplab-vr-tutorial-seen") === "1";
-
-    if (seen) {
-      // Returning user — short reminder
-      this.vrTutorial.setTitle("Welcome to VR!");
-      this.vrTutorial.setLines(["X or L-stick click \u2192 Menu"]);
-    } else {
-      // First time — full tutorial
-      this.vrTutorial.setTitle("Welcome to VR!");
-      this.vrTutorial.setLines([
-        "Left stick: Move around",
-        "Right stick: Snap turn",
-        "X button or L-stick click: Toggle menu",
-        "Trigger: Select / Teleport",
-      ]);
-    }
-
-    this.ctx.camera.updateWorldMatrix(true, false);
-    this.vrTutorial.show();
-    this.ctx.scene.add(this.vrTutorial.mesh);
-    this.vrTutorial.positionInFront(this.ctx.camera, 2, 0);
-
-    const timeout = seen ? 3000 : 8000;
-    this.vrTutorialTimeout = setTimeout(() => {
-      this.dismissVRTutorial();
-      if (!seen) {
-        localStorage.setItem("warplab-vr-tutorial-seen", "1");
-      }
-    }, timeout);
-  }
-
-  private dismissVRTutorial() {
-    if (!this.vrTutorial) return;
-    if (this.vrTutorialTimeout) {
-      clearTimeout(this.vrTutorialTimeout);
-      this.vrTutorialTimeout = null;
-    }
-    if (!this.vrTutorial.visible) return;
-
-    // Mark as seen on early dismiss too
-    localStorage.setItem("warplab-vr-tutorial-seen", "1");
-
-    this.vrTutorial.hide();
-    // Remove from scene after a brief delay
-    setTimeout(() => {
-      if (this.vrTutorial) {
-        this.ctx.scene.remove(this.vrTutorial.mesh);
-      }
-    }, 100);
   }
 
   private buildSceneObjects(scene: THREE.Scene) {
@@ -1543,13 +1477,8 @@ export class MergerScene implements Scene {
     }
 
     // Clean up VR tutorial
-    if (this.vrTutorialTimeout) {
-      clearTimeout(this.vrTutorialTimeout);
-      this.vrTutorialTimeout = null;
-    }
     if (this.vrTutorial) {
-      this.ctx.scene.remove(this.vrTutorial.mesh);
-      this.vrTutorial.dispose();
+      this.vrTutorial.dispose(this.ctx.scene);
       this.vrTutorial = null;
     }
 

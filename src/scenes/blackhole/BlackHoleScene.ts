@@ -4,6 +4,7 @@ import { getViewMode, onViewModeChange, type ViewMode } from "../../lib/view-mod
 import { blackholeEquations } from "../../lib/equation-data";
 import { buildEquationsSection, updateEquationValues, removeEquationsSection } from "../../lib/equations";
 import { VRPanel } from "../../lib/VRPanel";
+import { VRTutorial } from "../../lib/vr-tutorial";
 import vertexShader from "../../shaders/blackhole.vert.glsl?raw";
 import fragmentShader from "../../shaders/blackhole.frag.glsl?raw";
 import vrVertexShader from "../../shaders/blackhole-vr.vert.glsl?raw";
@@ -24,6 +25,7 @@ export class BlackHoleScene implements Scene {
   private vrSphere!: THREE.Mesh;
   private vrMaterial!: THREE.ShaderMaterial;
   private vrPanel: VRPanel | null = null;
+  private vrTutorial: VRTutorial | null = null;
   private wasPresenting = false;
 
   // Interaction state
@@ -301,7 +303,10 @@ export class BlackHoleScene implements Scene {
       }
     };
 
+    this.vrTutorial = new VRTutorial();
+
     xr.onMenuPress = () => {
+      if (this.vrTutorial?.dismiss()) return;
       if (!this.vrPanel) return;
       this.vrPanel.toggle();
       if (this.vrPanel.visible) {
@@ -315,12 +320,14 @@ export class BlackHoleScene implements Scene {
         this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
         ctx.scene.add(this.vrPanel.mesh);
       }
+      setTimeout(() => this.vrTutorial?.show(ctx.camera, ctx.scene), 200);
     };
 
     xr.onSessionEnd = () => {
       if (this.vrPanel) {
         ctx.scene.remove(this.vrPanel.mesh);
       }
+      this.vrTutorial?.hide(ctx.scene);
     };
 
     // If already in VR (scene switch mid-session), show panel immediately
@@ -790,6 +797,10 @@ export class BlackHoleScene implements Scene {
       this.ctx.xrManager.onMenuPress = null;
       this.ctx.xrManager.onControllerSelectStart = null;
       this.ctx.xrManager.onControllerSelectEnd = null;
+    }
+    if (this.vrTutorial) {
+      this.vrTutorial.dispose(this.ctx.scene);
+      this.vrTutorial = null;
     }
 
     // Clean up passthrough state

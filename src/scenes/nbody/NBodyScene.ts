@@ -10,6 +10,7 @@ import {
   makeTrailMaterial,
 } from "../../shaders/fresnel";
 import { VRPanel } from "../../lib/VRPanel";
+import { VRTutorial } from "../../lib/vr-tutorial";
 
 // ─── Collision particle system ─────────────────────────────────────
 const PARTICLE_COUNT = 50;
@@ -42,6 +43,7 @@ export class NBodyScene implements Scene {
   private gridHelper!: THREE.GridHelper;
   private panel!: NBodyPanel;
   private vrPanel: VRPanel | null = null;
+  private vrTutorial: VRTutorial | null = null;
   private vrPlacing = false;
   private vrPlacingControllerIndex = -1;
   private vrPlacePosition: THREE.Vector3 | null = null;
@@ -694,7 +696,10 @@ export class NBodyScene implements Scene {
 
     xr.registerPanel(this.vrPanel);
 
+    this.vrTutorial = new VRTutorial();
+
     xr.onMenuPress = () => {
+      if (this.vrTutorial?.dismiss()) return;
       if (!this.vrPanel) return;
       this.vrPanel.toggle();
       if (this.vrPanel.visible) {
@@ -708,11 +713,13 @@ export class NBodyScene implements Scene {
         this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
         ctx.scene.add(this.vrPanel.mesh);
       }
+      setTimeout(() => this.vrTutorial?.show(ctx.camera, ctx.scene), 200);
     };
 
     xr.onSessionEnd = () => {
       if (this.vrPanel) ctx.scene.remove(this.vrPanel.mesh);
       this.exitVRPlacementMode();
+      this.vrTutorial?.hide(ctx.scene);
     };
 
     // If already in VR (scene switch mid-session)
@@ -997,6 +1004,10 @@ export class NBodyScene implements Scene {
       this.ctx.xrManager.onMenuPress = null;
       this.ctx.xrManager.onControllerSelectStart = null;
       this.ctx.xrManager.onControllerSelectEnd = null;
+    }
+    if (this.vrTutorial) {
+      this.vrTutorial.dispose(this.ctx.scene);
+      this.vrTutorial = null;
     }
 
     for (const { el, type, fn } of this.boundHandlers) {

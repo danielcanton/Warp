@@ -4,6 +4,7 @@ import { generateCustomWaveform, waveformToTexture, type BinaryParams } from "..
 import { GWAudioEngine } from "../../lib/audio";
 import { BinarySystem } from "../../lib/binary";
 import { VRPanel } from "../../lib/VRPanel";
+import { VRTutorial } from "../../lib/vr-tutorial";
 import type { WaveformData, GWEvent } from "../../lib/waveform";
 import { SandboxPanel } from "./SandboxPanel";
 import vertexShader from "../../shaders/spacetime.vert.glsl?raw";
@@ -49,6 +50,7 @@ export class SandboxScene implements Scene {
 
   // VR panel
   private vrPanel: VRPanel | null = null;
+  private vrTutorial: VRTutorial | null = null;
 
   // Haptic feedback
   private static readonly WAVE_SPEED = 4; // m/s
@@ -424,7 +426,10 @@ export class SandboxScene implements Scene {
 
     xr.registerPanel(this.vrPanel);
 
+    this.vrTutorial = new VRTutorial();
+
     xr.onMenuPress = () => {
+      if (this.vrTutorial?.dismiss()) return;
       if (!this.vrPanel) return;
       this.vrPanel.toggle();
       if (this.vrPanel.visible) {
@@ -438,12 +443,14 @@ export class SandboxScene implements Scene {
         this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
         ctx.scene.add(this.vrPanel.mesh);
       }
+      setTimeout(() => this.vrTutorial?.show(ctx.camera, ctx.scene), 200);
     };
 
     xr.onSessionEnd = () => {
       if (this.vrPanel) {
         ctx.scene.remove(this.vrPanel.mesh);
       }
+      this.vrTutorial?.hide(ctx.scene);
     };
 
     // If already in VR (scene switch mid-session), show panel immediately
@@ -563,6 +570,10 @@ export class SandboxScene implements Scene {
     }
     if (this.ctx.xrManager) {
       this.ctx.xrManager.onMenuPress = null;
+    }
+    if (this.vrTutorial) {
+      this.vrTutorial.dispose(this.ctx.scene);
+      this.vrTutorial = null;
     }
 
     this.ctx.scene.remove(this.group);
