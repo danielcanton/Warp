@@ -51,6 +51,8 @@ export class SandboxScene implements Scene {
   // VR panel
   private vrPanel: VRPanel | null = null;
   private vrTutorial: VRTutorial | null = null;
+  private passthroughActive = false;
+  private savedBackground: THREE.Color | THREE.Texture | null = null;
 
   // Haptic feedback
   private static readonly WAVE_SPEED = 4; // m/s
@@ -424,6 +426,27 @@ export class SandboxScene implements Scene {
       },
     });
 
+    // Passthrough toggle — only for AR sessions
+    if (xr.isARSession) {
+      const ptBtnIdx = 14; // after all existing buttons
+      this.vrPanel.addButton({
+        label: "Passthrough: OFF",
+        x: startX + (btnW + gap) * 2, y: row4Y, w: btnW * 1.5, h: btnH,
+        onClick: () => {
+          this.passthroughActive = !this.passthroughActive;
+          if (this.passthroughActive) {
+            this.savedBackground = this.ctx.scene.background as THREE.Color | THREE.Texture | null;
+            this.ctx.scene.background = null;
+            this.ctx.renderer.setClearColor(0x000000, 0);
+          } else {
+            this.ctx.scene.background = this.savedBackground;
+            this.ctx.renderer.setClearColor(0x000000, 1);
+          }
+          this.vrPanel?.updateButton(ptBtnIdx, `Passthrough: ${this.passthroughActive ? "ON" : "OFF"}`);
+        },
+      });
+    }
+
     xr.registerPanel(this.vrPanel);
 
     this.vrTutorial = new VRTutorial();
@@ -451,6 +474,12 @@ export class SandboxScene implements Scene {
         ctx.scene.remove(this.vrPanel.mesh);
       }
       this.vrTutorial?.hide(ctx.scene);
+      // Restore opaque state if passthrough was active
+      if (this.passthroughActive) {
+        this.ctx.scene.background = this.savedBackground;
+        this.ctx.renderer.setClearColor(0x000000, 1);
+        this.passthroughActive = false;
+      }
     };
 
     // If already in VR (scene switch mid-session), show panel immediately

@@ -57,6 +57,7 @@ export class BlackHoleScene implements Scene {
   private grabOffset = new THREE.Vector3();
   private savedBackground: THREE.Color | THREE.Texture | null = null;
   private vrSphereOriginalGeo: THREE.BufferGeometry | null = null;
+  private modeButtonIndex = -1; // VR panel button index for passthrough/skybox toggle
 
   private boundHandlers: { el: EventTarget; type: string; fn: EventListener }[] = [];
   private initialized = false;
@@ -194,7 +195,8 @@ export class BlackHoleScene implements Scene {
 
   private setupVRPanel(ctx: SceneContext) {
     const xr = ctx.xrManager!;
-    this.vrPanel = new VRPanel(1.4, 0.7);
+    const panelHeight = xr.isARSession ? 1.0 : 0.7; // taller for AR (3 rows)
+    this.vrPanel = new VRPanel(1.4, panelHeight);
     this.vrPanel.setTitle("Black Hole");
 
     // Row 1: Mass + Disk
@@ -246,28 +248,32 @@ export class BlackHoleScene implements Scene {
       },
     });
 
-    // Row 2: Reset Pos + Exit VR
+    // Row 2: Mode toggle + Exit VR
     const row2Y = 0.70;
 
-    // Reset position — move BH back to 2m in front of user
-    this.vrPanel.addButton({
-      label: "Reset Pos",
-      x: startX,
-      y: row2Y,
-      w: btnW,
-      h: btnH,
-      onClick: () => {
-        const headPos = xr.cameraWorldPosition;
-        this.bhWorldPosition.set(headPos.x, headPos.y, headPos.z - 2);
-        this.vrSphere.position.copy(this.bhWorldPosition);
-        this.vrMaterial.uniforms.uBHCenter.value.copy(this.bhWorldPosition);
-      },
-    });
+    // Mode toggle — only shown for AR sessions (passthrough capable)
+    if (xr.isARSession) {
+      this.modeButtonIndex = 2; // buttons[0]=Mass, [1]=Disk, [2]=Mode
+      this.vrPanel.addButton({
+        label: "Mode: PT",
+        x: startX,
+        y: row2Y,
+        w: btnW,
+        h: btnH,
+        onClick: () => {
+          if (this.passthroughActive) {
+            this.enterSkyboxMode();
+          } else {
+            this.enterPassthroughMode();
+          }
+        },
+      });
+    }
 
     // Exit VR
     this.vrPanel.addButton({
       label: "Exit VR",
-      x: startX + btnW + gap,
+      x: xr.isARSession ? startX + btnW + gap : startX,
       y: row2Y,
       w: btnW,
       h: btnH,
@@ -275,6 +281,25 @@ export class BlackHoleScene implements Scene {
         xr.endSession();
       },
     });
+
+    // Row 3: Reset Pos (only for AR sessions — repositions BH in passthrough mode)
+    if (xr.isARSession) {
+      const row3Y = 1.00;
+      this.vrPanel.addButton({
+        label: "Reset Pos",
+        x: startX,
+        y: row3Y,
+        w: btnW,
+        h: btnH,
+        onClick: () => {
+          if (!this.passthroughActive) return;
+          const headPos = xr.cameraWorldPosition;
+          this.bhWorldPosition.set(headPos.x, headPos.y, headPos.z - 2);
+          this.vrSphere.position.copy(this.bhWorldPosition);
+          this.vrMaterial.uniforms.uBHCenter.value.copy(this.bhWorldPosition);
+        },
+      });
+    }
 
     xr.registerPanel(this.vrPanel);
 
@@ -347,55 +372,104 @@ export class BlackHoleScene implements Scene {
     this.vrMaterial.uniforms.uMass.value = this.mass;
     this.vrMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
 
-    // Save and clear scene background for passthrough transparency
+    // Save scene background for possible passthrough
     this.savedBackground = this.ctx.scene.background as THREE.Color | THREE.Texture | null;
-    this.ctx.scene.background = null;
 
-    // Clear color must have alpha = 0 so the XR compositor shows passthrough
-    this.ctx.renderer.setClearAlpha(0);
-
-    // Enter passthrough mode only if we have an AR session (immersive-ar gives real passthrough)
+    // Determine if we have AR session for passthrough
     const isAR = this.ctx.xrManager?.isARSession ?? false;
-    this.passthroughActive = isAR;
     this.hasCameraAccess = this.ctx.xrManager?.hasCameraAccess ?? false;
 
+    // Default to passthrough mode for AR sessions
+    this.passthroughActive = isAR;
+
     if (this.passthroughActive) {
-      // Replace large skybox sphere with localized sphere
-      this.vrSphereOriginalGeo = this.vrSphere.geometry;
-      const localGeo = new THREE.IcosahedronGeometry(2.0, 5);
-      localGeo.scale(-1, 1, 1); // invert normals
-      this.vrSphere.geometry = localGeo;
-
-      // Position BH in front of user at session start
-      const xr = this.ctx.xrManager;
-      if (xr) {
-        const headPos = xr.cameraWorldPosition;
-        this.bhWorldPosition.set(headPos.x, headPos.y, headPos.z - 2);
-      }
-      this.vrSphere.position.copy(this.bhWorldPosition);
-
-      // Configure material for passthrough
-      this.vrMaterial.transparent = true;
-      this.vrMaterial.blending = THREE.NormalBlending;
-      this.vrMaterial.uniforms.uPassthrough.value = 1.0;
-      this.vrMaterial.uniforms.uHasCameraFeed.value = this.hasCameraAccess ? 1.0 : 0.0;
-      this.vrMaterial.uniforms.uBHCenter.value.copy(this.bhWorldPosition);
-      this.vrMaterial.uniforms.uSphereRadius.value = 2.0;
+      this.enterPassthroughMode();
     }
+  }
+
+  /** Switch VR sphere to passthrough mode: localized 2m sphere, transparent, grab enabled */
+  private enterPassthroughMode() {
+    // Replace large skybox sphere with localized sphere (non-inverted — camera is outside)
+    if (!this.vrSphereOriginalGeo) {
+      this.vrSphereOriginalGeo = this.vrSphere.geometry;
+    } else {
+      this.vrSphere.geometry.dispose();
+    }
+    const localGeo = new THREE.IcosahedronGeometry(2.0, 5);
+    // Do NOT invert — camera is outside the sphere, we want front-facing triangles
+    this.vrSphere.geometry = localGeo;
+
+    // Position BH in front of user
+    const xr = this.ctx.xrManager;
+    if (xr) {
+      const headPos = xr.cameraWorldPosition;
+      this.bhWorldPosition.set(headPos.x, headPos.y, headPos.z - 2);
+    }
+    this.vrSphere.position.copy(this.bhWorldPosition);
+
+    // Configure material for passthrough: front-side, transparent
+    this.vrMaterial.side = THREE.FrontSide;
+    this.vrMaterial.transparent = true;
+    this.vrMaterial.blending = THREE.NormalBlending;
+    this.vrMaterial.uniforms.uPassthrough.value = 1.0;
+    this.vrMaterial.uniforms.uHasCameraFeed.value = this.hasCameraAccess ? 1.0 : 0.0;
+    this.vrMaterial.uniforms.uBHCenter.value.copy(this.bhWorldPosition);
+    this.vrMaterial.uniforms.uSphereRadius.value = 2.0;
+    this.vrMaterial.needsUpdate = true;
+
+    // Transparent background for passthrough
+    this.ctx.scene.background = null;
+    this.ctx.renderer.setClearColor(0x000000, 0);
+
+    this.passthroughActive = true;
+
+    // Update VR panel button
+    this.vrPanel?.updateButton(this.modeButtonIndex, "Mode: PT");
+  }
+
+  /** Switch VR sphere to opaque skybox mode: large inverted sphere with star background */
+  private enterSkyboxMode() {
+    // Restore large inverted sphere geometry
+    if (this.vrSphereOriginalGeo) {
+      this.vrSphere.geometry.dispose();
+      this.vrSphere.geometry = this.vrSphereOriginalGeo;
+      this.vrSphereOriginalGeo = null;
+    }
+    this.vrSphere.position.set(0, 0, 0);
+
+    // Configure material for skybox: back-side, opaque
+    this.vrMaterial.side = THREE.BackSide;
+    this.vrMaterial.transparent = false;
+    this.vrMaterial.blending = THREE.NormalBlending;
+    this.vrMaterial.uniforms.uPassthrough.value = 0.0;
+    this.vrMaterial.uniforms.uHasCameraFeed.value = 0.0;
+    this.vrMaterial.needsUpdate = true;
+
+    // Opaque background
+    if (this.savedBackground !== null) {
+      this.ctx.scene.background = this.savedBackground;
+    }
+    this.ctx.renderer.setClearColor(0x000000, 1);
+
+    this.passthroughActive = false;
+    this.grabbing = false;
+
+    // Update VR panel button
+    this.vrPanel?.updateButton(this.modeButtonIndex, "Mode: Sky");
   }
 
   private switchToDesktop() {
     this.vrSphere.visible = false;
     this.quad.visible = true;
 
-    // Restore scene background and clear alpha
+    // Restore scene background and clear color
     if (this.savedBackground !== null) {
       this.ctx.scene.background = this.savedBackground;
       this.savedBackground = null;
     }
-    this.ctx.renderer.setClearAlpha(1);
+    this.ctx.renderer.setClearColor(0x000000, 1);
 
-    // Restore large sphere geometry
+    // Restore large sphere geometry if in passthrough mode
     if (this.vrSphereOriginalGeo) {
       this.vrSphere.geometry.dispose();
       this.vrSphere.geometry = this.vrSphereOriginalGeo;
@@ -404,6 +478,7 @@ export class BlackHoleScene implements Scene {
     this.vrSphere.position.set(0, 0, 0);
 
     // Reset material to opaque skybox mode
+    this.vrMaterial.side = THREE.BackSide;
     this.vrMaterial.transparent = false;
     this.vrMaterial.blending = THREE.NormalBlending;
     this.vrMaterial.uniforms.uPassthrough.value = 0.0;

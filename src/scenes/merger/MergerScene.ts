@@ -177,6 +177,8 @@ export class MergerScene implements Scene {
   // VR panel
   private vrPanel: VRPanel | null = null;
   private vrTutorial: VRTutorial | null = null;
+  private passthroughActive = false;
+  private savedBackground: THREE.Color | THREE.Texture | null = null;
 
   private unsubViewMode: (() => void) | null = null;
 
@@ -426,6 +428,30 @@ export class MergerScene implements Scene {
       },
     });
 
+    // Passthrough toggle — only for AR sessions
+    if (xr.isARSession) {
+      const ptBtnIdx = 5; // buttons[0..4] = Play, Speed, Prev, Next, Exit
+      this.vrPanel.addButton({
+        label: "Passthrough: OFF",
+        x: startX,
+        y: btnY + btnH + 0.05,
+        w: btnW * 2 + gap,
+        h: btnH,
+        onClick: () => {
+          this.passthroughActive = !this.passthroughActive;
+          if (this.passthroughActive) {
+            this.savedBackground = this.ctx.scene.background as THREE.Color | THREE.Texture | null;
+            this.ctx.scene.background = null;
+            this.ctx.renderer.setClearColor(0x000000, 0);
+          } else {
+            this.ctx.scene.background = this.savedBackground;
+            this.ctx.renderer.setClearColor(0x000000, 1);
+          }
+          this.vrPanel?.updateButton(ptBtnIdx, `Passthrough: ${this.passthroughActive ? "ON" : "OFF"}`);
+        },
+      });
+    }
+
     xr.registerPanel(this.vrPanel);
 
     // ─── VR Tutorial (shared across all scenes) ───
@@ -457,6 +483,12 @@ export class MergerScene implements Scene {
         ctx.scene.remove(this.vrPanel.mesh);
       }
       this.vrTutorial?.hide(ctx.scene);
+      // Restore opaque state if passthrough was active
+      if (this.passthroughActive) {
+        this.ctx.scene.background = this.savedBackground;
+        this.ctx.renderer.setClearColor(0x000000, 1);
+        this.passthroughActive = false;
+      }
     };
 
     // If already in VR (scene switch mid-session), add to scene but hidden

@@ -44,6 +44,8 @@ export class NBodyScene implements Scene {
   private panel!: NBodyPanel;
   private vrPanel: VRPanel | null = null;
   private vrTutorial: VRTutorial | null = null;
+  private passthroughActive = false;
+  private savedBackground: THREE.Color | THREE.Texture | null = null;
   private vrPlacing = false;
   private vrPlacingControllerIndex = -1;
   private vrPlacePosition: THREE.Vector3 | null = null;
@@ -694,6 +696,27 @@ export class NBodyScene implements Scene {
       },
     });
 
+    // Passthrough toggle — only for AR sessions
+    if (xr.isARSession) {
+      const ptBtnIdx = 11; // after all existing buttons (0-10)
+      this.vrPanel.addButton({
+        label: "Passthrough: OFF",
+        x: startX + (btnW * 1.2 + gap) * 3, y: row3Y, w: btnW * 1.8, h: btnH,
+        onClick: () => {
+          this.passthroughActive = !this.passthroughActive;
+          if (this.passthroughActive) {
+            this.savedBackground = this.ctx.scene.background as THREE.Color | THREE.Texture | null;
+            this.ctx.scene.background = null;
+            this.ctx.renderer.setClearColor(0x000000, 0);
+          } else {
+            this.ctx.scene.background = this.savedBackground;
+            this.ctx.renderer.setClearColor(0x000000, 1);
+          }
+          this.vrPanel?.updateButton(ptBtnIdx, `Passthrough: ${this.passthroughActive ? "ON" : "OFF"}`);
+        },
+      });
+    }
+
     xr.registerPanel(this.vrPanel);
 
     this.vrTutorial = new VRTutorial();
@@ -720,6 +743,12 @@ export class NBodyScene implements Scene {
       if (this.vrPanel) ctx.scene.remove(this.vrPanel.mesh);
       this.exitVRPlacementMode();
       this.vrTutorial?.hide(ctx.scene);
+      // Restore opaque state if passthrough was active
+      if (this.passthroughActive) {
+        this.ctx.scene.background = this.savedBackground;
+        this.ctx.renderer.setClearColor(0x000000, 1);
+        this.passthroughActive = false;
+      }
     };
 
     // If already in VR (scene switch mid-session)
