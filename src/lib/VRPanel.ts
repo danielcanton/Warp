@@ -188,11 +188,17 @@ export class VRPanel {
 
   /** Position the panel in world space relative to the user. */
   positionInFront(camera: THREE.Camera, distance = 2, yOffset = 0) {
-    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-    const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+    const worldPos = new THREE.Vector3();
+    const worldQuat = new THREE.Quaternion();
+    camera.getWorldPosition(worldPos);
+    camera.getWorldQuaternion(worldQuat);
+
+    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(worldQuat);
+    const lookTarget = worldPos.clone();
+    const pos = worldPos.add(dir.multiplyScalar(distance));
     pos.y += yOffset;
     this.mesh.position.copy(pos);
-    this.mesh.lookAt(camera.position);
+    this.mesh.lookAt(lookTarget);
   }
 
   dispose() {

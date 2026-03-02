@@ -129,7 +129,7 @@ export class XRManager {
     if (this.controller1) {
       this.controllerRay1 = new THREE.Line(lineGeometry.clone(), lineMaterial.clone());
       this.controller1.add(this.controllerRay1);
-      this.scene.add(this.controller1);
+      this.cameraRig.add(this.controller1);
 
       (this.controller1 as unknown as EventTarget).addEventListener("selectstart", () => this.onSelect(this.controller1!));
       (this.controller1 as unknown as EventTarget).addEventListener("selectend", () => this.onSelectEnd(this.controller1!));
@@ -138,7 +138,7 @@ export class XRManager {
     if (this.controller2) {
       this.controllerRay2 = new THREE.Line(lineGeometry.clone(), lineMaterial.clone());
       this.controller2.add(this.controllerRay2);
-      this.scene.add(this.controller2);
+      this.cameraRig.add(this.controller2);
 
       (this.controller2 as unknown as EventTarget).addEventListener("selectstart", () => this.onSelect(this.controller2!));
       (this.controller2 as unknown as EventTarget).addEventListener("selectend", () => this.onSelectEnd(this.controller2!));
@@ -152,7 +152,7 @@ export class XRManager {
       new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.5 })
     );
     this.teleportTarget.visible = false;
-    this.scene.add(this.teleportTarget);
+    this.cameraRig.add(this.teleportTarget);
   }
 
   private setupHands() {
@@ -205,17 +205,17 @@ export class XRManager {
 
   private cleanupControllers() {
     if (this.controller1) {
-      this.scene.remove(this.controller1);
+      this.cameraRig.remove(this.controller1);
       this.controller1 = null;
       this.controllerRay1 = null;
     }
     if (this.controller2) {
-      this.scene.remove(this.controller2);
+      this.cameraRig.remove(this.controller2);
       this.controller2 = null;
       this.controllerRay2 = null;
     }
     if (this.teleportTarget) {
-      this.scene.remove(this.teleportTarget);
+      this.cameraRig.remove(this.teleportTarget);
       this.teleportTarget = null;
     }
     this.snapCooldownTimer = 0;
