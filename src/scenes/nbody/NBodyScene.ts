@@ -580,16 +580,16 @@ export class NBodyScene implements Scene {
 
   private setupVRPanel(ctx: SceneContext) {
     const xr = ctx.xrManager!;
-    this.vrPanel = new VRPanel(1.4, 0.9);
+    this.vrPanel = new VRPanel(1.4, 1.1);
     this.vrPanel.setTitle("N-Body Sandbox");
 
-    const btnY = 0.45;
-    const btnH = 0.22;
+    const btnH = 0.16;
     const btnW = 0.175;
     const gap = 0.015;
     const startX = 0.03;
 
     // Row 1: Play/Pause, Speed, Preset cycle, Clear
+    const btnY = 0.32;
     this.vrPanel.addButton({
       label: this.isPlaying ? "\u23F8" : "\u25B6",
       x: startX, y: btnY, w: btnW, h: btnH,
@@ -631,7 +631,7 @@ export class NBodyScene implements Scene {
     });
 
     // Row 2: Body type placement buttons + collision toggle
-    const row2Y = 0.72;
+    const row2Y = 0.52;
 
     this.vrPanel.addButton({
       label: "\u2729 Star",
@@ -657,6 +657,29 @@ export class NBodyScene implements Scene {
       onClick: () => {
         this.system.collisionsEnabled = !this.system.collisionsEnabled;
         this.vrPanel?.updateButton(7, this.system.collisionsEnabled ? "Coll: ON" : "Coll: OFF");
+      },
+    });
+
+    // Row 3: Trails, Grid toggles
+    const row3Y = 0.72;
+
+    this.vrPanel.addButton({
+      label: this.showTrails ? "Trails: ON" : "Trails: OFF",
+      x: startX, y: row3Y, w: btnW * 1.3, h: btnH,
+      onClick: () => {
+        this.showTrails = !this.showTrails;
+        this.updateTrailVisibility();
+        this.vrPanel?.updateButton(8, this.showTrails ? "Trails: ON" : "Trails: OFF");
+      },
+    });
+
+    this.vrPanel.addButton({
+      label: this.showGrid ? "Grid: ON" : "Grid: OFF",
+      x: startX + btnW * 1.3 + gap, y: row3Y, w: btnW * 1.3, h: btnH,
+      onClick: () => {
+        this.showGrid = !this.showGrid;
+        this.gridHelper.visible = this.showGrid;
+        this.vrPanel?.updateButton(9, this.showGrid ? "Grid: ON" : "Grid: OFF");
       },
     });
 

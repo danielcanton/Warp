@@ -26,6 +26,12 @@ export class XRManager {
   private raycaster = new THREE.Raycaster();
   private tempMatrix = new THREE.Matrix4();
 
+  // Ray hit reticle
+  private reticle: THREE.Mesh | null = null;
+  private static readonly RAY_DEFAULT_COLOR = 0x6366f1;
+  private static readonly RAY_HIT_COLOR = 0x67e8f9;
+  private static readonly RAY_LENGTH = 5;
+
   // Hand tracking
   private hand1: THREE.Group | null = null;
   private hand2: THREE.Group | null = null;
@@ -144,6 +150,13 @@ export class XRManager {
       (this.controller2 as unknown as EventTarget).addEventListener("selectend", () => this.onSelectEnd(this.controller2!));
     }
 
+    // Hit reticle — small glowing dot at ray-panel intersection
+    const reticleGeo = new THREE.SphereGeometry(0.008, 12, 12);
+    const reticleMat = new THREE.MeshBasicMaterial({ color: XRManager.RAY_HIT_COLOR });
+    this.reticle = new THREE.Mesh(reticleGeo, reticleMat);
+    this.reticle.visible = false;
+    this.scene.add(this.reticle);
+
     // Teleport target marker
     const teleportGeo = new THREE.RingGeometry(0.15, 0.2, 32);
     teleportGeo.rotateX(-Math.PI / 2);
@@ -217,6 +230,10 @@ export class XRManager {
     if (this.teleportTarget) {
       this.cameraRig.remove(this.teleportTarget);
       this.teleportTarget = null;
+    }
+    if (this.reticle) {
+      this.scene.remove(this.reticle);
+      this.reticle = null;
     }
     this.snapCooldownTimer = 0;
     this.prevLeftThumbstickPressed = false;
@@ -554,6 +571,14 @@ export class XRManager {
     const panelHovered = new Map<VRPanel, boolean>();
     for (const panel of this.panels) panelHovered.set(panel, false);
 
+    // Ensure panel world matrices are up-to-date before raycasting
+    for (const panel of this.panels) {
+      if (panel.visible) panel.mesh.updateMatrixWorld();
+    }
+
+    // Track closest hit for reticle
+    let closestHit: { point: THREE.Vector3; distance: number; controller: THREE.Group } | null = null;
+
     for (const controller of [this.controller1, this.controller2]) {
       if (!controller) continue;
       this.tempMatrix.identity().extractRotation(controller.matrixWorld);
@@ -567,6 +592,10 @@ export class XRManager {
         if (intersects.length > 0) {
           hitPanel = true;
           panelHovered.set(panel, true);
+          const hitDist = intersects[0].distance;
+          if (!closestHit || hitDist < closestHit.distance) {
+            closestHit = { point: intersects[0].point.clone(), distance: hitDist, controller };
+          }
         }
       }
 
@@ -587,6 +616,21 @@ export class XRManager {
       panel.setHovered(panelHovered.get(panel) ?? false);
     }
 
+    // Ray visual feedback: reticle + ray shortening
+    if (closestHit) {
+      if (this.reticle) {
+        this.reticle.position.copy(closestHit.point);
+        this.reticle.visible = true;
+      }
+      this.shortenRay(closestHit.controller, closestHit.distance);
+      // Reset the other controller ray to default
+      const other = closestHit.controller === this.controller1 ? this.controller2 : this.controller1;
+      if (other) this.resetControllerRay(other);
+    } else {
+      if (this.reticle) this.reticle.visible = false;
+      this.resetAllRays();
+    }
+
     if (this.teleportTarget) {
       this.teleportTarget.visible = showTeleport;
     }
@@ -599,6 +643,13 @@ export class XRManager {
     // Track combined hover across both hands
     const panelHovered = new Map<VRPanel, boolean>();
     for (const panel of this.panels) panelHovered.set(panel, false);
+
+    // Ensure panel world matrices are up-to-date before raycasting
+    for (const panel of this.panels) {
+      if (panel.visible) panel.mesh.updateMatrixWorld();
+    }
+
+    let closestHandHit: { point: THREE.Vector3; distance: number; ray: THREE.Line } | null = null;
 
     const handConfigs = [
       { index: 0, joints: this.handJoints1, ray: this.handRay1, prevPinchKey: "prevPinch1" as const },
@@ -630,6 +681,10 @@ export class XRManager {
         if (intersects.length > 0) {
           hitPanel = true;
           panelHovered.set(panel, true);
+          const hitDist = intersects[0].distance;
+          if (!closestHandHit || hitDist < closestHandHit.distance) {
+            closestHandHit = { point: intersects[0].point.clone(), distance: hitDist, ray: cfg.ray };
+          }
         }
       }
 
@@ -656,6 +711,22 @@ export class XRManager {
     for (const panel of this.panels) {
       if (!panel.visible) continue;
       panel.setHovered(panelHovered.get(panel) ?? false);
+    }
+
+    // Hand ray visual feedback: reticle + ray color change
+    if (closestHandHit) {
+      if (this.reticle) {
+        this.reticle.position.copy(closestHandHit.point);
+        this.reticle.visible = true;
+      }
+      (closestHandHit.ray.material as THREE.LineBasicMaterial).color.setHex(XRManager.RAY_HIT_COLOR);
+      // Reset the other hand ray
+      const otherRay = closestHandHit.ray === this.handRay1 ? this.handRay2 : this.handRay1;
+      if (otherRay) (otherRay.material as THREE.LineBasicMaterial).color.setHex(0x818cf8);
+    } else {
+      if (this.reticle) this.reticle.visible = false;
+      if (this.handRay1) (this.handRay1.material as THREE.LineBasicMaterial).color.setHex(0x818cf8);
+      if (this.handRay2) (this.handRay2.material as THREE.LineBasicMaterial).color.setHex(0x818cf8);
     }
 
     if (this.teleportTarget) {
@@ -688,6 +759,32 @@ export class XRManager {
     }
   }
 
+  /** Shorten a controller ray to stop at the given distance and change color. */
+  private shortenRay(controller: THREE.Group, distance: number) {
+    const ray = controller === this.controller1 ? this.controllerRay1 : this.controllerRay2;
+    if (!ray) return;
+    const positions = (ray.geometry as THREE.BufferGeometry).getAttribute("position") as THREE.BufferAttribute;
+    positions.setXYZ(1, 0, 0, -distance);
+    positions.needsUpdate = true;
+    (ray.material as THREE.LineBasicMaterial).color.setHex(XRManager.RAY_HIT_COLOR);
+  }
+
+  /** Reset a single controller ray to default length and color. */
+  private resetControllerRay(controller: THREE.Group) {
+    const ray = controller === this.controller1 ? this.controllerRay1 : this.controllerRay2;
+    if (!ray) return;
+    const positions = (ray.geometry as THREE.BufferGeometry).getAttribute("position") as THREE.BufferAttribute;
+    positions.setXYZ(1, 0, 0, -XRManager.RAY_LENGTH);
+    positions.needsUpdate = true;
+    (ray.material as THREE.LineBasicMaterial).color.setHex(XRManager.RAY_DEFAULT_COLOR);
+  }
+
+  /** Reset both controller rays to default length and color. */
+  private resetAllRays() {
+    if (this.controller1) this.resetControllerRay(this.controller1);
+    if (this.controller2) this.resetControllerRay(this.controller2);
+  }
+
   /** Pulse haptic actuators on all active gamepads. No-op for hands or intensity ≤ 0. */
   pulseHaptics(intensity: number, duration = 16) {
     if (intensity <= 0 || this.usingHands) return;
@@ -709,6 +806,8 @@ export class XRManager {
   private readonly _cameraWorldPos = new THREE.Vector3();
   get cameraWorldPosition(): THREE.Vector3 {
     const camera = this.renderer.xr.getCamera();
+    // Force matrix update — update() runs before renderer.render() so matrices may be stale
+    camera.updateMatrixWorld(true);
     camera.getWorldPosition(this._cameraWorldPos);
     return this._cameraWorldPos;
   }

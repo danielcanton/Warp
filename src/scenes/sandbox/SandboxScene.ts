@@ -211,7 +211,7 @@ export class SandboxScene implements Scene {
         this.isPlaying = false;
         this.audio.stop();
         this.playBtn.innerHTML = "&#9654;";
-        this.vrPanel?.updateButton(0, "\u25B6");
+        this.vrPanel?.updateButton(10, "\u25B6");
       } else {
         this.isPlaying = true;
         if (this.playbackTime >= 0.99) {
@@ -220,7 +220,7 @@ export class SandboxScene implements Scene {
         }
         this.audio.play(this.playbackTime, this.playbackSpeed);
         this.playBtn.innerHTML = "&#9646;&#9646;";
-        this.vrPanel?.updateButton(0, "\u23F8");
+        this.vrPanel?.updateButton(10, "\u23F8");
       }
     });
 
@@ -237,7 +237,7 @@ export class SandboxScene implements Scene {
       this.playbackSpeed = this.speeds[this.speedIndex];
       this.speedLabel.textContent = `${this.playbackSpeed}x`;
       this.audio.setSpeed(this.playbackSpeed);
-      this.vrPanel?.updateButton(1, `${this.playbackSpeed}x`);
+      this.vrPanel?.updateButton(11, `${this.playbackSpeed}x`);
     });
 
     // Keyboard
@@ -263,7 +263,7 @@ export class SandboxScene implements Scene {
     this.binary.reset();
     this.audio.play(0, this.playbackSpeed);
     this.playBtn.innerHTML = "&#9646;&#9646;";
-    this.vrPanel?.updateButton(0, "\u23F8");
+    this.vrPanel?.updateButton(10, "\u23F8");
   }
 
   private updateTexture() {
@@ -276,45 +276,134 @@ export class SandboxScene implements Scene {
     this.spacetimeMaterial.uniforms.uAmplitude.value = 1.2 + snrScale * 0.6;
   }
 
+  private updateVRPanelTitle() {
+    if (!this.vrPanel) return;
+    const p = this.currentParams;
+    const chi = ((p.m1 * p.chi1 + p.m2 * p.chi2) / (p.m1 + p.m2)).toFixed(2);
+    this.vrPanel.setTitle(`${p.m1} + ${p.m2} M\u2609  \u03C7: ${chi}`);
+  }
+
   private setupVRPanel(ctx: SceneContext) {
     const xr = ctx.xrManager!;
-    this.vrPanel = new VRPanel(1.2, 0.5);
-    this.vrPanel.setTitle("Binary Sandbox");
+    this.vrPanel = new VRPanel(1.4, 1.0);
+    this.updateVRPanelTitle();
 
-    const btnY = 0.55;
-    const btnH = 0.35;
-    const btnW = 0.28;
-    const gap = 0.03;
-    const startX = 0.05;
+    const btnH = 0.16;
+    const btnW = 0.21;
+    const gap = 0.015;
+    const startX = 0.03;
 
+    // ── Row 1: Presets ──
+    const row1Y = 0.30;
+    const presets: { label: string; m1: number; m2: number; chi1: number; chi2: number }[] = [
+      { label: "Light BBH", m1: 10, m2: 10, chi1: 0, chi2: 0 },
+      { label: "Heavy BBH", m1: 50, m2: 40, chi1: 0, chi2: 0 },
+      { label: "BNS", m1: 1.4, m2: 1.4, chi1: 0, chi2: 0 },
+      { label: "NSBH", m1: 1.4, m2: 10, chi1: 0, chi2: 0 },
+    ];
+
+    for (let i = 0; i < presets.length; i++) {
+      const preset = presets[i];
+      this.vrPanel.addButton({
+        label: preset.label,
+        x: startX + i * (btnW + gap), y: row1Y, w: btnW, h: btnH,
+        onClick: () => {
+          this.currentParams = { ...this.currentParams, m1: preset.m1, m2: preset.m2, chi1: preset.chi1, chi2: preset.chi2 };
+          this.onParamsChange(this.currentParams);
+          this.updateVRPanelTitle();
+        },
+      });
+    }
+
+    // ── Row 2: Mass adjustment ──
+    const row2Y = 0.50;
+    const massStep = 5;
+
+    // Button indices: 4=M1-, 5=M1+, 6=M2-, 7=M2+
+    this.vrPanel.addButton({
+      label: "M1 \u2212",
+      x: startX, y: row2Y, w: btnW, h: btnH,
+      onClick: () => {
+        this.currentParams.m1 = Math.max(1, this.currentParams.m1 - massStep);
+        this.onParamsChange(this.currentParams);
+        this.updateVRPanelTitle();
+      },
+    });
+    this.vrPanel.addButton({
+      label: "M1 +",
+      x: startX + (btnW + gap), y: row2Y, w: btnW, h: btnH,
+      onClick: () => {
+        this.currentParams.m1 = Math.min(150, this.currentParams.m1 + massStep);
+        this.onParamsChange(this.currentParams);
+        this.updateVRPanelTitle();
+      },
+    });
+    this.vrPanel.addButton({
+      label: "M2 \u2212",
+      x: startX + (btnW + gap) * 2, y: row2Y, w: btnW, h: btnH,
+      onClick: () => {
+        this.currentParams.m2 = Math.max(1, this.currentParams.m2 - massStep);
+        this.onParamsChange(this.currentParams);
+        this.updateVRPanelTitle();
+      },
+    });
+    this.vrPanel.addButton({
+      label: "M2 +",
+      x: startX + (btnW + gap) * 3, y: row2Y, w: btnW, h: btnH,
+      onClick: () => {
+        this.currentParams.m2 = Math.min(150, this.currentParams.m2 + massStep);
+        this.onParamsChange(this.currentParams);
+        this.updateVRPanelTitle();
+      },
+    });
+
+    // ── Row 3: Spin & playback ──
+    const row3Y = 0.70;
+    const spinStep = 0.2;
+
+    // Button indices: 8=Spin-, 9=Spin+, 10=Play/Pause, 11=Speed
+    this.vrPanel.addButton({
+      label: "Spin \u2212",
+      x: startX, y: row3Y, w: btnW, h: btnH,
+      onClick: () => {
+        this.currentParams.chi1 = Math.max(-1, +(this.currentParams.chi1 - spinStep).toFixed(2));
+        this.currentParams.chi2 = Math.max(-1, +(this.currentParams.chi2 - spinStep).toFixed(2));
+        this.onParamsChange(this.currentParams);
+        this.updateVRPanelTitle();
+      },
+    });
+    this.vrPanel.addButton({
+      label: "Spin +",
+      x: startX + (btnW + gap), y: row3Y, w: btnW, h: btnH,
+      onClick: () => {
+        this.currentParams.chi1 = Math.min(1, +(this.currentParams.chi1 + spinStep).toFixed(2));
+        this.currentParams.chi2 = Math.min(1, +(this.currentParams.chi2 + spinStep).toFixed(2));
+        this.onParamsChange(this.currentParams);
+        this.updateVRPanelTitle();
+      },
+    });
     this.vrPanel.addButton({
       label: this.isPlaying ? "\u23F8" : "\u25B6",
-      x: startX,
-      y: btnY,
-      w: btnW,
-      h: btnH,
+      x: startX + (btnW + gap) * 2, y: row3Y, w: btnW, h: btnH,
       onClick: () => {
         this.playBtn.click();
       },
     });
-
     this.vrPanel.addButton({
       label: `${this.playbackSpeed}x`,
-      x: startX + btnW + gap,
-      y: btnY,
-      w: btnW,
-      h: btnH,
+      x: startX + (btnW + gap) * 3, y: row3Y, w: btnW, h: btnH,
       onClick: () => {
         this.speedBtn.click();
       },
     });
 
+    // ── Row 4: Merge ──
+    const row4Y = 0.88;
+
+    // Button index: 12=Merge
     this.vrPanel.addButton({
       label: "Merge",
-      x: startX + (btnW + gap) * 2,
-      y: btnY,
-      w: btnW,
-      h: btnH,
+      x: startX, y: row4Y, w: btnW * 2 + gap, h: btnH,
       onClick: () => {
         this.triggerMerge();
       },
@@ -380,7 +469,7 @@ export class SandboxScene implements Scene {
         this.isPlaying = false;
         this.audio.stop();
         this.playBtn.innerHTML = "&#9654;";
-        this.vrPanel?.updateButton(0, "\u25B6");
+        this.vrPanel?.updateButton(10, "\u25B6");
       }
     }
 
