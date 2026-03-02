@@ -43,6 +43,7 @@ export class NBodyScene implements Scene {
   private panel!: NBodyPanel;
   private vrPanel: VRPanel | null = null;
   private vrPlacing = false;
+  private vrPlacingControllerIndex = -1;
   private vrPlacePosition: THREE.Vector3 | null = null;
   private vrVelocityArrow: THREE.ArrowHelper | null = null;
   private vrGhostSphere: THREE.Mesh | null = null;
@@ -660,12 +661,12 @@ export class NBodyScene implements Scene {
       },
     });
 
-    // Row 3: Trails, Grid toggles
+    // Row 3: Trails, Grid toggles, Exit VR
     const row3Y = 0.72;
 
     this.vrPanel.addButton({
       label: this.showTrails ? "Trails: ON" : "Trails: OFF",
-      x: startX, y: row3Y, w: btnW * 1.3, h: btnH,
+      x: startX, y: row3Y, w: btnW * 1.2, h: btnH,
       onClick: () => {
         this.showTrails = !this.showTrails;
         this.updateTrailVisibility();
@@ -675,11 +676,19 @@ export class NBodyScene implements Scene {
 
     this.vrPanel.addButton({
       label: this.showGrid ? "Grid: ON" : "Grid: OFF",
-      x: startX + btnW * 1.3 + gap, y: row3Y, w: btnW * 1.3, h: btnH,
+      x: startX + btnW * 1.2 + gap, y: row3Y, w: btnW * 1.2, h: btnH,
       onClick: () => {
         this.showGrid = !this.showGrid;
         this.gridHelper.visible = this.showGrid;
         this.vrPanel?.updateButton(9, this.showGrid ? "Grid: ON" : "Grid: OFF");
+      },
+    });
+
+    this.vrPanel.addButton({
+      label: "Exit VR",
+      x: startX + (btnW * 1.2 + gap) * 2, y: row3Y, w: btnW * 1.2, h: btnH,
+      onClick: () => {
+        this.ctx.renderer.xr.getSession()?.end();
       },
     });
 
@@ -713,7 +722,7 @@ export class NBodyScene implements Scene {
     }
 
     // Controller placement hooks
-    xr.onControllerSelectStart = (origin, direction) => {
+    xr.onControllerSelectStart = (origin, direction, controllerIndex) => {
       if (!this.vrPlacing) return false;
 
       // Raycast against ground plane
@@ -722,6 +731,7 @@ export class NBodyScene implements Scene {
       if (!ray.intersectPlane(this.groundPlane, hit)) return true;
 
       this.vrPlacePosition = hit.clone();
+      this.vrPlacingControllerIndex = controllerIndex;
 
       // Show ghost sphere at placement point
       const color = this.placeType === "blackhole" ? 0x6633aa :
@@ -736,7 +746,7 @@ export class NBodyScene implements Scene {
       return true; // consume — don't teleport
     };
 
-    xr.onControllerSelectEnd = (origin, direction) => {
+    xr.onControllerSelectEnd = (origin, direction, _controllerIndex) => {
       if (!this.vrPlacing || !this.vrPlacePosition) return;
 
       // Raycast to get release position for velocity
@@ -771,6 +781,7 @@ export class NBodyScene implements Scene {
         this.vrVelocityArrow = null;
       }
       this.vrPlacePosition = null;
+      this.vrPlacingControllerIndex = -1;
       // Stay in placement mode for rapid placement
     };
   }
@@ -923,36 +934,30 @@ export class NBodyScene implements Scene {
       }
     }
 
-    // Update VR velocity arrow during drag
-    if (this.vrPlacing && this.vrPlacePosition && this.ctx.xrManager?.isPresenting) {
-      // Read controller ray from renderer.xr
-      const session = this.ctx.renderer.xr.getSession();
-      if (session) {
-        for (let i = 0; i < 2; i++) {
-          const controller = this.ctx.renderer.xr.getController(i);
-          if (!controller) continue;
-          const tempMatrix = new THREE.Matrix4().identity().extractRotation(controller.matrixWorld);
-          const origin = new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
-          const direction = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix);
-          const ray = new THREE.Ray(origin, direction);
-          const hit = new THREE.Vector3();
-          if (ray.intersectPlane(this.groundPlane, hit)) {
-            const dir = new THREE.Vector3().subVectors(hit, this.vrPlacePosition);
-            const length = dir.length();
+    // Update VR velocity arrow during drag — track from the controller that started placement
+    if (this.vrPlacing && this.vrPlacePosition && this.vrPlacingControllerIndex >= 0 && this.ctx.xrManager?.isPresenting) {
+      const controller = this.ctx.renderer.xr.getController(this.vrPlacingControllerIndex);
+      if (controller) {
+        const tempMatrix = new THREE.Matrix4().identity().extractRotation(controller.matrixWorld);
+        const origin = new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
+        const direction = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix);
+        const ray = new THREE.Ray(origin, direction);
+        const hit = new THREE.Vector3();
+        if (ray.intersectPlane(this.groundPlane, hit)) {
+          const dir = new THREE.Vector3().subVectors(hit, this.vrPlacePosition);
+          const length = dir.length();
 
-            if (this.vrVelocityArrow) {
-              this.group.remove(this.vrVelocityArrow);
-              this.vrVelocityArrow = null;
-            }
+          if (this.vrVelocityArrow) {
+            this.group.remove(this.vrVelocityArrow);
+            this.vrVelocityArrow = null;
+          }
 
-            if (length > 0.1) {
-              this.vrVelocityArrow = new THREE.ArrowHelper(
-                dir.clone().normalize(), this.vrPlacePosition, length,
-                0x00ff88, 0.2, 0.12,
-              );
-              this.group.add(this.vrVelocityArrow);
-            }
-            break; // use first active controller
+          if (length > 0.1) {
+            this.vrVelocityArrow = new THREE.ArrowHelper(
+              dir.clone().normalize(), this.vrPlacePosition, length,
+              0x00ff88, 0.2, 0.12,
+            );
+            this.group.add(this.vrVelocityArrow);
           }
         }
       }

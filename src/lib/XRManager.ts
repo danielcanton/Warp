@@ -66,9 +66,9 @@ export class XRManager {
   onSessionStart: (() => void) | null = null;
   onSessionEnd: (() => void) | null = null;
   /** Scene-level hook: fires on trigger press. Return true to consume (skip teleport). */
-  onControllerSelectStart: ((origin: THREE.Vector3, direction: THREE.Vector3) => boolean) | null = null;
+  onControllerSelectStart: ((origin: THREE.Vector3, direction: THREE.Vector3, controllerIndex: number) => boolean) | null = null;
   /** Scene-level hook: fires on trigger release. */
-  onControllerSelectEnd: ((origin: THREE.Vector3, direction: THREE.Vector3) => void) | null = null;
+  onControllerSelectEnd: ((origin: THREE.Vector3, direction: THREE.Vector3, controllerIndex: number) => void) | null = null;
   /** Fires on left thumbstick press (rising edge). */
   onMenuPress: (() => void) | null = null;
 
@@ -140,8 +140,8 @@ export class XRManager {
       this.controller1.add(this.controllerRay1);
       this.cameraRig.add(this.controller1);
 
-      (this.controller1 as unknown as EventTarget).addEventListener("selectstart", () => this.onSelect(this.controller1!));
-      (this.controller1 as unknown as EventTarget).addEventListener("selectend", () => this.onSelectEnd(this.controller1!));
+      (this.controller1 as unknown as EventTarget).addEventListener("selectstart", () => this.onSelect(this.controller1!, 0));
+      (this.controller1 as unknown as EventTarget).addEventListener("selectend", () => this.onSelectEnd(this.controller1!, 0));
     }
 
     if (this.controller2) {
@@ -149,8 +149,8 @@ export class XRManager {
       this.controller2.add(this.controllerRay2);
       this.cameraRig.add(this.controller2);
 
-      (this.controller2 as unknown as EventTarget).addEventListener("selectstart", () => this.onSelect(this.controller2!));
-      (this.controller2 as unknown as EventTarget).addEventListener("selectend", () => this.onSelectEnd(this.controller2!));
+      (this.controller2 as unknown as EventTarget).addEventListener("selectstart", () => this.onSelect(this.controller2!, 1));
+      (this.controller2 as unknown as EventTarget).addEventListener("selectend", () => this.onSelectEnd(this.controller2!, 1));
     }
 
     // Hit reticle — small glowing dot at ray-panel intersection
@@ -273,18 +273,18 @@ export class XRManager {
     this.usingHands = false;
   }
 
-  private onSelect(controller: THREE.Group) {
+  private onSelect(controller: THREE.Group, controllerIndex: number) {
     // Ignore controller select events when using hands
     if (this.usingHands) return;
 
-    this.performSelect(controller);
+    this.performSelect(controller, controllerIndex);
   }
 
   /**
    * Perform a select action using a ray derived from the given object's
    * matrixWorld (works for controllers).
    */
-  private performSelect(source: THREE.Group) {
+  private performSelect(source: THREE.Group, controllerIndex = 0) {
     this.tempMatrix.identity().extractRotation(source.matrixWorld);
     this.raycaster.ray.origin.setFromMatrixPosition(source.matrixWorld);
     this.raycaster.ray.direction.set(0, 0, -1).applyMatrix4(this.tempMatrix);
@@ -303,7 +303,7 @@ export class XRManager {
     if (this.onControllerSelectStart) {
       const origin = this.raycaster.ray.origin.clone();
       const direction = this.raycaster.ray.direction.clone();
-      if (this.onControllerSelectStart(origin, direction)) return;
+      if (this.onControllerSelectStart(origin, direction, controllerIndex)) return;
     }
 
     // Teleport: raycast against ground plane
@@ -316,7 +316,7 @@ export class XRManager {
     }
   }
 
-  private onSelectEnd(controller: THREE.Group) {
+  private onSelectEnd(controller: THREE.Group, controllerIndex: number) {
     if (!this.onControllerSelectEnd) return;
     this.tempMatrix.identity().extractRotation(controller.matrixWorld);
     this.raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
@@ -324,6 +324,7 @@ export class XRManager {
     this.onControllerSelectEnd(
       this.raycaster.ray.origin.clone(),
       this.raycaster.ray.direction.clone(),
+      controllerIndex,
     );
   }
 

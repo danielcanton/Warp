@@ -401,15 +401,24 @@ export class SandboxScene implements Scene {
       },
     });
 
-    // ── Row 4: Merge ──
+    // ── Row 4: Merge + Exit VR ──
     const row4Y = 0.88;
 
     // Button index: 12=Merge
     this.vrPanel.addButton({
       label: "Merge",
-      x: startX, y: row4Y, w: btnW * 2 + gap, h: btnH,
+      x: startX, y: row4Y, w: btnW, h: btnH,
       onClick: () => {
         this.triggerMerge();
+      },
+    });
+
+    // Button index: 13=Exit VR
+    this.vrPanel.addButton({
+      label: "Exit VR",
+      x: startX + (btnW + gap), y: row4Y, w: btnW, h: btnH,
+      onClick: () => {
+        this.ctx.renderer.xr.getSession()?.end();
       },
     });
 
