@@ -46,6 +46,11 @@ export class SceneManager {
       this.activeScene.dispose();
     }
 
+    // Reset VR camera rig so position/rotation doesn't carry between scenes
+    if (this.ctx.xrManager) {
+      this.ctx.xrManager.resetCameraRig();
+    }
+
     this.activeScene = next;
     await next.init(this.ctx);
 

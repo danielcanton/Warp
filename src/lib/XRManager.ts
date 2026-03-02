@@ -852,6 +852,12 @@ export class XRManager {
     }
   }
 
+  /** Reset camera rig to origin with identity rotation (used on scene switch). */
+  resetCameraRig() {
+    this.cameraRig.position.set(0, 0, 0);
+    this.cameraRig.rotation.set(0, 0, 0);
+  }
+
   get cameraRigPosition(): THREE.Vector3 {
     return this.cameraRig.position;
   }

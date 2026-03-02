@@ -83,6 +83,7 @@ if (vrButtonEl) {
   xrManager.createButton().then((btn) => {
     if (btn) {
       btn.id = "vr-button";
+      btn.className = vrButtonEl.className;
       btn.style.cssText = vrButtonEl.style.cssText;
       vrButtonEl.replaceWith(btn);
     } else {
