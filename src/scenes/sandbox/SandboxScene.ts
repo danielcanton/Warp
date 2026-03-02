@@ -50,6 +50,10 @@ export class SandboxScene implements Scene {
   // VR panel
   private vrPanel: VRPanel | null = null;
 
+  // Haptic feedback
+  private static readonly WAVE_SPEED = 4; // m/s
+  private readonly mergerCenter = new THREE.Vector3(0, 0.6, 0);
+
   private boundHandlers: { el: EventTarget; type: string; fn: EventListener }[] = [];
   private initialized = false;
 
@@ -411,6 +415,15 @@ export class SandboxScene implements Scene {
 
     xr.registerPanel(this.vrPanel);
 
+    xr.onMenuPress = () => {
+      if (!this.vrPanel) return;
+      this.vrPanel.toggle();
+      if (this.vrPanel.visible) {
+        this.ctx.camera.updateWorldMatrix(true, false);
+        this.vrPanel.positionInFront(this.ctx.camera, 2, -0.3);
+      }
+    };
+
     xr.onSessionStart = () => {
       if (this.vrPanel) {
         this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
@@ -488,6 +501,23 @@ export class SandboxScene implements Scene {
       this.ctx.bloom.intensity = 1.2 + glowIntensity * 3;
     }
 
+    // VR haptic feedback — distance-aware wave propagation
+    if (this.isPlaying && this.ctx.xrManager?.isPresenting && this.currentWaveform) {
+      const hPlus = this.currentWaveform.hPlus;
+      const peakAmplitude = Math.abs(hPlus[this.currentWaveform.peakIndex]);
+      if (peakAmplitude > 0) {
+        const distance = this.ctx.xrManager.cameraWorldPosition.distanceTo(this.mergerCenter);
+        const delayNorm = (distance / SandboxScene.WAVE_SPEED) / this.currentWaveform.duration;
+        const delayedTime = this.playbackTime - delayNorm;
+        if (delayedTime >= 0) {
+          const sampleIndex = Math.min(Math.floor(delayedTime * hPlus.length), hPlus.length - 1);
+          const rawIntensity = Math.abs(hPlus[sampleIndex]) / peakAmplitude;
+          const spatialFactor = Math.min(1, Math.max(0, 1 / (1 + distance * 0.3)));
+          this.ctx.xrManager.pulseHaptics(rawIntensity * spatialFactor);
+        }
+      }
+    }
+
     // Subtle camera drift
     if (!this.isPlaying) {
       this.ctx.camera.position.x += Math.sin(elapsed * 0.1) * 0.002;
@@ -521,6 +551,9 @@ export class SandboxScene implements Scene {
       this.ctx.scene.remove(this.vrPanel.mesh);
       this.vrPanel.dispose();
       this.vrPanel = null;
+    }
+    if (this.ctx.xrManager) {
+      this.ctx.xrManager.onMenuPress = null;
     }
 
     this.ctx.scene.remove(this.group);

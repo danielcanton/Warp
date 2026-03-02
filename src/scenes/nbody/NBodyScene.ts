@@ -685,9 +685,18 @@ export class NBodyScene implements Scene {
 
     xr.registerPanel(this.vrPanel);
 
+    xr.onMenuPress = () => {
+      if (!this.vrPanel) return;
+      this.vrPanel.toggle();
+      if (this.vrPanel.visible) {
+        this.ctx.camera.updateWorldMatrix(true, false);
+        this.vrPanel.positionInFront(this.ctx.camera, 2, -0.3);
+      }
+    };
+
     xr.onSessionStart = () => {
       if (this.vrPanel) {
-        this.vrPanel.positionInFront(ctx.camera, 2.5, -0.3);
+        this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
         ctx.scene.add(this.vrPanel.mesh);
       }
     };
@@ -699,7 +708,7 @@ export class NBodyScene implements Scene {
 
     // If already in VR (scene switch mid-session)
     if (xr.isPresenting && this.vrPanel) {
-      this.vrPanel.positionInFront(ctx.camera, 2.5, -0.3);
+      this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
       ctx.scene.add(this.vrPanel.mesh);
     }
 
@@ -980,6 +989,7 @@ export class NBodyScene implements Scene {
       this.vrPanel = null;
     }
     if (this.ctx.xrManager) {
+      this.ctx.xrManager.onMenuPress = null;
       this.ctx.xrManager.onControllerSelectStart = null;
       this.ctx.xrManager.onControllerSelectEnd = null;
     }

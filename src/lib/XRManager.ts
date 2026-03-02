@@ -81,8 +81,11 @@ export class XRManager {
     this.cameraRig.name = "xr-camera-rig";
   }
 
+  private userCamera: THREE.Camera | null = null;
+
   /** Add camera to the rig and add the rig to the scene. */
   setupCameraRig(camera: THREE.Camera) {
+    this.userCamera = camera;
     this.cameraRig.add(camera);
     this.scene.add(this.cameraRig);
   }
@@ -805,10 +808,10 @@ export class XRManager {
   /** Camera world position including physical head offset within the rig. */
   private readonly _cameraWorldPos = new THREE.Vector3();
   get cameraWorldPosition(): THREE.Vector3 {
-    const camera = this.renderer.xr.getCamera();
-    // Force matrix update — update() runs before renderer.render() so matrices may be stale
-    camera.updateMatrixWorld(true);
-    camera.getWorldPosition(this._cameraWorldPos);
+    if (this.userCamera) {
+      this.userCamera.updateMatrixWorld(true);
+      this.userCamera.getWorldPosition(this._cameraWorldPos);
+    }
     return this._cameraWorldPos;
   }
 

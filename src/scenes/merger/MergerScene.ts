@@ -1538,6 +1538,9 @@ export class MergerScene implements Scene {
       this.vrPanel.dispose();
       this.vrPanel = null;
     }
+    if (this.ctx.xrManager) {
+      this.ctx.xrManager.onMenuPress = null;
+    }
 
     // Clean up VR tutorial
     if (this.vrTutorialTimeout) {

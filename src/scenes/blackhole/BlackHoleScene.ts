@@ -243,6 +243,15 @@ export class BlackHoleScene implements Scene {
 
     xr.registerPanel(this.vrPanel);
 
+    xr.onMenuPress = () => {
+      if (!this.vrPanel) return;
+      this.vrPanel.toggle();
+      if (this.vrPanel.visible) {
+        this.ctx.camera.updateWorldMatrix(true, false);
+        this.vrPanel.positionInFront(this.ctx.camera, 2, -0.3);
+      }
+    };
+
     xr.onSessionStart = () => {
       if (this.vrPanel) {
         this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
@@ -627,6 +636,9 @@ export class BlackHoleScene implements Scene {
       this.ctx.scene.remove(this.vrPanel.mesh);
       this.vrPanel.dispose();
       this.vrPanel = null;
+    }
+    if (this.ctx.xrManager) {
+      this.ctx.xrManager.onMenuPress = null;
     }
 
     if (this.panelEl?.parentNode) {
