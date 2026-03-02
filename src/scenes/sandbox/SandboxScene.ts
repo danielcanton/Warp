@@ -53,7 +53,6 @@ export class SandboxScene implements Scene {
   private vrTutorial: VRTutorial | null = null;
   private passthroughActive = false;
   private savedBackground: THREE.Color | THREE.Texture | null = null;
-  private skySphere: THREE.Mesh | null = null;
 
   // Haptic feedback
   private static readonly WAVE_SPEED = 4; // m/s
@@ -441,31 +440,15 @@ export class SandboxScene implements Scene {
             this.ctx.scene.background = null;
             this.ctx.renderer.setClearColor(0x000000, 0);
             this.spacetimeMaterial.uniforms.uOpacity.value = 0.3;
-            if (this.skySphere) this.skySphere.visible = false;
           } else {
             // Force solid background to block AR camera passthrough
             this.ctx.scene.background = new THREE.Color(0x000005);
             this.ctx.renderer.setClearColor(0x000005, 1);
             this.spacetimeMaterial.uniforms.uOpacity.value = 1.0;
-            if (this.skySphere) this.skySphere.visible = true;
           }
           this.vrPanel?.updateButton(ptBtnIdx, `Passthrough: ${this.passthroughActive ? "ON" : "OFF"}`);
         },
       });
-    }
-
-    // ─── Opaque sky sphere for blocking AR camera when passthrough is OFF ───
-    if (xr.supportsAR && !this.skySphere) {
-      const skyGeo = new THREE.IcosahedronGeometry(45, 2);
-      skyGeo.scale(-1, 1, 1);
-      this.skySphere = new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({
-        color: 0x000005,
-        side: THREE.BackSide,
-        depthWrite: false,
-      }));
-      this.skySphere.renderOrder = -1000;
-      this.skySphere.visible = false;
-      this.ctx.scene.add(this.skySphere);
     }
 
     xr.registerPanel(this.vrPanel);
@@ -496,7 +479,6 @@ export class SandboxScene implements Scene {
       }
       this.vrTutorial?.hide(ctx.scene);
       // Restore opaque state if passthrough was active
-      if (this.skySphere) this.skySphere.visible = false;
       if (this.passthroughActive) {
         this.ctx.scene.background = new THREE.Color(0x000005);
         this.ctx.renderer.setClearColor(0x000005, 1);
@@ -626,14 +608,6 @@ export class SandboxScene implements Scene {
     if (this.vrTutorial) {
       this.vrTutorial.dispose(this.ctx.scene);
       this.vrTutorial = null;
-    }
-
-    // Clean up sky sphere
-    if (this.skySphere) {
-      this.ctx.scene.remove(this.skySphere);
-      this.skySphere.geometry.dispose();
-      (this.skySphere.material as THREE.MeshBasicMaterial).dispose();
-      this.skySphere = null;
     }
 
     this.ctx.scene.remove(this.group);

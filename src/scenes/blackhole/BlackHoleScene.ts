@@ -369,22 +369,14 @@ export class BlackHoleScene implements Scene {
     this.vrSphere.visible = true;
 
     // Sync VR material uniforms
-    this.vrMaterial.uniforms.uMass.value = this.mass;
     this.vrMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
 
-    // Save scene background for possible passthrough
-    this.savedBackground = this.ctx.scene.background as THREE.Color | THREE.Texture | null;
+    // Scale BH for VR: smaller mass + positioned at eye level 5m ahead
+    // At 33×rs the photon sphere subtends a visible angle with clear lensing
+    this.vrMaterial.uniforms.uMass.value = 0.15;
+    this.vrMaterial.uniforms.uBHCenter.value.set(0, 1.6, -5);
 
-    // Determine if we have AR session for passthrough
-    const isAR = this.ctx.xrManager?.isARSession ?? false;
-    this.hasCameraAccess = this.ctx.xrManager?.hasCameraAccess ?? false;
-
-    // Default to passthrough mode for AR sessions
-    this.passthroughActive = isAR;
-
-    if (this.passthroughActive) {
-      this.enterPassthroughMode();
-    }
+    this.passthroughActive = false;
   }
 
   /** Switch VR sphere to passthrough mode: localized 2m sphere, transparent, grab enabled */

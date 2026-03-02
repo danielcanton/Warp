@@ -94,8 +94,8 @@ export class XRManager {
   }
 
   /**
-   * Check XR support and create the VR/AR button.
-   * Prefers immersive-ar (passthrough on Quest 3) over immersive-vr.
+   * Check XR support and create the VR button.
+   * Always uses immersive-vr for reliable opaque rendering.
    * Returns the button element, or null if unsupported.
    */
   async createButton(): Promise<HTMLElement | null> {
@@ -103,13 +103,11 @@ export class XRManager {
 
     const xr = (navigator as Navigator & { xr: XRSystem }).xr;
 
-    // Prefer immersive-ar for passthrough support (Quest 3)
-    const arSupported = await xr.isSessionSupported("immersive-ar").catch(() => false);
     const vrSupported = await xr.isSessionSupported("immersive-vr").catch(() => false);
-    if (!arSupported && !vrSupported) return null;
+    if (!vrSupported) return null;
 
-    const sessionMode: XRSessionMode = arSupported ? "immersive-ar" : "immersive-vr";
-    this._supportsAR = arSupported;
+    const sessionMode: XRSessionMode = "immersive-vr";
+    this._supportsAR = false;
 
     this.renderer.xr.enabled = true;
 
@@ -119,8 +117,6 @@ export class XRManager {
         'bounded-floor',
         'hand-tracking',
         'layers',
-        ...(sessionMode === 'immersive-vr' ? ['passthrough'] : []),
-        'camera-access',
       ],
     };
 
@@ -151,37 +147,16 @@ export class XRManager {
     });
 
     this.renderer.xr.addEventListener("sessionstart", () => {
-      const session = this.renderer.xr.getSession();
-      this._isARSession = sessionMode === "immersive-ar";
-
-      if (session) {
-        // Store XRWebGLBinding for camera-access (getCameraImage)
-        try {
-          const gl = this.renderer.getContext();
-          const XRWebGLBindingCtor = (globalThis as Record<string, unknown>).XRWebGLBinding as
-            | (new (session: XRSession, context: WebGLRenderingContext | WebGL2RenderingContext) => unknown)
-            | undefined;
-          if (XRWebGLBindingCtor) {
-            this.glBinding = new XRWebGLBindingCtor(session, gl);
-          }
-        } catch {
-          // XRWebGLBinding not available — Tier 1 fallback
-        }
-
-        // Check if camera-access was granted
-        const enabledFeatures = (session as unknown as { enabledFeatures?: string[] }).enabledFeatures;
-        this._hasCameraAccess = enabledFeatures?.includes('camera-access') ?? false;
-      }
-
+      this._isARSession = false;
+      this._hasCameraAccess = false;
       this.setupControllers();
       this.setupHands();
       this.onSessionStart?.();
     });
 
     this.renderer.xr.addEventListener("sessionend", () => {
-      this.glBinding = null;
-      this._hasCameraAccess = false;
       this._isARSession = false;
+      this._hasCameraAccess = false;
       this.cleanupControllers();
       this.cleanupHands();
       this.onSessionEnd?.();
