@@ -30,6 +30,10 @@ WarpLab lets you explore gravitational wave events — the ripples in spacetime 
 - Full-screen ray-marched Schwarzschild black hole
 - Togglable accretion disk and AR camera mode
 - Independent orbit camera with smooth interpolation
+- **VR passthrough (Quest 3)** — black hole floats in your real room via mixed reality
+  - Two-tier architecture: Tier 1 (dark void + Einstein ring glow over passthrough), Tier 2 (gravitational lensing of camera feed — activates automatically when WebXR camera-access ships)
+  - Grab & drag to reposition the black hole with controllers or hand tracking
+  - Localized 2m sphere with early ray termination for Quest 3 performance
 
 ### Sandbox & N-Body
 - Custom binary parameters with live waveform preview
@@ -49,7 +53,8 @@ Downloads a ZIP bundle containing:
 - `CITATION.bib` — BibTeX for GWOSC, catalog paper, and WarpLab
 
 ### Platform support
-- WebXR / VR ready (Merger + Sandbox scenes)
+- WebXR / VR ready (Merger, Sandbox, Black Hole, N-Body scenes)
+- Quest 3 mixed reality passthrough (Black Hole scene)
 - Embeddable via iframe (`?embed=true`)
 - Responsive mobile layout
 - First-visit onboarding hints
@@ -106,7 +111,9 @@ src/
 │   ├── spacetime.vert.glsl     # Grid deformation from binary masses
 │   ├── spacetime.frag.glsl     # Grid lines, glow, distance fade
 │   ├── blackhole.vert.glsl     # Fullscreen quad vertex shader
-│   └── blackhole.frag.glsl     # Schwarzschild ray marching
+│   ├── blackhole.frag.glsl     # Schwarzschild ray marching
+│   ├── blackhole-vr.vert.glsl  # VR stereo vertex shader (per-eye parallax)
+│   └── blackhole-vr.frag.glsl  # VR ray marching + passthrough lensing
 └── components/                 # React components (landing page)
     ├── SplashCursor.tsx
     ├── DecryptedText.tsx

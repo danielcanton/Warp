@@ -46,6 +46,16 @@ export class BlackHoleScene implements Scene {
   private arCheckbox: HTMLInputElement | null = null;
   private invCameraMatrix = new THREE.Matrix4();
 
+  // VR passthrough state
+  private passthroughActive = false;
+  private hasCameraAccess = false;
+  private bhWorldPosition = new THREE.Vector3(0, 1.2, -2); // 2m in front, chest height
+  private grabbing = false;
+  private grabControllerIndex = -1;
+  private grabOffset = new THREE.Vector3();
+  private savedBackground: THREE.Color | THREE.Texture | null = null;
+  private vrSphereOriginalGeo: THREE.BufferGeometry | null = null;
+
   private boundHandlers: { el: EventTarget; type: string; fn: EventListener }[] = [];
   private initialized = false;
   private unsubViewMode: (() => void) | null = null;
@@ -101,9 +111,16 @@ export class BlackHoleScene implements Scene {
           uMass: { value: this.mass },
           uShowDisk: { value: 1.0 },
           uCameraPosVR: { value: new THREE.Vector3() },
+          // Passthrough uniforms
+          uPassthrough: { value: 0.0 },
+          uHasCameraFeed: { value: 0.0 },
+          uCameraFeed: { value: new THREE.Texture() },
+          uBHCenter: { value: new THREE.Vector3() },
+          uSphereRadius: { value: 2.0 },
         },
         side: THREE.BackSide,
         depthWrite: false,
+        transparent: false,
       });
 
       this.vrSphere = new THREE.Mesh(sphereGeo, this.vrMaterial);
@@ -175,13 +192,13 @@ export class BlackHoleScene implements Scene {
 
   private setupVRPanel(ctx: SceneContext) {
     const xr = ctx.xrManager!;
-    this.vrPanel = new VRPanel(1.4, 0.5);
+    this.vrPanel = new VRPanel(1.4, 0.7);
     this.vrPanel.setTitle("Black Hole");
 
-    // 3 buttons in a row
-    const btnY = 0.55;
-    const btnH = 0.35;
-    const btnW = 0.30;
+    // Row 1: Mass + Disk
+    const row1Y = 0.40;
+    const btnH = 0.25;
+    const btnW = 0.44;
     const gap = 0.03;
     const startX = 0.04;
 
@@ -191,7 +208,7 @@ export class BlackHoleScene implements Scene {
     this.vrPanel.addButton({
       label: `Mass: ${this.mass}`,
       x: startX,
-      y: btnY,
+      y: row1Y,
       w: btnW,
       h: btnH,
       onClick: () => {
@@ -201,7 +218,6 @@ export class BlackHoleScene implements Scene {
         this.vrMaterial.uniforms.uMass.value = this.mass;
         this.vrPanel?.updateButton(0, `Mass: ${this.mass}`);
         this.updateEquationValuesForMass();
-        // Sync DOM slider if present
         const slider = this.panelEl?.querySelector("#bh-mass") as HTMLInputElement | null;
         if (slider) {
           slider.value = String(this.mass * 100);
@@ -215,7 +231,7 @@ export class BlackHoleScene implements Scene {
     this.vrPanel.addButton({
       label: this.showDisk ? "Disk: ON" : "Disk: OFF",
       x: startX + btnW + gap,
-      y: btnY,
+      y: row1Y,
       w: btnW,
       h: btnH,
       onClick: () => {
@@ -223,25 +239,67 @@ export class BlackHoleScene implements Scene {
         this.bhMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
         this.vrMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
         this.vrPanel?.updateButton(1, this.showDisk ? "Disk: ON" : "Disk: OFF");
-        // Sync DOM checkbox
         const cb = this.panelEl?.querySelector("#bh-disk") as HTMLInputElement | null;
         if (cb) cb.checked = this.showDisk;
       },
     });
 
-    // AR toggle (disabled in VR — label only)
+    // Row 2: Reset Pos + Exit VR
+    const row2Y = 0.70;
+
+    // Reset position — move BH back to 2m in front of user
     this.vrPanel.addButton({
-      label: "AR: N/A",
-      x: startX + (btnW + gap) * 2,
-      y: btnY,
+      label: "Reset Pos",
+      x: startX,
+      y: row2Y,
       w: btnW,
       h: btnH,
       onClick: () => {
-        // AR not available in VR mode — no-op
+        const headPos = xr.cameraWorldPosition;
+        this.bhWorldPosition.set(headPos.x, headPos.y, headPos.z - 2);
+        this.vrSphere.position.copy(this.bhWorldPosition);
+        this.vrMaterial.uniforms.uBHCenter.value.copy(this.bhWorldPosition);
+      },
+    });
+
+    // Exit VR
+    this.vrPanel.addButton({
+      label: "Exit VR",
+      x: startX + btnW + gap,
+      y: row2Y,
+      w: btnW,
+      h: btnH,
+      onClick: () => {
+        xr.endSession();
       },
     });
 
     xr.registerPanel(this.vrPanel);
+
+    // Grab & drag black hole with controller/hand
+    const grabRaycaster = new THREE.Raycaster();
+    xr.onControllerSelectStart = (origin, direction, _controllerIndex) => {
+      if (!this.passthroughActive) return false;
+
+      grabRaycaster.set(origin, direction);
+      const intersects = grabRaycaster.intersectObject(this.vrSphere);
+      if (intersects.length > 0) {
+        this.grabbing = true;
+        this.grabControllerIndex = _controllerIndex;
+        // Store offset from ray hit to BH center for smooth dragging
+        this.grabOffset.copy(this.bhWorldPosition).sub(intersects[0].point);
+        xr.pulseHaptics(0.3, 50);
+        return true; // consume event (skip teleport)
+      }
+      return false;
+    };
+
+    xr.onControllerSelectEnd = () => {
+      if (this.grabbing) {
+        this.grabbing = false;
+        this.grabControllerIndex = -1;
+      }
+    };
 
     xr.onMenuPress = () => {
       if (!this.vrPanel) return;
@@ -277,14 +335,69 @@ export class BlackHoleScene implements Scene {
   private switchToVR() {
     this.quad.visible = false;
     this.vrSphere.visible = true;
+
     // Sync VR material uniforms
     this.vrMaterial.uniforms.uMass.value = this.mass;
     this.vrMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
+
+    // Save and clear scene background for passthrough transparency
+    this.savedBackground = this.ctx.scene.background as THREE.Color | THREE.Texture | null;
+    this.ctx.scene.background = null;
+
+    // Always enter passthrough mode in VR (localized sphere)
+    this.passthroughActive = true;
+    this.hasCameraAccess = this.ctx.xrManager?.hasCameraAccess ?? false;
+
+    // Replace large skybox sphere with localized sphere
+    this.vrSphereOriginalGeo = this.vrSphere.geometry;
+    const localGeo = new THREE.IcosahedronGeometry(2.0, 5);
+    localGeo.scale(-1, 1, 1); // invert normals
+    this.vrSphere.geometry = localGeo;
+
+    // Position BH in front of user at session start
+    const xr = this.ctx.xrManager;
+    if (xr) {
+      const headPos = xr.cameraWorldPosition;
+      this.bhWorldPosition.set(headPos.x, headPos.y, headPos.z - 2);
+    }
+    this.vrSphere.position.copy(this.bhWorldPosition);
+
+    // Configure material for passthrough
+    this.vrMaterial.transparent = true;
+    this.vrMaterial.blending = THREE.NormalBlending;
+    this.vrMaterial.uniforms.uPassthrough.value = 1.0;
+    this.vrMaterial.uniforms.uHasCameraFeed.value = this.hasCameraAccess ? 1.0 : 0.0;
+    this.vrMaterial.uniforms.uBHCenter.value.copy(this.bhWorldPosition);
+    this.vrMaterial.uniforms.uSphereRadius.value = 2.0;
   }
 
   private switchToDesktop() {
     this.vrSphere.visible = false;
     this.quad.visible = true;
+
+    // Restore scene background
+    if (this.savedBackground !== null) {
+      this.ctx.scene.background = this.savedBackground;
+      this.savedBackground = null;
+    }
+
+    // Restore large sphere geometry
+    if (this.vrSphereOriginalGeo) {
+      this.vrSphere.geometry.dispose();
+      this.vrSphere.geometry = this.vrSphereOriginalGeo;
+      this.vrSphereOriginalGeo = null;
+    }
+    this.vrSphere.position.set(0, 0, 0);
+
+    // Reset material to opaque skybox mode
+    this.vrMaterial.transparent = false;
+    this.vrMaterial.blending = THREE.NormalBlending;
+    this.vrMaterial.uniforms.uPassthrough.value = 0.0;
+    this.vrMaterial.uniforms.uHasCameraFeed.value = 0.0;
+
+    this.passthroughActive = false;
+    this.hasCameraAccess = false;
+    this.grabbing = false;
   }
 
   private buildPanel() {
@@ -549,6 +662,35 @@ export class BlackHoleScene implements Scene {
     if (isPresenting) {
       const xrCamera = this.ctx.renderer.xr.getCamera();
       this.vrMaterial.uniforms.uCameraPosVR.value.copy(xrCamera.position);
+
+      // Update BH center uniform and grab logic
+      if (this.passthroughActive) {
+        // Grab-drag: move BH to follow controller ray
+        if (this.grabbing) {
+          // Use the XR camera's current controller position
+          // The controller provides ray origin; place BH at fixed distance along ray
+          const session = this.ctx.renderer.xr.getSession();
+          if (session) {
+            for (const source of session.inputSources) {
+              if (!source.gripSpace) continue;
+              const frame = this.ctx.renderer.xr.getFrame() as XRFrame | null;
+              const refSpace = this.ctx.renderer.xr.getReferenceSpace();
+              if (frame && refSpace) {
+                const pose = frame.getPose(source.gripSpace, refSpace);
+                if (pose) {
+                  const p = pose.transform.position;
+                  // Place BH at grip position + offset
+                  this.bhWorldPosition.set(p.x + this.grabOffset.x, p.y + this.grabOffset.y, p.z + this.grabOffset.z);
+                  this.vrSphere.position.copy(this.bhWorldPosition);
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        this.vrMaterial.uniforms.uBHCenter.value.copy(this.bhWorldPosition);
+      }
     }
 
     // Smooth camera interpolation (desktop only)
@@ -639,7 +781,18 @@ export class BlackHoleScene implements Scene {
     }
     if (this.ctx.xrManager) {
       this.ctx.xrManager.onMenuPress = null;
+      this.ctx.xrManager.onControllerSelectStart = null;
+      this.ctx.xrManager.onControllerSelectEnd = null;
     }
+
+    // Clean up passthrough state
+    if (this.vrSphereOriginalGeo) {
+      this.vrSphere.geometry.dispose();
+      this.vrSphere.geometry = this.vrSphereOriginalGeo;
+      this.vrSphereOriginalGeo = null;
+    }
+    this.passthroughActive = false;
+    this.grabbing = false;
 
     if (this.panelEl?.parentNode) {
       this.panelEl.parentNode.removeChild(this.panelEl);

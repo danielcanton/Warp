@@ -18,6 +18,10 @@ export class XRManager {
   private scene: THREE.Scene;
   private panels: VRPanel[] = [];
 
+  // Passthrough / camera-access
+  private glBinding: unknown | null = null; // XRWebGLBinding (when available)
+  private _hasCameraAccess = false;
+
   // Controllers
   private controller1: THREE.Group | null = null;
   private controller2: THREE.Group | null = null;
@@ -103,15 +107,48 @@ export class XRManager {
 
     this.renderer.xr.enabled = true;
 
-    const button = VRButton.createButton(this.renderer);
+    // Request passthrough + camera-access as optional features
+    const sessionInit: XRSessionInit = {
+      optionalFeatures: [
+        'local-floor',
+        'bounded-floor',
+        'hand-tracking',
+        'layers',
+        'passthrough',
+        'camera-access',
+      ],
+    };
+    const button = VRButton.createButton(this.renderer, sessionInit);
 
     this.renderer.xr.addEventListener("sessionstart", () => {
+      // Store XRWebGLBinding for camera-access (getCameraImage)
+      const session = this.renderer.xr.getSession();
+      if (session) {
+        try {
+          const gl = this.renderer.getContext();
+          const XRWebGLBindingCtor = (globalThis as Record<string, unknown>).XRWebGLBinding as
+            | (new (session: XRSession, context: WebGLRenderingContext | WebGL2RenderingContext) => unknown)
+            | undefined;
+          if (XRWebGLBindingCtor) {
+            this.glBinding = new XRWebGLBindingCtor(session, gl);
+          }
+        } catch {
+          // XRWebGLBinding not available — Tier 1 fallback
+        }
+
+        // Check if camera-access was granted
+        const enabledFeatures = (session as unknown as { enabledFeatures?: string[] }).enabledFeatures;
+        this._hasCameraAccess = enabledFeatures?.includes('camera-access') ?? false;
+      }
+
       this.setupControllers();
       this.setupHands();
       this.onSessionStart?.();
     });
 
     this.renderer.xr.addEventListener("sessionend", () => {
+      this.glBinding = null;
+      this._hasCameraAccess = false;
       this.cleanupControllers();
       this.cleanupHands();
       this.onSessionEnd?.();
@@ -753,6 +790,11 @@ export class XRManager {
       }
     }
 
+    // Scene-level select hook (e.g. grab black hole)
+    if (this.onControllerSelectStart) {
+      if (this.onControllerSelectStart(origin.clone(), direction.clone(), -1)) return;
+    }
+
     // Teleport
     const hit = new THREE.Vector3();
     if (this.raycaster.ray.intersectPlane(this.groundPlane, hit)) {
@@ -818,6 +860,33 @@ export class XRManager {
 
   get isPresenting(): boolean {
     return this.renderer.xr.isPresenting;
+  }
+
+  /** Whether the current XR session has camera-access enabled. */
+  get hasCameraAccess(): boolean {
+    return this._hasCameraAccess;
+  }
+
+  /**
+   * Get the passthrough camera texture for a given XRView.
+   * Returns a WebGLTexture if camera-access is available, null otherwise.
+   */
+  getCameraTexture(view: unknown): WebGLTexture | null {
+    if (!this.glBinding) return null;
+    const xrView = view as { camera?: unknown };
+    if (!xrView.camera) return null;
+    try {
+      const binding = this.glBinding as { getCameraImage?: (camera: unknown) => WebGLTexture | null };
+      return binding.getCameraImage?.(xrView.camera) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** End the current XR session programmatically. */
+  async endSession(): Promise<void> {
+    const session = this.renderer.xr.getSession();
+    if (session) await session.end();
   }
 
   dispose() {
