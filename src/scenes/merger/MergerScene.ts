@@ -171,6 +171,8 @@ export class MergerScene implements Scene {
 
   // VR panel
   private vrPanel: VRPanel | null = null;
+  private vrTutorial: VRPanel | null = null;
+  private vrTutorialTimeout: ReturnType<typeof setTimeout> | null = null;
 
   private unsubViewMode: (() => void) | null = null;
 
@@ -348,12 +350,12 @@ export class MergerScene implements Scene {
     this.vrPanel = new VRPanel(1.4, 0.5);
     this.vrPanel.setTitle(this.currentEvent?.commonName ?? "Merger");
 
-    // Button layout: 4 buttons in a row
+    // Button layout: 5 buttons in a row
     const btnY = 0.55;
     const btnH = 0.35;
-    const btnW = 0.22;
+    const btnW = 0.18;
     const gap = 0.02;
-    const startX = 0.04;
+    const startX = 0.02;
 
     this.vrPanel.addButton({
       label: this.isPlaying ? "\u23F8" : "\u25B6",
@@ -407,12 +409,43 @@ export class MergerScene implements Scene {
       },
     });
 
+    this.vrPanel.addButton({
+      label: "Exit VR",
+      x: startX + (btnW + gap) * 4,
+      y: btnY,
+      w: btnW,
+      h: btnH,
+      onClick: () => {
+        this.ctx.renderer.xr.getSession()?.end();
+      },
+    });
+
     xr.registerPanel(this.vrPanel);
+
+    // ─── VR Tutorial panel (informational, not registered for ray interaction) ───
+    this.vrTutorial = new VRPanel(1.0, 0.6);
 
     xr.onSessionStart = () => {
       if (this.vrPanel) {
-        this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
+        // Panel starts hidden — user toggles with left stick press or X button
+        this.vrPanel.hide();
         ctx.scene.add(this.vrPanel.mesh);
+      }
+      this.showVRTutorial();
+    };
+
+    // Menu press → dismiss tutorial or toggle panel
+    xr.onMenuPress = () => {
+      // If tutorial is visible, dismiss it instead of toggling menu
+      if (this.vrTutorial?.visible) {
+        this.dismissVRTutorial();
+        return;
+      }
+      if (!this.vrPanel) return;
+      this.vrPanel.toggle();
+      if (this.vrPanel.visible) {
+        const camera = this.ctx.renderer.xr.getCamera();
+        this.vrPanel.positionInFront(camera, 2, -0.3);
       }
     };
 
@@ -420,13 +453,76 @@ export class MergerScene implements Scene {
       if (this.vrPanel) {
         ctx.scene.remove(this.vrPanel.mesh);
       }
+      // Clean up tutorial
+      if (this.vrTutorialTimeout) {
+        clearTimeout(this.vrTutorialTimeout);
+        this.vrTutorialTimeout = null;
+      }
+      if (this.vrTutorial) {
+        this.vrTutorial.hide();
+        ctx.scene.remove(this.vrTutorial.mesh);
+      }
     };
 
-    // If already in VR (scene switch mid-session), show panel immediately
+    // If already in VR (scene switch mid-session), add to scene but hidden
     if (xr.isPresenting && this.vrPanel) {
-      this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
+      this.vrPanel.hide();
       ctx.scene.add(this.vrPanel.mesh);
     }
+  }
+
+  private showVRTutorial() {
+    if (!this.vrTutorial) return;
+
+    const seen = localStorage.getItem("warplab-vr-tutorial-seen") === "1";
+
+    if (seen) {
+      // Returning user — short reminder
+      this.vrTutorial.setTitle("Welcome to VR!");
+      this.vrTutorial.setLines(["X or L-stick click \u2192 Menu"]);
+    } else {
+      // First time — full tutorial
+      this.vrTutorial.setTitle("Welcome to VR!");
+      this.vrTutorial.setLines([
+        "Left stick: Move around",
+        "Right stick: Snap turn",
+        "X button or L-stick click: Toggle menu",
+        "Trigger: Select / Teleport",
+      ]);
+    }
+
+    const camera = this.ctx.renderer.xr.getCamera();
+    this.vrTutorial.show();
+    this.ctx.scene.add(this.vrTutorial.mesh);
+    this.vrTutorial.positionInFront(camera, 2, 0);
+
+    const timeout = seen ? 3000 : 8000;
+    this.vrTutorialTimeout = setTimeout(() => {
+      this.dismissVRTutorial();
+      if (!seen) {
+        localStorage.setItem("warplab-vr-tutorial-seen", "1");
+      }
+    }, timeout);
+  }
+
+  private dismissVRTutorial() {
+    if (!this.vrTutorial) return;
+    if (this.vrTutorialTimeout) {
+      clearTimeout(this.vrTutorialTimeout);
+      this.vrTutorialTimeout = null;
+    }
+    if (!this.vrTutorial.visible) return;
+
+    // Mark as seen on early dismiss too
+    localStorage.setItem("warplab-vr-tutorial-seen", "1");
+
+    this.vrTutorial.hide();
+    // Remove from scene after a brief delay
+    setTimeout(() => {
+      if (this.vrTutorial) {
+        this.ctx.scene.remove(this.vrTutorial.mesh);
+      }
+    }, 100);
   }
 
   private buildSceneObjects(scene: THREE.Scene) {
@@ -1372,6 +1468,20 @@ export class MergerScene implements Scene {
         this.glowMaterial.opacity = glowIntensity * 0.9;
         this.mergerGlow.scale.setScalar(1 + glowIntensity * 3);
         this.ctx.bloom.intensity = 1.2 + glowIntensity * 3;
+
+        // Haptic feedback proportional to gravitational wave strain
+        if (this.isPlaying && this.ctx.xrManager?.isPresenting) {
+          const hPlus = this.currentWaveform.hPlus;
+          const sampleIndex = Math.min(
+            Math.floor(this.playbackTime * hPlus.length),
+            hPlus.length - 1,
+          );
+          const peakAmplitude = Math.abs(hPlus[this.currentWaveform.peakIndex]);
+          const hapticIntensity = peakAmplitude > 0
+            ? Math.abs(hPlus[sampleIndex]) / peakAmplitude
+            : 0;
+          this.ctx.xrManager.pulseHaptics(hapticIntensity);
+        }
       }
 
       if (!this.isPlaying) {
@@ -1412,6 +1522,17 @@ export class MergerScene implements Scene {
       this.ctx.scene.remove(this.vrPanel.mesh);
       this.vrPanel.dispose();
       this.vrPanel = null;
+    }
+
+    // Clean up VR tutorial
+    if (this.vrTutorialTimeout) {
+      clearTimeout(this.vrTutorialTimeout);
+      this.vrTutorialTimeout = null;
+    }
+    if (this.vrTutorial) {
+      this.ctx.scene.remove(this.vrTutorial.mesh);
+      this.vrTutorial.dispose();
+      this.vrTutorial = null;
     }
 
     // Remove 3D objects from scene (but keep references for re-add)

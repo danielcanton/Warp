@@ -46,6 +46,16 @@ export class XRManager {
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private teleportMaxDistance = 20;
 
+  // Locomotion & snap turn
+  private static readonly DEAD_ZONE = 0.15;
+  private static readonly MOVE_SPEED = 2.0; // m/s
+  private static readonly SNAP_ANGLE = Math.PI / 4; // 45°
+  private static readonly SNAP_COOLDOWN = 0.3; // seconds
+  private snapCooldownTimer = 0;
+  private prevLeftThumbstickPressed = false;
+  private prevLeftXButtonPressed = false;
+  private clock = new THREE.Clock();
+
   // Callbacks
   onSessionStart: (() => void) | null = null;
   onSessionEnd: (() => void) | null = null;
@@ -53,6 +63,8 @@ export class XRManager {
   onControllerSelectStart: ((origin: THREE.Vector3, direction: THREE.Vector3) => boolean) | null = null;
   /** Scene-level hook: fires on trigger release. */
   onControllerSelectEnd: ((origin: THREE.Vector3, direction: THREE.Vector3) => void) | null = null;
+  /** Fires on left thumbstick press (rising edge). */
+  onMenuPress: (() => void) | null = null;
 
   constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene) {
     this.renderer = renderer;
@@ -206,6 +218,9 @@ export class XRManager {
       this.scene.remove(this.teleportTarget);
       this.teleportTarget = null;
     }
+    this.snapCooldownTimer = 0;
+    this.prevLeftThumbstickPressed = false;
+    this.prevLeftXButtonPressed = false;
   }
 
   private cleanupHands() {
@@ -255,6 +270,7 @@ export class XRManager {
     this.raycaster.ray.direction.set(0, 0, -1).applyMatrix4(this.tempMatrix);
 
     for (const panel of this.panels) {
+      if (!panel.visible) continue;
       const intersects = this.raycaster.intersectObject(panel.mesh);
       if (intersects.length > 0) {
         const uv = intersects[0].uv;
@@ -466,9 +482,74 @@ export class XRManager {
   }
 
   private updateControllers() {
+    const dt = this.clock.getDelta();
     let showTeleport = false;
     const hit = new THREE.Vector3();
 
+    // Find gamepads by handedness
+    const session = this.renderer.xr.getSession();
+    let leftGamepad: Gamepad | null = null;
+    let rightGamepad: Gamepad | null = null;
+    if (session) {
+      for (const source of session.inputSources) {
+        if (!source.gamepad) continue;
+        if (source.handedness === "left") leftGamepad = source.gamepad;
+        else if (source.handedness === "right") rightGamepad = source.gamepad;
+      }
+    }
+
+    // ── Left stick: smooth locomotion ──
+    if (leftGamepad && leftGamepad.axes.length >= 4) {
+      const lx = leftGamepad.axes[2]; // strafe
+      const ly = leftGamepad.axes[3]; // forward/back
+
+      if (Math.abs(lx) > XRManager.DEAD_ZONE || Math.abs(ly) > XRManager.DEAD_ZONE) {
+        // Head-relative movement on XZ plane
+        const camera = this.renderer.xr.getCamera();
+        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        forward.y = 0;
+        forward.normalize();
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        right.y = 0;
+        right.normalize();
+
+        const moveX = Math.abs(lx) > XRManager.DEAD_ZONE ? lx : 0;
+        const moveZ = Math.abs(ly) > XRManager.DEAD_ZONE ? ly : 0;
+
+        this.cameraRig.position.addScaledVector(right, moveX * XRManager.MOVE_SPEED * dt);
+        this.cameraRig.position.addScaledVector(forward, -moveZ * XRManager.MOVE_SPEED * dt);
+      }
+
+      // Left stick press → menu toggle (rising edge)
+      const thumbstickPressed = leftGamepad.buttons.length > 3 && leftGamepad.buttons[3].pressed;
+      if (thumbstickPressed && !this.prevLeftThumbstickPressed) {
+        this.onMenuPress?.();
+      }
+      this.prevLeftThumbstickPressed = thumbstickPressed;
+
+      // X button (buttons[4]) → menu toggle (rising edge)
+      const xButtonPressed = leftGamepad.buttons.length > 4 && leftGamepad.buttons[4].pressed;
+      if (xButtonPressed && !this.prevLeftXButtonPressed) {
+        this.onMenuPress?.();
+      }
+      this.prevLeftXButtonPressed = xButtonPressed;
+    }
+
+    // ── Right stick: snap turn ──
+    if (this.snapCooldownTimer > 0) {
+      this.snapCooldownTimer -= dt;
+    }
+
+    if (rightGamepad && rightGamepad.axes.length >= 4) {
+      const rx = rightGamepad.axes[2];
+      if (Math.abs(rx) > XRManager.DEAD_ZONE && this.snapCooldownTimer <= 0) {
+        const angle = rx > 0 ? -XRManager.SNAP_ANGLE : XRManager.SNAP_ANGLE;
+        this.cameraRig.rotateY(angle);
+        this.snapCooldownTimer = XRManager.SNAP_COOLDOWN;
+      }
+    }
+
+    // ── Panel hover + teleport preview ──
     for (const controller of [this.controller1, this.controller2]) {
       if (!controller) continue;
       this.tempMatrix.identity().extractRotation(controller.matrixWorld);
@@ -477,6 +558,7 @@ export class XRManager {
 
       let hitPanel = false;
       for (const panel of this.panels) {
+        if (!panel.visible) continue;
         const intersects = this.raycaster.intersectObject(panel.mesh);
         if (intersects.length > 0) hitPanel = true;
         panel.setHovered(intersects.length > 0);
@@ -527,6 +609,7 @@ export class XRManager {
       // Hover panels
       let hitPanel = false;
       for (const panel of this.panels) {
+        if (!panel.visible) continue;
         const intersects = this.raycaster.intersectObject(panel.mesh);
         if (intersects.length > 0) hitPanel = true;
         panel.setHovered(intersects.length > 0);
@@ -562,6 +645,7 @@ export class XRManager {
     this.raycaster.ray.direction.copy(direction);
 
     for (const panel of this.panels) {
+      if (!panel.visible) continue;
       const intersects = this.raycaster.intersectObject(panel.mesh);
       if (intersects.length > 0) {
         const uv = intersects[0].uv;
@@ -577,6 +661,19 @@ export class XRManager {
         this.cameraRig.position.set(hit.x, 0, hit.z);
         if (this.teleportTarget) this.teleportTarget.visible = false;
       }
+    }
+  }
+
+  /** Pulse haptic actuators on all active gamepads. No-op for hands or intensity ≤ 0. */
+  pulseHaptics(intensity: number, duration = 16) {
+    if (intensity <= 0 || this.usingHands) return;
+    const session = this.renderer.xr.getSession();
+    if (!session) return;
+    for (const source of session.inputSources) {
+      const actuator = source.gamepad?.hapticActuators?.[0] as
+        | { pulse(value: number, duration: number): void }
+        | undefined;
+      actuator?.pulse(intensity, duration);
     }
   }
 

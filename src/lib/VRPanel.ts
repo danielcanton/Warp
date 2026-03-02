@@ -165,6 +165,27 @@ export class VRPanel {
     this.texture.needsUpdate = true;
   }
 
+  /** Whether the panel is currently visible. */
+  get visible(): boolean {
+    return this.mesh.visible;
+  }
+
+  /** Show the panel. */
+  show() {
+    this.mesh.visible = true;
+  }
+
+  /** Hide the panel. */
+  hide() {
+    this.mesh.visible = false;
+  }
+
+  /** Toggle visibility. Returns new visible state. */
+  toggle(): boolean {
+    this.mesh.visible = !this.mesh.visible;
+    return this.mesh.visible;
+  }
+
   /** Position the panel in world space relative to the user. */
   positionInFront(camera: THREE.Camera, distance = 2, yOffset = 0) {
     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
