@@ -550,6 +550,10 @@ export class XRManager {
     }
 
     // ── Panel hover + teleport preview ──
+    // Track combined hover across both controllers so the second doesn't override the first
+    const panelHovered = new Map<VRPanel, boolean>();
+    for (const panel of this.panels) panelHovered.set(panel, false);
+
     for (const controller of [this.controller1, this.controller2]) {
       if (!controller) continue;
       this.tempMatrix.identity().extractRotation(controller.matrixWorld);
@@ -560,8 +564,10 @@ export class XRManager {
       for (const panel of this.panels) {
         if (!panel.visible) continue;
         const intersects = this.raycaster.intersectObject(panel.mesh);
-        if (intersects.length > 0) hitPanel = true;
-        panel.setHovered(intersects.length > 0);
+        if (intersects.length > 0) {
+          hitPanel = true;
+          panelHovered.set(panel, true);
+        }
       }
 
       if (!hitPanel && this.raycaster.ray.intersectPlane(this.groundPlane, hit)) {
@@ -575,6 +581,12 @@ export class XRManager {
       }
     }
 
+    // Apply hover state once after both controllers are processed
+    for (const panel of this.panels) {
+      if (!panel.visible) continue;
+      panel.setHovered(panelHovered.get(panel) ?? false);
+    }
+
     if (this.teleportTarget) {
       this.teleportTarget.visible = showTeleport;
     }
@@ -583,6 +595,10 @@ export class XRManager {
   private updateHands() {
     let showTeleport = false;
     const hit = new THREE.Vector3();
+
+    // Track combined hover across both hands
+    const panelHovered = new Map<VRPanel, boolean>();
+    for (const panel of this.panels) panelHovered.set(panel, false);
 
     const handConfigs = [
       { index: 0, joints: this.handJoints1, ray: this.handRay1, prevPinchKey: "prevPinch1" as const },
@@ -611,8 +627,10 @@ export class XRManager {
       for (const panel of this.panels) {
         if (!panel.visible) continue;
         const intersects = this.raycaster.intersectObject(panel.mesh);
-        if (intersects.length > 0) hitPanel = true;
-        panel.setHovered(intersects.length > 0);
+        if (intersects.length > 0) {
+          hitPanel = true;
+          panelHovered.set(panel, true);
+        }
       }
 
       // Pinch just started -> trigger select
@@ -632,6 +650,12 @@ export class XRManager {
           }
         }
       }
+    }
+
+    // Apply hover state once after both hands are processed
+    for (const panel of this.panels) {
+      if (!panel.visible) continue;
+      panel.setHovered(panelHovered.get(panel) ?? false);
     }
 
     if (this.teleportTarget) {
@@ -679,6 +703,14 @@ export class XRManager {
 
   get cameraRigPosition(): THREE.Vector3 {
     return this.cameraRig.position;
+  }
+
+  /** Camera world position including physical head offset within the rig. */
+  private readonly _cameraWorldPos = new THREE.Vector3();
+  get cameraWorldPosition(): THREE.Vector3 {
+    const camera = this.renderer.xr.getCamera();
+    camera.getWorldPosition(this._cameraWorldPos);
+    return this._cameraWorldPos;
   }
 
   get isPresenting(): boolean {

@@ -170,13 +170,16 @@ export class VRPanel {
     }
 
     // ── Title with glow ──
+    const margin = w * 0.06;
+    const maxTextWidth = w - margin * 2;
+
     if (this.title) {
       cx.save();
       cx.shadowColor = "rgba(103, 232, 249, 0.7)";
       cx.shadowBlur = 12;
       cx.fillStyle = "#67e8f9";
       cx.font = `600 ${Math.round(w * 0.06)}px -apple-system, system-ui, sans-serif`;
-      cx.fillText(this.title, w * 0.06, h * 0.12);
+      cx.fillText(this.title, margin, h * 0.12, maxTextWidth);
       cx.restore();
     }
 
@@ -184,7 +187,7 @@ export class VRPanel {
     cx.fillStyle = "rgba(186, 230, 253, 0.7)";
     cx.font = `400 ${Math.round(w * 0.04)}px -apple-system, system-ui, sans-serif`;
     for (let i = 0; i < this.lines.length; i++) {
-      cx.fillText(this.lines[i], w * 0.06, h * 0.22 + i * w * 0.055);
+      cx.fillText(this.lines[i], margin, h * 0.22 + i * w * 0.055, maxTextWidth);
     }
 
     // ── Buttons: outlined with glow ──

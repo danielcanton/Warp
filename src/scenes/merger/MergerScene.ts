@@ -313,6 +313,8 @@ export class MergerScene implements Scene {
     this.helpOverlay.style.display = "none";
     const uiEl = document.getElementById("ui");
     if (uiEl) uiEl.style.display = "flex";
+    const vrBtn = document.getElementById("vr-button");
+    if (vrBtn) vrBtn.style.display = "";
     this.updateExportVisibility();
 
     // Apply initial mode gating
@@ -435,7 +437,8 @@ export class MergerScene implements Scene {
         this.vrPanel.hide();
         ctx.scene.add(this.vrPanel.mesh);
       }
-      this.showVRTutorial();
+      // Delay tutorial until XR camera has a valid pose (needs at least 1 frame)
+      setTimeout(() => this.showVRTutorial(), 200);
     };
 
     // Menu press → dismiss tutorial or toggle panel
@@ -1479,7 +1482,7 @@ export class MergerScene implements Scene {
           const peakAmplitude = Math.abs(hPlus[this.currentWaveform.peakIndex]);
 
           if (peakAmplitude > 0) {
-            const distance = this.ctx.xrManager.cameraRigPosition.distanceTo(this.mergerCenter);
+            const distance = this.ctx.xrManager.cameraWorldPosition.distanceTo(this.mergerCenter);
             const delayNorm = (distance / MergerScene.WAVE_SPEED) / this.currentWaveform.duration;
             const delayedTime = this.playbackTime - delayNorm;
 

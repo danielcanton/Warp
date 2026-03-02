@@ -61,11 +61,16 @@ export class CosmologyScene implements Scene {
     controls.minDistance = 5;
     controls.maxDistance = 150;
 
-    // Hide other UI
-    for (const id of ["event-info", "event-list", "time-controls", "map-legend", "help-overlay", "ui"]) {
+    // Hide merger-specific UI and VR button (Cosmology doesn't support XR)
+    for (const id of ["event-info", "event-list", "time-controls", "map-legend", "help-overlay", "map-toggle", "tour-toggle", "events-toggle"]) {
       const el = document.getElementById(id);
       if (el) el.style.display = "none";
     }
+    const uiBar = document.getElementById("ui");
+    if (uiBar) uiBar.style.display = "flex";
+    // Hide VR button — this scene doesn't support XR
+    const vrBtn = document.getElementById("vr-button");
+    if (vrBtn) vrBtn.style.display = "none";
 
     const loadingScreen = document.getElementById("loading-screen");
     if (loadingScreen) {
