@@ -1023,14 +1023,7 @@
       body.embed #nbody-panel .nb-info { display: none; }
       body.embed #nbody-panel .nb-collapsible { display: none; }
       body.embed #nbody-panel .nb-expand-btn { display: inline-block; }
-      body.embed #cosmology-panel {
-        top: 12px; left: 12px;
-        padding: 10px 14px;
-        min-width: 180px; max-width: 220px;
-        font-size: 12px;
-      }
-      body.embed #cosmology-panel .cos-collapsible { display: none; }
-      body.embed #cosmology-panel .cos-expand-btn { display: inline-block; }
+
 
       /* ── Mobile ── */
       @media (max-width: 768px) {
@@ -1380,8 +1373,7 @@
         /* ── Scene panels above mobile bar ── */
         #sandbox-panel,
         #blackhole-panel,
-        #nbody-panel,
-        #cosmology-panel {
+        #nbody-panel {
           bottom: calc(48px + env(safe-area-inset-bottom, 0px)) !important;
         }
 
@@ -1874,99 +1866,6 @@
       }
 
 
-      /* ── Cosmology Panel ── */
-      #cosmology-panel {
-        position: fixed;
-        top: 24px;
-        left: 24px;
-        z-index: 10;
-        padding: 16px 20px;
-        min-width: 240px;
-        max-width: 280px;
-        font-size: 13px;
-      }
-      .cos-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-      .cos-expand-btn {
-        display: none;
-        background: none;
-        border: none;
-        color: rgba(255,255,255,0.4);
-        font-size: 12px;
-        cursor: pointer;
-        padding: 2px 6px;
-      }
-      .cos-title {
-        font-size: 16px;
-        font-weight: 600;
-        margin-bottom: 12px;
-        color: #fff;
-      }
-      .cos-section {
-        margin-bottom: 10px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      }
-      .cos-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 4px;
-      }
-      .cos-row label {
-        min-width: 50px;
-        font-size: 11px;
-        color: rgba(255, 255, 255, 0.45);
-      }
-      .cos-select {
-        flex: 1;
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 6px;
-        color: #fff;
-        padding: 4px 8px;
-        font-size: 11px;
-        outline: none;
-      }
-      .cos-slider {
-        flex: 1;
-        accent-color: #a78bfa;
-        height: 4px;
-      }
-      .cos-speed-val {
-        min-width: 36px;
-        font-size: 11px;
-        color: rgba(255, 255, 255, 0.6);
-        text-align: right;
-        font-variant-numeric: tabular-nums;
-      }
-      .cos-btn {
-        padding: 4px 10px;
-        border-radius: 6px;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        background: rgba(255, 255, 255, 0.08);
-        color: #fff;
-        font-size: 13px;
-        cursor: pointer;
-        transition: background 0.2s;
-      }
-      .cos-btn:hover {
-        background: rgba(255, 255, 255, 0.15);
-      }
-      .cos-info {
-        display: flex;
-        justify-content: space-between;
-        font-size: 10px;
-        color: rgba(255, 255, 255, 0.3);
-        margin-bottom: 6px;
-      }
-      .cos-info strong {
-        color: rgba(255, 255, 255, 0.6);
-      }
-
       /* ─── Mobile overrides for new panels ─── */
       @media (max-width: 768px) {
         #scene-selector { display: none !important; }
@@ -1997,17 +1896,6 @@
         #nbody-panel .nb-hint { display: none; }
         #nbody-panel.nb-collapsed .nb-collapsible { display: none; }
         #nbody-panel .nb-info { font-size: 9px; }
-        #cosmology-panel {
-          top: auto; bottom: calc(48px + env(safe-area-inset-bottom, 0px));
-          left: 12px; right: 12px;
-          max-width: none; min-width: 0;
-          border-radius: 14px;
-          padding: 10px 14px;
-        }
-        #cosmology-panel .cos-title { font-size: 14px; margin-bottom: 8px; }
-        #cosmology-panel .cos-expand-btn { display: inline-block; }
-        #cosmology-panel .cos-section { margin-bottom: 6px; padding-bottom: 6px; }
-        #cosmology-panel.cos-collapsed .cos-collapsible { display: none; }
       }
 
       /* ─── Desktop: hide mobile-only elements ─── */
@@ -2071,8 +1959,7 @@
         }
         #sandbox-panel,
         #blackhole-panel,
-        #nbody-panel,
-        #cosmology-panel {
+        #nbody-panel {
           left: 60px !important; bottom: 12px !important; right: 12px !important;
         }
         #event-list {
