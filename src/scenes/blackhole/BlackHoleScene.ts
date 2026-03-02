@@ -347,31 +347,34 @@ export class BlackHoleScene implements Scene {
     // Clear color must have alpha = 0 so the XR compositor shows passthrough
     this.ctx.renderer.setClearAlpha(0);
 
-    // Always enter passthrough mode in VR (localized sphere)
-    this.passthroughActive = true;
+    // Enter passthrough mode only if we have an AR session (immersive-ar gives real passthrough)
+    const isAR = this.ctx.xrManager?.isARSession ?? false;
+    this.passthroughActive = isAR;
     this.hasCameraAccess = this.ctx.xrManager?.hasCameraAccess ?? false;
 
-    // Replace large skybox sphere with localized sphere
-    this.vrSphereOriginalGeo = this.vrSphere.geometry;
-    const localGeo = new THREE.IcosahedronGeometry(2.0, 5);
-    localGeo.scale(-1, 1, 1); // invert normals
-    this.vrSphere.geometry = localGeo;
+    if (this.passthroughActive) {
+      // Replace large skybox sphere with localized sphere
+      this.vrSphereOriginalGeo = this.vrSphere.geometry;
+      const localGeo = new THREE.IcosahedronGeometry(2.0, 5);
+      localGeo.scale(-1, 1, 1); // invert normals
+      this.vrSphere.geometry = localGeo;
 
-    // Position BH in front of user at session start
-    const xr = this.ctx.xrManager;
-    if (xr) {
-      const headPos = xr.cameraWorldPosition;
-      this.bhWorldPosition.set(headPos.x, headPos.y, headPos.z - 2);
+      // Position BH in front of user at session start
+      const xr = this.ctx.xrManager;
+      if (xr) {
+        const headPos = xr.cameraWorldPosition;
+        this.bhWorldPosition.set(headPos.x, headPos.y, headPos.z - 2);
+      }
+      this.vrSphere.position.copy(this.bhWorldPosition);
+
+      // Configure material for passthrough
+      this.vrMaterial.transparent = true;
+      this.vrMaterial.blending = THREE.NormalBlending;
+      this.vrMaterial.uniforms.uPassthrough.value = 1.0;
+      this.vrMaterial.uniforms.uHasCameraFeed.value = this.hasCameraAccess ? 1.0 : 0.0;
+      this.vrMaterial.uniforms.uBHCenter.value.copy(this.bhWorldPosition);
+      this.vrMaterial.uniforms.uSphereRadius.value = 2.0;
     }
-    this.vrSphere.position.copy(this.bhWorldPosition);
-
-    // Configure material for passthrough
-    this.vrMaterial.transparent = true;
-    this.vrMaterial.blending = THREE.NormalBlending;
-    this.vrMaterial.uniforms.uPassthrough.value = 1.0;
-    this.vrMaterial.uniforms.uHasCameraFeed.value = this.hasCameraAccess ? 1.0 : 0.0;
-    this.vrMaterial.uniforms.uBHCenter.value.copy(this.bhWorldPosition);
-    this.vrMaterial.uniforms.uSphereRadius.value = 2.0;
   }
 
   private switchToDesktop() {

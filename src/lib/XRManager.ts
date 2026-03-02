@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { VRButton } from "three/addons/webxr/VRButton.js";
 import type { VRPanel } from "./VRPanel";
 
 /**
@@ -21,6 +20,7 @@ export class XRManager {
   // Passthrough / camera-access
   private glBinding: unknown | null = null; // XRWebGLBinding (when available)
   private _hasCameraAccess = false;
+  private _isARSession = false; // true when using immersive-ar (passthrough)
 
   // Controllers
   private controller1: THREE.Group | null = null;
@@ -95,35 +95,67 @@ export class XRManager {
   }
 
   /**
-   * Check XR support and create the VR button.
+   * Check XR support and create the VR/AR button.
+   * Prefers immersive-ar (passthrough on Quest 3) over immersive-vr.
    * Returns the button element, or null if unsupported.
    */
   async createButton(): Promise<HTMLElement | null> {
     if (!("xr" in navigator)) return null;
 
     const xr = (navigator as Navigator & { xr: XRSystem }).xr;
-    const supported = await xr.isSessionSupported("immersive-vr");
-    if (!supported) return null;
+
+    // Prefer immersive-ar for passthrough support (Quest 3)
+    const arSupported = await xr.isSessionSupported("immersive-ar").catch(() => false);
+    const vrSupported = await xr.isSessionSupported("immersive-vr").catch(() => false);
+    if (!arSupported && !vrSupported) return null;
+
+    const sessionMode: XRSessionMode = arSupported ? "immersive-ar" : "immersive-vr";
 
     this.renderer.xr.enabled = true;
 
-    // Request passthrough + camera-access as optional features
     const sessionInit: XRSessionInit = {
       optionalFeatures: [
         'local-floor',
         'bounded-floor',
         'hand-tracking',
         'layers',
-        'passthrough',
+        ...(sessionMode === 'immersive-vr' ? ['passthrough'] : []),
         'camera-access',
       ],
     };
-    const button = VRButton.createButton(this.renderer, sessionInit);
+
+    // Create button manually (VRButton hardcodes immersive-vr)
+    let currentSession: XRSession | null = null;
+    const button = document.createElement("button");
+    button.textContent = "ENTER VR";
+
+    const onSessionStarted = (session: XRSession) => {
+      session.addEventListener("end", onSessionEnded);
+      this.renderer.xr.setReferenceSpaceType("local-floor");
+      this.renderer.xr.setSession(session);
+      currentSession = session;
+      button.textContent = "EXIT VR";
+    };
+
+    const onSessionEnded = () => {
+      currentSession = null;
+      button.textContent = "ENTER VR";
+    };
+
+    button.addEventListener("click", () => {
+      if (currentSession) {
+        currentSession.end();
+      } else {
+        xr.requestSession(sessionMode, sessionInit).then(onSessionStarted);
+      }
+    });
 
     this.renderer.xr.addEventListener("sessionstart", () => {
-      // Store XRWebGLBinding for camera-access (getCameraImage)
       const session = this.renderer.xr.getSession();
+      this._isARSession = sessionMode === "immersive-ar";
+
       if (session) {
+        // Store XRWebGLBinding for camera-access (getCameraImage)
         try {
           const gl = this.renderer.getContext();
           const XRWebGLBindingCtor = (globalThis as Record<string, unknown>).XRWebGLBinding as
@@ -149,6 +181,7 @@ export class XRManager {
     this.renderer.xr.addEventListener("sessionend", () => {
       this.glBinding = null;
       this._hasCameraAccess = false;
+      this._isARSession = false;
       this.cleanupControllers();
       this.cleanupHands();
       this.onSessionEnd?.();
@@ -860,6 +893,11 @@ export class XRManager {
 
   get isPresenting(): boolean {
     return this.renderer.xr.isPresenting;
+  }
+
+  /** Whether the current XR session is immersive-ar (passthrough). */
+  get isARSession(): boolean {
+    return this._isARSession;
   }
 
   /** Whether the current XR session has camera-access enabled. */
