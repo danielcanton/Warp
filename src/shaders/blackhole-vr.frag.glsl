@@ -120,27 +120,20 @@ void main() {
 
   // Black hole parameters
   float rs = uMass;
-  // In passthrough mode, BH is at uBHCenter; in skybox mode, at origin
-  vec3 bhPos = uPassthrough > 0.5 ? uBHCenter : vec3(0.0);
+  // BH position is always uBHCenter (set by scene for both modes)
+  vec3 bhPos = uBHCenter;
 
   // Early exit radius — localized sphere in passthrough, large distance in skybox
   float exitRadius = uPassthrough > 0.5 ? uSphereRadius * 1.1 : MAX_DIST;
 
   // Ray march with geodesic bending
   // In passthrough mode, camera is outside the localized sphere — start at sphere surface
-  // In skybox mode, clamp starting distance to at least 10 rs from BH center
-  // (VR camera is physically ~1.6m from origin — too close for a good view)
+  // In skybox mode, BH is positioned far enough from camera that no clamping is needed
   vec3 pos;
   if (uPassthrough > 0.5) {
     pos = vWorldPos;
   } else {
     pos = ro;
-    float distToBH = length(pos - bhPos);
-    float minDist = rs * 10.0;
-    if (distToBH < minDist) {
-      vec3 awayDir = distToBH > 0.001 ? normalize(pos - bhPos) : vec3(0.0, 1.0, 0.0);
-      pos = bhPos + awayDir * minDist;
-    }
   }
   vec3 vel = rd;
 

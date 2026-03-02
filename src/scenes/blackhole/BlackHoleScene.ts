@@ -415,6 +415,8 @@ export class BlackHoleScene implements Scene {
     this.vrMaterial.uniforms.uHasCameraFeed.value = this.hasCameraAccess ? 1.0 : 0.0;
     this.vrMaterial.uniforms.uBHCenter.value.copy(this.bhWorldPosition);
     this.vrMaterial.uniforms.uSphereRadius.value = 2.0;
+    // Restore full mass for passthrough localized sphere
+    this.vrMaterial.uniforms.uMass.value = this.mass;
     this.vrMaterial.needsUpdate = true;
 
     // Transparent background for passthrough
@@ -443,6 +445,10 @@ export class BlackHoleScene implements Scene {
     this.vrMaterial.blending = THREE.NormalBlending;
     this.vrMaterial.uniforms.uPassthrough.value = 0.0;
     this.vrMaterial.uniforms.uHasCameraFeed.value = 0.0;
+    // Scale BH for VR: smaller mass + positioned at eye level 5m ahead
+    // At 33×rs the photon sphere subtends a visible angle with clear lensing
+    this.vrMaterial.uniforms.uMass.value = 0.15;
+    this.vrMaterial.uniforms.uBHCenter.value.set(0, 1.6, -5);
     this.vrMaterial.needsUpdate = true;
 
     // Opaque background — force solid color to block AR camera passthrough
@@ -479,6 +485,8 @@ export class BlackHoleScene implements Scene {
     this.vrMaterial.blending = THREE.NormalBlending;
     this.vrMaterial.uniforms.uPassthrough.value = 0.0;
     this.vrMaterial.uniforms.uHasCameraFeed.value = 0.0;
+    this.vrMaterial.uniforms.uMass.value = this.mass;
+    this.vrMaterial.uniforms.uBHCenter.value.set(0, 0, 0);
 
     this.passthroughActive = false;
     this.hasCameraAccess = false;

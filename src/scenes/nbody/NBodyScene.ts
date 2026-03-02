@@ -46,6 +46,7 @@ export class NBodyScene implements Scene {
   private vrTutorial: VRTutorial | null = null;
   private passthroughActive = false;
   private savedBackground: THREE.Color | THREE.Texture | null = null;
+  private skySphere: THREE.Mesh | null = null;
   private vrPlacing = false;
   private vrPlacingControllerIndex = -1;
   private vrPlacePosition: THREE.Vector3 | null = null;
@@ -708,14 +709,30 @@ export class NBodyScene implements Scene {
             this.savedBackground = this.ctx.scene.background as THREE.Color | THREE.Texture | null;
             this.ctx.scene.background = null;
             this.ctx.renderer.setClearColor(0x000000, 0);
+            if (this.skySphere) this.skySphere.visible = false;
           } else {
             // Force solid background to block AR camera passthrough
             this.ctx.scene.background = new THREE.Color(0x000005);
             this.ctx.renderer.setClearColor(0x000005, 1);
+            if (this.skySphere) this.skySphere.visible = true;
           }
           this.vrPanel?.updateButton(ptBtnIdx, `Passthrough: ${this.passthroughActive ? "ON" : "OFF"}`);
         },
       });
+    }
+
+    // ─── Opaque sky sphere for blocking AR camera when passthrough is OFF ───
+    if (xr.supportsAR && !this.skySphere) {
+      const skyGeo = new THREE.IcosahedronGeometry(45, 2);
+      skyGeo.scale(-1, 1, 1);
+      this.skySphere = new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({
+        color: 0x000005,
+        side: THREE.BackSide,
+        depthWrite: false,
+      }));
+      this.skySphere.renderOrder = -1000;
+      this.skySphere.visible = false;
+      this.ctx.scene.add(this.skySphere);
     }
 
     xr.registerPanel(this.vrPanel);
@@ -745,6 +762,7 @@ export class NBodyScene implements Scene {
       this.exitVRPlacementMode();
       this.vrTutorial?.hide(ctx.scene);
       // Restore opaque state if passthrough was active
+      if (this.skySphere) this.skySphere.visible = false;
       if (this.passthroughActive) {
         this.ctx.scene.background = new THREE.Color(0x000005);
         this.ctx.renderer.setClearColor(0x000005, 1);
@@ -1044,6 +1062,14 @@ export class NBodyScene implements Scene {
       el.removeEventListener(type, fn);
     }
     this.boundHandlers = [];
+
+    // Clean up sky sphere
+    if (this.skySphere) {
+      this.ctx.scene.remove(this.skySphere);
+      this.skySphere.geometry.dispose();
+      (this.skySphere.material as THREE.MeshBasicMaterial).dispose();
+      this.skySphere = null;
+    }
 
     this.clearVisuals();
     this.ctx.scene.remove(this.group);
