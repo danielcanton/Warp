@@ -9,7 +9,6 @@ import DecryptedText from "./components/DecryptedText";
 import GradientText from "./components/GradientText";
 import GlassCTA from "./components/GlassCTA";
 import SplashCursor from "./components/SplashCursor";
-import StarBorder from "./components/StarBorder";
 import SpotlightCard from "./components/SpotlightCard";
 import Counter from "./components/Counter";
 import "./landing.css";
@@ -224,15 +223,13 @@ function Landing() {
             {...fadeScale}
             transition={{ duration: 0.6, delay: 1.0, ease: "easeOut" }}
           >
-            <StarBorder color="#818cf8" speed="6s" thickness={2}>
-              <GlassCTA
-                onClick={() => {
-                  window.location.href = "/app.html";
-                }}
-              >
-                Enter the Lab
-              </GlassCTA>
-            </StarBorder>
+            <GlassCTA
+              onClick={() => {
+                window.location.href = "/app.html";
+              }}
+            >
+              Enter the Lab
+            </GlassCTA>
           </motion.div>
 
           {/* Scroll indicator */}
@@ -390,15 +387,13 @@ function Landing() {
             {...viewFadeUp}
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
-            <StarBorder color="#818cf8" speed="6s" thickness={2}>
-              <GlassCTA
-                onClick={() => {
-                  window.location.href = "/app.html";
-                }}
-              >
-                Enter the Lab
-              </GlassCTA>
-            </StarBorder>
+            <GlassCTA
+              onClick={() => {
+                window.location.href = "/app.html";
+              }}
+            >
+              Enter the Lab
+            </GlassCTA>
           </motion.div>
 
           <motion.a
