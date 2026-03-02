@@ -169,6 +169,10 @@ export class MergerScene implements Scene {
   // Share
   private shareToastTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // VR haptics
+  private static readonly WAVE_SPEED = 4; // m/s — tunable
+  private readonly mergerCenter = new THREE.Vector3(0, 0.6, 0);
+
   // VR panel
   private vrPanel: VRPanel | null = null;
   private vrTutorial: VRPanel | null = null;
@@ -444,8 +448,8 @@ export class MergerScene implements Scene {
       if (!this.vrPanel) return;
       this.vrPanel.toggle();
       if (this.vrPanel.visible) {
-        const camera = this.ctx.renderer.xr.getCamera();
-        this.vrPanel.positionInFront(camera, 2, -0.3);
+        this.ctx.camera.updateWorldMatrix(true, false);
+        this.vrPanel.positionInFront(this.ctx.camera, 2, -0.3);
       }
     };
 
@@ -491,10 +495,10 @@ export class MergerScene implements Scene {
       ]);
     }
 
-    const camera = this.ctx.renderer.xr.getCamera();
+    this.ctx.camera.updateWorldMatrix(true, false);
     this.vrTutorial.show();
     this.ctx.scene.add(this.vrTutorial.mesh);
-    this.vrTutorial.positionInFront(camera, 2, 0);
+    this.vrTutorial.positionInFront(this.ctx.camera, 2, 0);
 
     const timeout = seen ? 3000 : 8000;
     this.vrTutorialTimeout = setTimeout(() => {
@@ -1469,18 +1473,26 @@ export class MergerScene implements Scene {
         this.mergerGlow.scale.setScalar(1 + glowIntensity * 3);
         this.ctx.bloom.intensity = 1.2 + glowIntensity * 3;
 
-        // Haptic feedback proportional to gravitational wave strain
+        // Haptic feedback: wave propagation delay + distance attenuation
         if (this.isPlaying && this.ctx.xrManager?.isPresenting) {
           const hPlus = this.currentWaveform.hPlus;
-          const sampleIndex = Math.min(
-            Math.floor(this.playbackTime * hPlus.length),
-            hPlus.length - 1,
-          );
           const peakAmplitude = Math.abs(hPlus[this.currentWaveform.peakIndex]);
-          const hapticIntensity = peakAmplitude > 0
-            ? Math.abs(hPlus[sampleIndex]) / peakAmplitude
-            : 0;
-          this.ctx.xrManager.pulseHaptics(hapticIntensity);
+
+          if (peakAmplitude > 0) {
+            const distance = this.ctx.xrManager.cameraRigPosition.distanceTo(this.mergerCenter);
+            const delayNorm = (distance / MergerScene.WAVE_SPEED) / this.currentWaveform.duration;
+            const delayedTime = this.playbackTime - delayNorm;
+
+            if (delayedTime >= 0) {
+              const sampleIndex = Math.min(
+                Math.floor(delayedTime * hPlus.length),
+                hPlus.length - 1,
+              );
+              const rawIntensity = Math.abs(hPlus[sampleIndex]) / peakAmplitude;
+              const spatialFactor = Math.min(1, Math.max(0, 1 / (1 + distance * 0.3)));
+              this.ctx.xrManager.pulseHaptics(rawIntensity * spatialFactor);
+            }
+          }
         }
       }
 

@@ -13,7 +13,8 @@ export interface VRPanelButton {
  * World-space UI panel rendered via CanvasTexture on a quad.
  *
  * Used in VR mode as a replacement for DOM overlays.
- * Canvas is 512x512 by default and re-rendered when content changes.
+ * Canvas is 1024px wide by default for crisp VR readability.
+ * Holographic sci-fi render style with glow effects and scan lines.
  */
 export class VRPanel {
   readonly mesh: THREE.Mesh;
@@ -29,7 +30,7 @@ export class VRPanel {
   constructor(
     width = 1.2,
     height = 0.8,
-    resolution = 512,
+    resolution = 1024,
   ) {
     this.canvas = document.createElement("canvas");
     this.canvas.width = resolution;
@@ -105,58 +106,110 @@ export class VRPanel {
     }
   }
 
-  /** Redraw the canvas. */
+  /** Redraw the canvas with holographic sci-fi style. */
   private render() {
     const { cx, canvas } = this;
     const w = canvas.width;
     const h = canvas.height;
+    const hovered = this._hovered;
 
-    // Background
     cx.clearRect(0, 0, w, h);
-    cx.fillStyle = this._hovered
-      ? "rgba(0, 0, 5, 0.85)"
-      : "rgba(0, 0, 5, 0.75)";
+
+    // ── Background: dark translucent gradient ──
+    const bgGrad = cx.createLinearGradient(0, 0, 0, h);
+    bgGrad.addColorStop(0, hovered ? "rgba(8, 15, 40, 0.88)" : "rgba(5, 10, 30, 0.82)");
+    bgGrad.addColorStop(1, hovered ? "rgba(2, 6, 18, 0.92)" : "rgba(1, 3, 12, 0.88)");
     cx.beginPath();
-    cx.roundRect(0, 0, w, h, 16);
+    cx.roundRect(0, 0, w, h, 12);
+    cx.fillStyle = bgGrad;
     cx.fill();
 
-    // Border
-    cx.strokeStyle = this._hovered
-      ? "rgba(99, 102, 241, 0.4)"
-      : "rgba(255, 255, 255, 0.08)";
+    // ── Border glow ──
+    cx.save();
+    cx.shadowColor = hovered ? "rgba(103, 232, 249, 0.6)" : "rgba(99, 102, 241, 0.35)";
+    cx.shadowBlur = hovered ? 18 : 10;
+    cx.strokeStyle = hovered ? "rgba(103, 232, 249, 0.7)" : "rgba(99, 130, 241, 0.4)";
     cx.lineWidth = 2;
     cx.stroke();
+    cx.restore();
 
-    // Title
-    if (this.title) {
-      cx.fillStyle = "#fff";
-      cx.font = `600 ${Math.round(w * 0.06)}px -apple-system, system-ui, sans-serif`;
-      cx.fillText(this.title, w * 0.06, h * 0.12);
+    // ── Corner brackets (HUD accent) ──
+    const bracketLen = Math.round(w * 0.06);
+    const bracketInset = 6;
+    cx.strokeStyle = hovered ? "rgba(103, 232, 249, 0.8)" : "rgba(103, 232, 249, 0.45)";
+    cx.lineWidth = 2;
+    // Top-left
+    cx.beginPath();
+    cx.moveTo(bracketInset, bracketInset + bracketLen);
+    cx.lineTo(bracketInset, bracketInset);
+    cx.lineTo(bracketInset + bracketLen, bracketInset);
+    cx.stroke();
+    // Top-right
+    cx.beginPath();
+    cx.moveTo(w - bracketInset - bracketLen, bracketInset);
+    cx.lineTo(w - bracketInset, bracketInset);
+    cx.lineTo(w - bracketInset, bracketInset + bracketLen);
+    cx.stroke();
+    // Bottom-left
+    cx.beginPath();
+    cx.moveTo(bracketInset, h - bracketInset - bracketLen);
+    cx.lineTo(bracketInset, h - bracketInset);
+    cx.lineTo(bracketInset + bracketLen, h - bracketInset);
+    cx.stroke();
+    // Bottom-right
+    cx.beginPath();
+    cx.moveTo(w - bracketInset - bracketLen, h - bracketInset);
+    cx.lineTo(w - bracketInset, h - bracketInset);
+    cx.lineTo(w - bracketInset, h - bracketInset - bracketLen);
+    cx.stroke();
+
+    // ── Scan lines ──
+    cx.fillStyle = "rgba(103, 232, 249, 0.03)";
+    for (let y = 0; y < h; y += 4) {
+      cx.fillRect(0, y, w, 1);
     }
 
-    // Body text
-    cx.fillStyle = "rgba(255, 255, 255, 0.6)";
+    // ── Title with glow ──
+    if (this.title) {
+      cx.save();
+      cx.shadowColor = "rgba(103, 232, 249, 0.7)";
+      cx.shadowBlur = 12;
+      cx.fillStyle = "#67e8f9";
+      cx.font = `600 ${Math.round(w * 0.06)}px -apple-system, system-ui, sans-serif`;
+      cx.fillText(this.title, w * 0.06, h * 0.12);
+      cx.restore();
+    }
+
+    // ── Body text ──
+    cx.fillStyle = "rgba(186, 230, 253, 0.7)";
     cx.font = `400 ${Math.round(w * 0.04)}px -apple-system, system-ui, sans-serif`;
     for (let i = 0; i < this.lines.length; i++) {
       cx.fillText(this.lines[i], w * 0.06, h * 0.22 + i * w * 0.055);
     }
 
-    // Buttons
+    // ── Buttons: outlined with glow ──
     for (const btn of this.buttons) {
       const bx = btn.x * w;
       const by = btn.y * h;
       const bw = btn.w * w;
       const bh = btn.h * h;
 
-      cx.fillStyle = "rgba(99, 102, 241, 0.2)";
-      cx.strokeStyle = "rgba(99, 102, 241, 0.4)";
-      cx.lineWidth = 1;
+      cx.save();
+      cx.shadowColor = hovered ? "rgba(103, 232, 249, 0.5)" : "rgba(99, 102, 241, 0.3)";
+      cx.shadowBlur = hovered ? 10 : 6;
+
+      // Outlined button (not filled)
+      cx.fillStyle = hovered ? "rgba(103, 232, 249, 0.08)" : "rgba(99, 102, 241, 0.06)";
+      cx.strokeStyle = hovered ? "rgba(103, 232, 249, 0.6)" : "rgba(99, 130, 241, 0.4)";
+      cx.lineWidth = 1.5;
       cx.beginPath();
-      cx.roundRect(bx, by, bw, bh, 8);
+      cx.roundRect(bx, by, bw, bh, 6);
       cx.fill();
       cx.stroke();
+      cx.restore();
 
-      cx.fillStyle = "#a5b4fc";
+      // Button label
+      cx.fillStyle = hovered ? "#67e8f9" : "#a5b4fc";
       cx.font = `500 ${Math.round(w * 0.035)}px -apple-system, system-ui, sans-serif`;
       const textWidth = cx.measureText(btn.label).width;
       cx.fillText(btn.label, bx + (bw - textWidth) / 2, by + bh * 0.65);

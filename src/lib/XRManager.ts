@@ -677,6 +677,10 @@ export class XRManager {
     }
   }
 
+  get cameraRigPosition(): THREE.Vector3 {
+    return this.cameraRig.position;
+  }
+
   get isPresenting(): boolean {
     return this.renderer.xr.isPresenting;
   }
