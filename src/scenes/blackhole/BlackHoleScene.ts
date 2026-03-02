@@ -445,11 +445,9 @@ export class BlackHoleScene implements Scene {
     this.vrMaterial.uniforms.uHasCameraFeed.value = 0.0;
     this.vrMaterial.needsUpdate = true;
 
-    // Opaque background
-    if (this.savedBackground !== null) {
-      this.ctx.scene.background = this.savedBackground;
-    }
-    this.ctx.renderer.setClearColor(0x000000, 1);
+    // Opaque background — force solid color to block AR camera passthrough
+    this.ctx.scene.background = new THREE.Color(0x000005);
+    this.ctx.renderer.setClearColor(0x000005, 1);
 
     this.passthroughActive = false;
     this.grabbing = false;
@@ -463,11 +461,9 @@ export class BlackHoleScene implements Scene {
     this.quad.visible = true;
 
     // Restore scene background and clear color
-    if (this.savedBackground !== null) {
-      this.ctx.scene.background = this.savedBackground;
-      this.savedBackground = null;
-    }
-    this.ctx.renderer.setClearColor(0x000000, 1);
+    this.ctx.scene.background = this.savedBackground ?? new THREE.Color(0x000005);
+    this.savedBackground = null;
+    this.ctx.renderer.setClearColor(0x000005, 1);
 
     // Restore large sphere geometry if in passthrough mode
     if (this.vrSphereOriginalGeo) {

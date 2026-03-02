@@ -128,7 +128,20 @@ void main() {
 
   // Ray march with geodesic bending
   // In passthrough mode, camera is outside the localized sphere — start at sphere surface
-  vec3 pos = uPassthrough > 0.5 ? vWorldPos : ro;
+  // In skybox mode, clamp starting distance to at least 10 rs from BH center
+  // (VR camera is physically ~1.6m from origin — too close for a good view)
+  vec3 pos;
+  if (uPassthrough > 0.5) {
+    pos = vWorldPos;
+  } else {
+    pos = ro;
+    float distToBH = length(pos - bhPos);
+    float minDist = rs * 10.0;
+    if (distToBH < minDist) {
+      vec3 awayDir = distToBH > 0.001 ? normalize(pos - bhPos) : vec3(0.0, 1.0, 0.0);
+      pos = bhPos + awayDir * minDist;
+    }
+  }
   vec3 vel = rd;
 
   float stepSize = 0.1;

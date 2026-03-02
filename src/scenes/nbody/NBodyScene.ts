@@ -709,8 +709,9 @@ export class NBodyScene implements Scene {
             this.ctx.scene.background = null;
             this.ctx.renderer.setClearColor(0x000000, 0);
           } else {
-            this.ctx.scene.background = this.savedBackground;
-            this.ctx.renderer.setClearColor(0x000000, 1);
+            // Force solid background to block AR camera passthrough
+            this.ctx.scene.background = new THREE.Color(0x000005);
+            this.ctx.renderer.setClearColor(0x000005, 1);
           }
           this.vrPanel?.updateButton(ptBtnIdx, `Passthrough: ${this.passthroughActive ? "ON" : "OFF"}`);
         },
@@ -745,8 +746,8 @@ export class NBodyScene implements Scene {
       this.vrTutorial?.hide(ctx.scene);
       // Restore opaque state if passthrough was active
       if (this.passthroughActive) {
-        this.ctx.scene.background = this.savedBackground;
-        this.ctx.renderer.setClearColor(0x000000, 1);
+        this.ctx.scene.background = new THREE.Color(0x000005);
+        this.ctx.renderer.setClearColor(0x000005, 1);
         this.passthroughActive = false;
       }
     };

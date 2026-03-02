@@ -441,8 +441,9 @@ export class SandboxScene implements Scene {
             this.ctx.renderer.setClearColor(0x000000, 0);
             this.spacetimeMaterial.uniforms.uOpacity.value = 0.3;
           } else {
-            this.ctx.scene.background = this.savedBackground;
-            this.ctx.renderer.setClearColor(0x000000, 1);
+            // Force solid background to block AR camera passthrough
+            this.ctx.scene.background = new THREE.Color(0x000005);
+            this.ctx.renderer.setClearColor(0x000005, 1);
             this.spacetimeMaterial.uniforms.uOpacity.value = 1.0;
           }
           this.vrPanel?.updateButton(ptBtnIdx, `Passthrough: ${this.passthroughActive ? "ON" : "OFF"}`);
@@ -479,8 +480,8 @@ export class SandboxScene implements Scene {
       this.vrTutorial?.hide(ctx.scene);
       // Restore opaque state if passthrough was active
       if (this.passthroughActive) {
-        this.ctx.scene.background = this.savedBackground;
-        this.ctx.renderer.setClearColor(0x000000, 1);
+        this.ctx.scene.background = new THREE.Color(0x000005);
+        this.ctx.renderer.setClearColor(0x000005, 1);
         this.spacetimeMaterial.uniforms.uOpacity.value = 1.0;
         this.passthroughActive = false;
       }
