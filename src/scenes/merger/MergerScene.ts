@@ -355,12 +355,13 @@ export class MergerScene implements Scene {
 
   private setupVRPanel(ctx: SceneContext) {
     const xr = ctx.xrManager!;
-    this.vrPanel = new VRPanel(1.4, 0.5);
+    const panelHeight = xr.supportsAR ? 0.85 : 0.5;
+    this.vrPanel = new VRPanel(1.4, panelHeight);
     this.vrPanel.setTitle(this.currentEvent?.commonName ?? "Merger");
 
     // Button layout: 5 buttons in a row
-    const btnY = 0.55;
-    const btnH = 0.35;
+    const btnY = 0.40;
+    const btnH = 0.25;
     const btnW = 0.18;
     const gap = 0.02;
     const startX = 0.02;
@@ -434,7 +435,7 @@ export class MergerScene implements Scene {
       this.vrPanel.addButton({
         label: "Passthrough: OFF",
         x: startX,
-        y: btnY + btnH + 0.05,
+        y: 0.72,
         w: btnW * 2 + gap,
         h: btnH,
         onClick: () => {
@@ -443,9 +444,11 @@ export class MergerScene implements Scene {
             this.savedBackground = this.ctx.scene.background as THREE.Color | THREE.Texture | null;
             this.ctx.scene.background = null;
             this.ctx.renderer.setClearColor(0x000000, 0);
+            this.spacetimeMaterial.uniforms.uOpacity.value = 0.3;
           } else {
             this.ctx.scene.background = this.savedBackground;
             this.ctx.renderer.setClearColor(0x000000, 1);
+            this.spacetimeMaterial.uniforms.uOpacity.value = 1.0;
           }
           this.vrPanel?.updateButton(ptBtnIdx, `Passthrough: ${this.passthroughActive ? "ON" : "OFF"}`);
         },
@@ -474,7 +477,7 @@ export class MergerScene implements Scene {
       this.vrPanel.toggle();
       if (this.vrPanel.visible) {
         this.ctx.camera.updateWorldMatrix(true, false);
-        this.vrPanel.positionInFront(this.ctx.camera, 2, -0.3);
+        this.vrPanel.positionInFront(this.ctx.camera, 2, 0);
       }
     };
 
@@ -487,6 +490,7 @@ export class MergerScene implements Scene {
       if (this.passthroughActive) {
         this.ctx.scene.background = this.savedBackground;
         this.ctx.renderer.setClearColor(0x000000, 1);
+        this.spacetimeMaterial.uniforms.uOpacity.value = 1.0;
         this.passthroughActive = false;
       }
     };
@@ -521,6 +525,7 @@ export class MergerScene implements Scene {
         uTime: { value: 0 },
         uAmplitude: { value: 1.8 },
         uWaveform: { value: defaultTexture },
+        uOpacity: { value: 1.0 },
       },
       transparent: true,
       side: THREE.DoubleSide,

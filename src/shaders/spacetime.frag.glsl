@@ -6,6 +6,7 @@ varying vec3 vNormal;
 varying float vDisplacement;
 
 uniform float uTime;
+uniform float uOpacity;
 
 void main() {
   // ─── Dual-scale grid ───
@@ -59,5 +60,5 @@ void main() {
   float centerGlow = exp(-dist * 0.4) * intensity * 0.15;
   color += dispColor * centerGlow;
 
-  gl_FragColor = vec4(color, fade);
+  gl_FragColor = vec4(color, fade * uOpacity);
 }

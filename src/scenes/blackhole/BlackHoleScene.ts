@@ -336,13 +336,13 @@ export class BlackHoleScene implements Scene {
       this.vrPanel.toggle();
       if (this.vrPanel.visible) {
         this.ctx.camera.updateWorldMatrix(true, false);
-        this.vrPanel.positionInFront(this.ctx.camera, 2, -0.3);
+        this.vrPanel.positionInFront(this.ctx.camera, 2, 0);
       }
     };
 
     xr.onSessionStart = () => {
       if (this.vrPanel) {
-        this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
+        this.vrPanel.positionInFront(ctx.camera, 2, 0);
         ctx.scene.add(this.vrPanel.mesh);
       }
       setTimeout(() => this.vrTutorial?.show(ctx.camera, ctx.scene), 200);
@@ -357,7 +357,7 @@ export class BlackHoleScene implements Scene {
 
     // If already in VR (scene switch mid-session), show panel immediately
     if (xr.isPresenting && this.vrPanel) {
-      this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
+      this.vrPanel.positionInFront(ctx.camera, 2, 0);
       ctx.scene.add(this.vrPanel.mesh);
     }
   }
@@ -407,8 +407,8 @@ export class BlackHoleScene implements Scene {
     }
     this.vrSphere.position.copy(this.bhWorldPosition);
 
-    // Configure material for passthrough: front-side, transparent
-    this.vrMaterial.side = THREE.FrontSide;
+    // Configure material for passthrough: double-side so sphere is visible from inside and outside
+    this.vrMaterial.side = THREE.DoubleSide;
     this.vrMaterial.transparent = true;
     this.vrMaterial.blending = THREE.NormalBlending;
     this.vrMaterial.uniforms.uPassthrough.value = 1.0;
@@ -751,6 +751,7 @@ export class BlackHoleScene implements Scene {
     if (isPresenting) {
       // Use world position (not rig-local) so it matches world-space vWorldPos/uBHCenter
       const xrCamera = this.ctx.renderer.xr.getCamera();
+      xrCamera.updateMatrixWorld(true);
       xrCamera.getWorldPosition(this.vrMaterial.uniforms.uCameraPosVR.value);
 
       // Update BH center uniform and grab logic

@@ -160,6 +160,7 @@ export class SandboxScene implements Scene {
         uTime: { value: 0 },
         uAmplitude: { value: 1.8 },
         uWaveform: { value: defaultTexture },
+        uOpacity: { value: 1.0 },
       },
       transparent: true,
       side: THREE.DoubleSide,
@@ -438,9 +439,11 @@ export class SandboxScene implements Scene {
             this.savedBackground = this.ctx.scene.background as THREE.Color | THREE.Texture | null;
             this.ctx.scene.background = null;
             this.ctx.renderer.setClearColor(0x000000, 0);
+            this.spacetimeMaterial.uniforms.uOpacity.value = 0.3;
           } else {
             this.ctx.scene.background = this.savedBackground;
             this.ctx.renderer.setClearColor(0x000000, 1);
+            this.spacetimeMaterial.uniforms.uOpacity.value = 1.0;
           }
           this.vrPanel?.updateButton(ptBtnIdx, `Passthrough: ${this.passthroughActive ? "ON" : "OFF"}`);
         },
@@ -457,13 +460,13 @@ export class SandboxScene implements Scene {
       this.vrPanel.toggle();
       if (this.vrPanel.visible) {
         this.ctx.camera.updateWorldMatrix(true, false);
-        this.vrPanel.positionInFront(this.ctx.camera, 2, -0.3);
+        this.vrPanel.positionInFront(this.ctx.camera, 2, 0);
       }
     };
 
     xr.onSessionStart = () => {
       if (this.vrPanel) {
-        this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
+        this.vrPanel.positionInFront(ctx.camera, 2, 0);
         ctx.scene.add(this.vrPanel.mesh);
       }
       setTimeout(() => this.vrTutorial?.show(ctx.camera, ctx.scene), 200);
@@ -478,13 +481,14 @@ export class SandboxScene implements Scene {
       if (this.passthroughActive) {
         this.ctx.scene.background = this.savedBackground;
         this.ctx.renderer.setClearColor(0x000000, 1);
+        this.spacetimeMaterial.uniforms.uOpacity.value = 1.0;
         this.passthroughActive = false;
       }
     };
 
     // If already in VR (scene switch mid-session), show panel immediately
     if (xr.isPresenting && this.vrPanel) {
-      this.vrPanel.positionInFront(ctx.camera, 2, -0.3);
+      this.vrPanel.positionInFront(ctx.camera, 2, 0);
       ctx.scene.add(this.vrPanel.mesh);
     }
   }
