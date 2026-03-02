@@ -195,7 +195,7 @@ export class BlackHoleScene implements Scene {
 
   private setupVRPanel(ctx: SceneContext) {
     const xr = ctx.xrManager!;
-    const panelHeight = xr.isARSession ? 1.0 : 0.7; // taller for AR (3 rows)
+    const panelHeight = xr.supportsAR ? 1.0 : 0.7; // taller for AR (3 rows)
     this.vrPanel = new VRPanel(1.4, panelHeight);
     this.vrPanel.setTitle("Black Hole");
 
@@ -252,7 +252,7 @@ export class BlackHoleScene implements Scene {
     const row2Y = 0.70;
 
     // Mode toggle — only shown for AR sessions (passthrough capable)
-    if (xr.isARSession) {
+    if (xr.supportsAR) {
       this.modeButtonIndex = 2; // buttons[0]=Mass, [1]=Disk, [2]=Mode
       this.vrPanel.addButton({
         label: "Mode: PT",
@@ -273,7 +273,7 @@ export class BlackHoleScene implements Scene {
     // Exit VR
     this.vrPanel.addButton({
       label: "Exit VR",
-      x: xr.isARSession ? startX + btnW + gap : startX,
+      x: xr.supportsAR ? startX + btnW + gap : startX,
       y: row2Y,
       w: btnW,
       h: btnH,
@@ -283,7 +283,7 @@ export class BlackHoleScene implements Scene {
     });
 
     // Row 3: Reset Pos (only for AR sessions — repositions BH in passthrough mode)
-    if (xr.isARSession) {
+    if (xr.supportsAR) {
       const row3Y = 1.00;
       this.vrPanel.addButton({
         label: "Reset Pos",
@@ -749,8 +749,9 @@ export class BlackHoleScene implements Scene {
 
     // In VR, pass the XR camera position for proper stereo parallax
     if (isPresenting) {
+      // Use world position (not rig-local) so it matches world-space vWorldPos/uBHCenter
       const xrCamera = this.ctx.renderer.xr.getCamera();
-      this.vrMaterial.uniforms.uCameraPosVR.value.copy(xrCamera.position);
+      xrCamera.getWorldPosition(this.vrMaterial.uniforms.uCameraPosVR.value);
 
       // Update BH center uniform and grab logic
       if (this.passthroughActive) {

@@ -429,7 +429,7 @@ export class MergerScene implements Scene {
     });
 
     // Passthrough toggle — only for AR sessions
-    if (xr.isARSession) {
+    if (xr.supportsAR) {
       const ptBtnIdx = 5; // buttons[0..4] = Play, Speed, Prev, Next, Exit
       this.vrPanel.addButton({
         label: "Passthrough: OFF",

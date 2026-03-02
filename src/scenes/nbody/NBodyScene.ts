@@ -697,7 +697,7 @@ export class NBodyScene implements Scene {
     });
 
     // Passthrough toggle — only for AR sessions
-    if (xr.isARSession) {
+    if (xr.supportsAR) {
       const ptBtnIdx = 11; // after all existing buttons (0-10)
       this.vrPanel.addButton({
         label: "Passthrough: OFF",

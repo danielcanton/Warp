@@ -427,7 +427,7 @@ export class SandboxScene implements Scene {
     });
 
     // Passthrough toggle — only for AR sessions
-    if (xr.isARSession) {
+    if (xr.supportsAR) {
       const ptBtnIdx = 14; // after all existing buttons
       this.vrPanel.addButton({
         label: "Passthrough: OFF",

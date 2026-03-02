@@ -21,6 +21,7 @@ export class XRManager {
   private glBinding: unknown | null = null; // XRWebGLBinding (when available)
   private _hasCameraAccess = false;
   private _isARSession = false; // true when using immersive-ar (passthrough)
+  private _supportsAR = false; // true if immersive-ar is supported (set in createButton, before session)
 
   // Controllers
   private controller1: THREE.Group | null = null;
@@ -108,6 +109,7 @@ export class XRManager {
     if (!arSupported && !vrSupported) return null;
 
     const sessionMode: XRSessionMode = arSupported ? "immersive-ar" : "immersive-vr";
+    this._supportsAR = arSupported;
 
     this.renderer.xr.enabled = true;
 
@@ -891,6 +893,11 @@ export class XRManager {
 
   get isPresenting(): boolean {
     return this.renderer.xr.isPresenting;
+  }
+
+  /** Whether AR (passthrough) is supported. Available before session starts (set in createButton). */
+  get supportsAR(): boolean {
+    return this._supportsAR;
   }
 
   /** Whether the current XR session is immersive-ar (passthrough). */
