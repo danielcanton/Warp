@@ -344,6 +344,9 @@ export class BlackHoleScene implements Scene {
     this.savedBackground = this.ctx.scene.background as THREE.Color | THREE.Texture | null;
     this.ctx.scene.background = null;
 
+    // Clear color must have alpha = 0 so the XR compositor shows passthrough
+    this.ctx.renderer.setClearAlpha(0);
+
     // Always enter passthrough mode in VR (localized sphere)
     this.passthroughActive = true;
     this.hasCameraAccess = this.ctx.xrManager?.hasCameraAccess ?? false;
@@ -375,11 +378,12 @@ export class BlackHoleScene implements Scene {
     this.vrSphere.visible = false;
     this.quad.visible = true;
 
-    // Restore scene background
+    // Restore scene background and clear alpha
     if (this.savedBackground !== null) {
       this.ctx.scene.background = this.savedBackground;
       this.savedBackground = null;
     }
+    this.ctx.renderer.setClearAlpha(1);
 
     // Restore large sphere geometry
     if (this.vrSphereOriginalGeo) {

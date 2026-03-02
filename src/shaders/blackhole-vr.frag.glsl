@@ -127,7 +127,8 @@ void main() {
   float exitRadius = uPassthrough > 0.5 ? uSphereRadius * 1.1 : MAX_DIST;
 
   // Ray march with geodesic bending
-  vec3 pos = ro;
+  // In passthrough mode, camera is outside the localized sphere — start at sphere surface
+  vec3 pos = uPassthrough > 0.5 ? vWorldPos : ro;
   vec3 vel = rd;
 
   float stepSize = 0.1;
@@ -176,17 +177,20 @@ void main() {
     }
   }
 
+  // Ray entry point for glow calculations (sphere surface in passthrough, camera in skybox)
+  vec3 rayEntry = uPassthrough > 0.5 ? vWorldPos : ro;
+
   // Einstein ring glow
   float ringGlow = 0.0;
   if (!absorbed) {
-    vec3 relRo = ro - bhPos;
-    float closest = length(cross(relRo, vel));
+    vec3 relEntry = rayEntry - bhPos;
+    float closest = length(cross(relEntry, vel));
     float photonSphere = rs * 1.5;
     ringGlow = exp(-pow((closest - photonSphere) / (rs * 0.3), 2.0)) * 0.8;
   }
 
   // Photon ring
-  float impactParam = length(cross(ro - bhPos, rd));
+  float impactParam = length(cross(rayEntry - bhPos, rd));
   float photonRing = exp(-pow((impactParam - rs * 2.6) / (rs * 0.15), 2.0)) * 0.3;
 
   // ─── Passthrough mode ───────────────────────────────────────────
