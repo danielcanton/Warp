@@ -56,12 +56,10 @@ export class XRManager {
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private teleportMaxDistance = 20;
 
-  // Locomotion & snap turn
+  // Locomotion & smooth turn
   private static readonly DEAD_ZONE = 0.15;
   private static readonly MOVE_SPEED = 2.0; // m/s
-  private static readonly SNAP_ANGLE = Math.PI / 4; // 45°
-  private static readonly SNAP_COOLDOWN = 0.3; // seconds
-  private snapCooldownTimer = 0;
+  private static readonly TURN_SPEED = 1.8; // rad/s (continuous smooth turn)
   private prevLeftThumbstickPressed = false;
   private prevLeftXButtonPressed = false;
   private clock = new THREE.Clock();
@@ -308,7 +306,6 @@ export class XRManager {
       this.scene.remove(this.reticle);
       this.reticle = null;
     }
-    this.snapCooldownTimer = 0;
     this.prevLeftThumbstickPressed = false;
     this.prevLeftXButtonPressed = false;
   }
@@ -590,19 +587,26 @@ export class XRManager {
     }
 
     // ── Left stick: smooth locomotion ──
+    // Hold left grip (buttons[1]) + stick → fly mode (full 3D, follows head pitch)
+    // Without grip → ground-locked XZ movement
     if (leftGamepad && leftGamepad.axes.length >= 4) {
       const lx = leftGamepad.axes[2]; // strafe
       const ly = leftGamepad.axes[3]; // forward/back
+      const leftGrip = leftGamepad.buttons.length > 1 && leftGamepad.buttons[1].pressed;
 
       if (Math.abs(lx) > XRManager.DEAD_ZONE || Math.abs(ly) > XRManager.DEAD_ZONE) {
-        // Head-relative movement on XZ plane
         const camera = this.renderer.xr.getCamera();
         const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-        forward.y = 0;
-        forward.normalize();
         const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-        right.y = 0;
-        right.normalize();
+
+        if (!leftGrip) {
+          // Ground mode: project to XZ plane
+          forward.y = 0;
+          forward.normalize();
+          right.y = 0;
+          right.normalize();
+        }
+        // Fly mode (grip held): forward/right keep full Y component
 
         const moveX = Math.abs(lx) > XRManager.DEAD_ZONE ? lx : 0;
         const moveZ = Math.abs(ly) > XRManager.DEAD_ZONE ? ly : 0;
@@ -626,17 +630,11 @@ export class XRManager {
       this.prevLeftXButtonPressed = xButtonPressed;
     }
 
-    // ── Right stick: snap turn ──
-    if (this.snapCooldownTimer > 0) {
-      this.snapCooldownTimer -= dt;
-    }
-
+    // ── Right stick: smooth continuous turn ──
     if (rightGamepad && rightGamepad.axes.length >= 4) {
       const rx = rightGamepad.axes[2];
-      if (Math.abs(rx) > XRManager.DEAD_ZONE && this.snapCooldownTimer <= 0) {
-        const angle = rx > 0 ? -XRManager.SNAP_ANGLE : XRManager.SNAP_ANGLE;
-        this.cameraRig.rotateY(angle);
-        this.snapCooldownTimer = XRManager.SNAP_COOLDOWN;
+      if (Math.abs(rx) > XRManager.DEAD_ZONE) {
+        this.cameraRig.rotateY(-rx * XRManager.TURN_SPEED * dt);
       }
     }
 
