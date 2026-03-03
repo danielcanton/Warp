@@ -607,11 +607,15 @@ export class XRManager {
       this.prevLeftXButtonPressed = xButtonPressed;
     }
 
-    // ── Right stick: smooth continuous turn ──
+    // ── Right stick: smooth continuous turn (horizontal + vertical) ──
     if (rightGamepad && rightGamepad.axes.length >= 4) {
       const rx = rightGamepad.axes[2];
+      const ry = rightGamepad.axes[3];
       if (Math.abs(rx) > XRManager.DEAD_ZONE) {
         this.cameraRig.rotateY(-rx * XRManager.TURN_SPEED * dt);
+      }
+      if (Math.abs(ry) > XRManager.DEAD_ZONE) {
+        this.cameraRig.rotateX(-ry * XRManager.TURN_SPEED * 0.5 * dt);
       }
     }
 

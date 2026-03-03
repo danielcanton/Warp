@@ -371,7 +371,7 @@ export class BlackHoleScene implements Scene {
     this.vrMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
 
     // BH at eye level 5m ahead — reduced mass for manageable VR scale
-    this.vrMaterial.uniforms.uMass.value = 0.4;
+    this.vrMaterial.uniforms.uMass.value = 0.2;
     this.vrMaterial.uniforms.uBHCenter.value.set(0, 1.6, -5);
 
     // Solid background to block AR passthrough
@@ -440,7 +440,7 @@ export class BlackHoleScene implements Scene {
     this.vrMaterial.uniforms.uPassthrough.value = 0.0;
     this.vrMaterial.uniforms.uHasCameraFeed.value = 0.0;
     // BH at eye level 5m ahead — reduced mass for manageable VR scale
-    this.vrMaterial.uniforms.uMass.value = 0.4;
+    this.vrMaterial.uniforms.uMass.value = 0.2;
     this.vrMaterial.uniforms.uBHCenter.value.set(0, 1.6, -5);
     this.vrMaterial.needsUpdate = true;
 
