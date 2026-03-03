@@ -730,12 +730,7 @@ export class MergerScene implements Scene {
     this.addHandler(this.helpBtn, "click", () => this.toggleHelp());
     this.addHandler(this.helpCloseBtn, "click", () => this.toggleHelp());
 
-    // About
-    this.addHandler(this.brandEl, "click", () => this.toggleAbout());
-    this.addHandler(this.aboutCloseBtn, "click", () => this.toggleAbout());
-    this.addHandler(this.aboutOverlay, "click", ((e: Event) => {
-      if (e.target === this.aboutOverlay) this.toggleAbout();
-    }) as EventListener);
+    // About overlay is handled globally in main.ts (works across all scenes)
 
     // Tour buttons
     this.addHandler(this.tourToggleBtn, "click", () => {

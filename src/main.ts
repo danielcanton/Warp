@@ -120,6 +120,21 @@ sceneManager.register(new BlackHoleScene());
 sceneManager.register(new NBodyScene());
 
 
+// ─── About overlay (brand logo click) ─────────────────────────────────
+
+const brandEl = document.getElementById("brand");
+const aboutOverlay = document.getElementById("about-overlay");
+const aboutCloseBtn = aboutOverlay?.querySelector(".about-close");
+
+if (brandEl && aboutOverlay) {
+  const toggleAbout = () => aboutOverlay.classList.toggle("show");
+  brandEl.addEventListener("click", toggleAbout);
+  aboutCloseBtn?.addEventListener("click", toggleAbout);
+  aboutOverlay.addEventListener("click", (e) => {
+    if (e.target === aboutOverlay) toggleAbout();
+  });
+}
+
 // ─── URL Parameters: embed mode & scene selection ────────────────────
 const params = new URLSearchParams(window.location.search);
 
