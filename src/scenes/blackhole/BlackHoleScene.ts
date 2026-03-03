@@ -120,7 +120,7 @@ export class BlackHoleScene implements Scene {
           uBHCenter: { value: new THREE.Vector3() },
           uSphereRadius: { value: 2.0 },
         },
-        side: THREE.BackSide,
+        side: THREE.DoubleSide,
         depthWrite: false,
         transparent: false,
       });
@@ -433,8 +433,8 @@ export class BlackHoleScene implements Scene {
     }
     this.vrSphere.position.set(0, 0, 0);
 
-    // Configure material for skybox: back-side, opaque
-    this.vrMaterial.side = THREE.BackSide;
+    // Configure material for skybox: double-side to ensure visibility from inside
+    this.vrMaterial.side = THREE.DoubleSide;
     this.vrMaterial.transparent = false;
     this.vrMaterial.blending = THREE.NormalBlending;
     this.vrMaterial.uniforms.uPassthrough.value = 0.0;
