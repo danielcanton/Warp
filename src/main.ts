@@ -212,6 +212,8 @@ if (window.innerWidth <= 768) {
         mobileTabs.querySelectorAll(".mobile-tab").forEach((t) =>
           t.classList.toggle("active", (t as HTMLElement).dataset.sceneId === s.id)
         );
+        // Rebuild hamburger menu for this scene's controls
+        buildMobileMenu(s.id);
         // Show info sheet only in merger scene
         if (s.id === "merger") {
           infoSheet.classList.add("sheet-peek");
@@ -237,41 +239,47 @@ if (window.innerWidth <= 768) {
   });
   backdrop.addEventListener("click", closeMenu);
 
-  // ── Menu items ──
-  const menuItems: { icon: string; label: string; action: () => void }[] = [
+  // ── Scene-aware menu items ──
+  type MenuItem = { icon: string; label: string; action: () => void; scenes: string[] };
+  const allMenuItems: MenuItem[] = [
     {
-      icon: "▶", label: "Play",
+      icon: "▶", label: "Play", scenes: ["merger", "sandbox"],
       action: () => { document.getElementById("play-btn")?.click(); closeMenu(); },
     },
     {
-      icon: "⏲", label: "Speed",
+      icon: "⏲", label: "Speed", scenes: ["merger", "sandbox"],
       action: () => { document.getElementById("speed-btn")?.click(); closeMenu(); },
     },
     {
-      icon: "☰", label: "Events",
+      icon: "☰", label: "Events", scenes: ["merger"],
       action: () => { document.getElementById("events-toggle")?.click(); closeMenu(); },
     },
     {
-      icon: "🗺", label: "Map",
+      icon: "🗺", label: "Map", scenes: ["merger"],
       action: () => { document.getElementById("map-toggle")?.click(); closeMenu(); },
     },
     {
-      icon: "📷", label: "Screenshot",
+      icon: "📷", label: "Screenshot", scenes: ["merger", "sandbox", "blackhole", "nbody"],
       action: () => { document.getElementById("screenshot-btn")?.click(); closeMenu(); },
     },
     {
-      icon: "🎯", label: "Tours",
+      icon: "🎯", label: "Tours", scenes: ["merger"],
       action: () => { document.getElementById("tour-toggle")?.click(); closeMenu(); },
     },
   ];
 
-  for (const item of menuItems) {
-    const btn = document.createElement("button");
-    btn.className = "mobile-menu-item";
-    btn.innerHTML = `<span class="menu-icon">${item.icon}</span>${item.label}`;
-    btn.addEventListener("click", item.action);
-    menuGrid.appendChild(btn);
+  function buildMobileMenu(sceneId: string) {
+    menuGrid.innerHTML = "";
+    for (const item of allMenuItems) {
+      if (!item.scenes.includes(sceneId)) continue;
+      const btn = document.createElement("button");
+      btn.className = "mobile-menu-item";
+      btn.innerHTML = `<span class="menu-icon">${item.icon}</span>${item.label}`;
+      btn.addEventListener("click", item.action);
+      menuGrid.appendChild(btn);
+    }
   }
+  buildMobileMenu(startScene);
 
   // ── Info sheet gesture ──
   let sheetStartY = 0;

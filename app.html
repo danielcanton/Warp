@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>WarpLab — Feel Spacetime Bend</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌀</text></svg>" />
     <meta name="theme-color" content="#000005" />
@@ -23,6 +23,10 @@
     <meta name="twitter:creator" content="@coco_canton" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        height: 100%;
+        height: 100dvh;
+      }
       body {
         background: #000;
         color: #fff;
@@ -1314,7 +1318,7 @@
           border-radius: 16px 16px 0 0;
           transform: translateY(100%);
           transition: transform 0.3s ease-out;
-          max-height: 60vh;
+          max-height: 60dvh;
           overflow-y: auto;
           overscroll-behavior: contain;
         }
