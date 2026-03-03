@@ -607,15 +607,16 @@ export class XRManager {
       this.prevLeftXButtonPressed = xButtonPressed;
     }
 
-    // ── Right stick: smooth continuous turn (horizontal + vertical) ──
+    // ── Right stick: horizontal turn + vertical fly ──
     if (rightGamepad && rightGamepad.axes.length >= 4) {
       const rx = rightGamepad.axes[2];
       const ry = rightGamepad.axes[3];
       if (Math.abs(rx) > XRManager.DEAD_ZONE) {
         this.cameraRig.rotateY(-rx * XRManager.TURN_SPEED * dt);
       }
+      // Vertical stick → fly up/down (pitch rotation conflicts with headset tracking)
       if (Math.abs(ry) > XRManager.DEAD_ZONE) {
-        this.cameraRig.rotateX(-ry * XRManager.TURN_SPEED * 0.5 * dt);
+        this.cameraRig.position.y += -ry * XRManager.MOVE_SPEED * 0.5 * dt;
       }
     }
 

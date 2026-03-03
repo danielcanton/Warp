@@ -76,6 +76,8 @@ export class MergerScene implements Scene {
   private binary = new BinarySystem();
   private mergerGlow!: THREE.Mesh;
   private glowMaterial!: THREE.MeshBasicMaterial;
+  private shockwaveRing!: THREE.Mesh;
+  private shockwaveMaterial!: THREE.MeshBasicMaterial;
   private stars!: THREE.Points;
   private universeMap = new UniverseMap();
 
@@ -549,6 +551,17 @@ export class MergerScene implements Scene {
     );
     this.mergerGlow.position.set(0, 0.6, 0);
     this.eventViewGroup.add(this.mergerGlow);
+
+    // Expanding shockwave ring for collision effect (works in VR without postprocessing)
+    this.shockwaveMaterial = new THREE.MeshBasicMaterial({
+      color: 0x88aaff, transparent: true, opacity: 0, side: THREE.DoubleSide,
+    });
+    this.shockwaveRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.1, 0.15, 64), this.shockwaveMaterial
+    );
+    this.shockwaveRing.position.set(0, 0.6, 0);
+    this.shockwaveRing.rotation.x = -Math.PI / 2;
+    this.eventViewGroup.add(this.shockwaveRing);
 
     this.eventViewGroup.add(new THREE.AmbientLight(0x404060, 0.4));
 
@@ -1445,10 +1458,25 @@ export class MergerScene implements Scene {
         const distFromMerger = Math.abs(this.playbackTime - mergerNorm);
         const glowIntensity = Math.max(0, 1 - distFromMerger * 8);
         this.glowMaterial.opacity = glowIntensity * 0.9;
-        this.mergerGlow.scale.setScalar(1 + glowIntensity * 3);
+        this.mergerGlow.scale.setScalar(1 + glowIntensity * 5);
+        // Color shift: purple → white at peak
+        const r = 0.39 + glowIntensity * 0.61;
+        const g = 0.40 + glowIntensity * 0.60;
+        const b = 0.95 + glowIntensity * 0.05;
+        this.glowMaterial.color.setRGB(r, g, b);
         this.ctx.bloom.intensity = 1.2 + glowIntensity * 3;
 
-        // Screen-space gravitational wave distortion
+        // Expanding shockwave ring
+        const shockProgress = Math.max(0, (this.playbackTime - mergerNorm) * 6);
+        if (shockProgress > 0 && shockProgress < 1) {
+          this.shockwaveMaterial.opacity = (1 - shockProgress) * 0.7;
+          const ringScale = 1 + shockProgress * 15;
+          this.shockwaveRing.scale.setScalar(ringScale);
+        } else {
+          this.shockwaveMaterial.opacity = 0;
+        }
+
+        // Screen-space gravitational wave distortion (desktop only)
         const distortion = this.ctx.gwDistortion;
         distortion.intensity = glowIntensity * 0.012;
         distortion.frequency = 15 + glowIntensity * 30;
@@ -1490,6 +1518,7 @@ export class MergerScene implements Scene {
     } else {
       this.ctx.bloom.intensity = 1.8;
       this.ctx.gwDistortion.intensity = 0;
+      this.shockwaveMaterial.opacity = 0;
     }
 
     this.ctx.controls.update();
