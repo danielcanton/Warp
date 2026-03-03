@@ -1448,6 +1448,12 @@ export class MergerScene implements Scene {
         this.mergerGlow.scale.setScalar(1 + glowIntensity * 3);
         this.ctx.bloom.intensity = 1.2 + glowIntensity * 3;
 
+        // Screen-space gravitational wave distortion
+        const distortion = this.ctx.gwDistortion;
+        distortion.intensity = glowIntensity * 0.012;
+        distortion.frequency = 15 + glowIntensity * 30;
+        distortion.waveTime = elapsed;
+
         // Haptic feedback: wave propagation delay + distance attenuation
         if (this.isPlaying && this.ctx.xrManager?.isPresenting) {
           const hPlus = this.currentWaveform.hPlus;
@@ -1483,6 +1489,7 @@ export class MergerScene implements Scene {
 
     } else {
       this.ctx.bloom.intensity = 1.8;
+      this.ctx.gwDistortion.intensity = 0;
     }
 
     this.ctx.controls.update();

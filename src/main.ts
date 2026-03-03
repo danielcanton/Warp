@@ -11,6 +11,7 @@ import {
   ToneMappingEffect,
   ToneMappingMode,
 } from "postprocessing";
+import { GWDistortionEffect } from "./lib/GWDistortionEffect";
 import { SceneManager } from "./lib/SceneManager";
 import { XRManager } from "./lib/XRManager";
 import { MergerScene } from "./scenes/merger/MergerScene";
@@ -71,7 +72,9 @@ const toneMapping = new ToneMappingEffect({
   mode: ToneMappingMode.ACES_FILMIC,
 });
 
-composer.addPass(new EffectPass(camera, bloom, toneMapping));
+const gwDistortion = new GWDistortionEffect();
+
+composer.addPass(new EffectPass(camera, bloom, gwDistortion, toneMapping));
 
 // ─── XR Manager ─────────────────────────────────────────────────────
 
@@ -102,6 +105,7 @@ const ctx: SceneContext = {
   controls,
   composer,
   bloom,
+  gwDistortion,
   audioCtx: null,
   container: document.body,
   xrManager,

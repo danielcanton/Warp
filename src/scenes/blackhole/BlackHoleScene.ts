@@ -103,8 +103,7 @@ export class BlackHoleScene implements Scene {
 
       // ─── Inverted sphere (VR skybox) ───
       const sphereGeo = new THREE.IcosahedronGeometry(50, 5);
-      // Invert normals so the shader renders on inside faces
-      sphereGeo.scale(-1, 1, 1);
+      // BackSide rendering handles inside-out view — no geometry inversion needed
 
       this.vrMaterial = new THREE.ShaderMaterial({
         vertexShader: vrVertexShader,
@@ -371,9 +370,13 @@ export class BlackHoleScene implements Scene {
     // Sync VR material uniforms
     this.vrMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
 
-    // Full mass at origin — camera at ~1.07×rs creates dramatic lensing
+    // BH at eye level 5m ahead — camera at 3.3×rs for dramatic Einstein ring
     this.vrMaterial.uniforms.uMass.value = this.mass;
-    this.vrMaterial.uniforms.uBHCenter.value.set(0, 0, 0);
+    this.vrMaterial.uniforms.uBHCenter.value.set(0, 1.6, -5);
+
+    // Solid background to block AR passthrough
+    this.ctx.scene.background = new THREE.Color(0x000005);
+    this.ctx.renderer.setClearColor(0x000005, 1);
 
     this.passthroughActive = false;
   }
@@ -436,9 +439,9 @@ export class BlackHoleScene implements Scene {
     this.vrMaterial.blending = THREE.NormalBlending;
     this.vrMaterial.uniforms.uPassthrough.value = 0.0;
     this.vrMaterial.uniforms.uHasCameraFeed.value = 0.0;
-    // Full mass at origin — camera at ~1.07×rs creates dramatic lensing
+    // BH at eye level 5m ahead — camera at 3.3×rs for dramatic Einstein ring
     this.vrMaterial.uniforms.uMass.value = this.mass;
-    this.vrMaterial.uniforms.uBHCenter.value.set(0, 0, 0);
+    this.vrMaterial.uniforms.uBHCenter.value.set(0, 1.6, -5);
     this.vrMaterial.needsUpdate = true;
 
     // Opaque background — force solid color to block AR camera passthrough

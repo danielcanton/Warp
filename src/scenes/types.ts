@@ -5,6 +5,7 @@ import type {
 } from "postprocessing";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { XRManager } from "../lib/XRManager";
+import type { GWDistortionEffect } from "../lib/GWDistortionEffect";
 
 export interface SceneContext {
   renderer: THREE.WebGLRenderer;
@@ -13,6 +14,7 @@ export interface SceneContext {
   controls: OrbitControls;
   composer: EffectComposer;
   bloom: BloomEffect;
+  gwDistortion: GWDistortionEffect;
   audioCtx: AudioContext | null;
   container: HTMLElement;
   xrManager: XRManager | null;
