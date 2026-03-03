@@ -652,7 +652,9 @@ export class XRManager {
         if (hit.length() <= this.teleportMaxDistance) {
           showTeleport = true;
           if (this.teleportTarget) {
+            // Convert world-space hit to cameraRig local space
             this.teleportTarget.position.copy(hit);
+            this.cameraRig.worldToLocal(this.teleportTarget.position);
             this.teleportTarget.position.y = 0.01;
           }
         }
@@ -749,7 +751,9 @@ export class XRManager {
         if (hit.length() <= this.teleportMaxDistance) {
           showTeleport = true;
           if (this.teleportTarget) {
+            // Convert world-space hit to cameraRig local space
             this.teleportTarget.position.copy(hit);
+            this.cameraRig.worldToLocal(this.teleportTarget.position);
             this.teleportTarget.position.y = 0.01;
           }
         }
