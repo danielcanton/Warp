@@ -240,7 +240,18 @@ if (window.innerWidth <= 768) {
   backdrop.addEventListener("click", closeMenu);
 
   // ── Scene-aware menu items ──
-  type MenuItem = { icon: string; label: string; action: () => void; scenes: string[] };
+  type MenuItem = { icon: string; label: string; action: () => void; scenes: string[]; id?: string };
+
+  // Mode cycling button — label updates dynamically
+  const modeLabels: Record<ViewMode, string> = {
+    explorer: "Explorer",
+    student: "Student",
+    researcher: "Researcher",
+  };
+  const modeOrder: ViewMode[] = ["explorer", "student", "researcher"];
+
+  let currentMode: ViewMode = initialMode;
+
   const allMenuItems: MenuItem[] = [
     {
       icon: "▶", label: "Play", scenes: ["merger", "sandbox"],
@@ -266,7 +277,27 @@ if (window.innerWidth <= 768) {
       icon: "🎯", label: "Tours", scenes: ["merger"],
       action: () => { document.getElementById("tour-toggle")?.click(); closeMenu(); },
     },
+    {
+      icon: "👁", label: `Mode: ${modeLabels[initialMode]}`, scenes: ["merger", "sandbox", "blackhole", "nbody"],
+      id: "mode-cycle",
+      action: () => {
+        const idx = modeOrder.indexOf(currentMode);
+        const next = modeOrder[(idx + 1) % modeOrder.length];
+        currentMode = next;
+        setViewMode(next);
+        // Update the button label
+        const modeBtn = menuGrid.querySelector('[data-menu-id="mode-cycle"]');
+        if (modeBtn) modeBtn.innerHTML = `<span class="menu-icon">👁</span>Mode: ${modeLabels[next]}`;
+      },
+    },
   ];
+
+  // Keep mobile mode button in sync with programmatic mode changes
+  onViewModeChange((mode: ViewMode) => {
+    currentMode = mode;
+    const modeBtn = menuGrid.querySelector('[data-menu-id="mode-cycle"]');
+    if (modeBtn) modeBtn.innerHTML = `<span class="menu-icon">👁</span>Mode: ${modeLabels[mode]}`;
+  });
 
   function buildMobileMenu(sceneId: string) {
     menuGrid.innerHTML = "";
@@ -274,7 +305,13 @@ if (window.innerWidth <= 768) {
       if (!item.scenes.includes(sceneId)) continue;
       const btn = document.createElement("button");
       btn.className = "mobile-menu-item";
-      btn.innerHTML = `<span class="menu-icon">${item.icon}</span>${item.label}`;
+      if (item.id) btn.dataset.menuId = item.id;
+      // For mode button, use current mode label
+      if (item.id === "mode-cycle") {
+        btn.innerHTML = `<span class="menu-icon">${item.icon}</span>Mode: ${modeLabels[currentMode]}`;
+      } else {
+        btn.innerHTML = `<span class="menu-icon">${item.icon}</span>${item.label}`;
+      }
       btn.addEventListener("click", item.action);
       menuGrid.appendChild(btn);
     }
