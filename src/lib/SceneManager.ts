@@ -57,6 +57,15 @@ export class SceneManager {
     const nextUI = next.getUI();
     if (nextUI) nextUI.style.display = "";
 
+    // Sync URL with current scene
+    const url = new URL(window.location.href);
+    url.searchParams.set("scene", id);
+    // Clear merger-specific params when leaving merger
+    if (id !== "merger") {
+      url.searchParams.delete("event");
+    }
+    history.replaceState(null, "", url.toString());
+
     this.updateSelector();
   }
 
