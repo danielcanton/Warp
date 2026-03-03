@@ -59,7 +59,7 @@ export class XRManager {
 
   // Locomotion & smooth turn
   private static readonly DEAD_ZONE = 0.15;
-  private static readonly MOVE_SPEED = 2.0; // m/s
+  private static readonly MOVE_SPEED = 5.0; // m/s
   private static readonly TURN_SPEED = 1.8; // rad/s (continuous smooth turn)
   private prevLeftThumbstickPressed = false;
   private prevLeftXButtonPressed = false;
