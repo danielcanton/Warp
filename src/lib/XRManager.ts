@@ -128,6 +128,15 @@ export class XRManager {
     const onSessionStarted = (session: XRSession) => {
       session.addEventListener("end", onSessionEnded);
       this.renderer.xr.setReferenceSpaceType("local-floor");
+
+      // Set high-res framebuffer for sharp VR rendering
+      const gl = this.renderer.getContext();
+      const glLayer = new XRWebGLLayer(session, gl, {
+        framebufferScaleFactor: XRWebGLLayer.getNativeFramebufferScaleFactor(session),
+        antialias: true,
+      });
+      session.updateRenderState({ baseLayer: glLayer });
+
       this.renderer.xr.setSession(session);
       currentSession = session;
       button.textContent = "EXIT VR";
