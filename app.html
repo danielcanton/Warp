@@ -1735,6 +1735,36 @@
         color: rgba(255, 255, 255, 0.2);
         text-align: center;
       }
+      .bh-mode-toggle {
+        display: flex;
+        gap: 0;
+        border-radius: 6px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        margin-bottom: 8px;
+      }
+      .bh-mode-btn {
+        flex: 1;
+        padding: 5px 0;
+        font-size: 11px;
+        font-weight: 500;
+        text-align: center;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.45);
+        border: none;
+        cursor: pointer;
+        transition: background 0.15s, color 0.15s;
+      }
+      .bh-mode-btn.active {
+        background: rgba(99, 102, 241, 0.35);
+        color: #fff;
+      }
+      .bh-geodesic-info {
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.35);
+        text-align: center;
+        margin-top: 4px;
+      }
 
       /* ─── N-Body Panel ─── */
       #nbody-panel {

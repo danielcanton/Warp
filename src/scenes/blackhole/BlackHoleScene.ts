@@ -5,6 +5,7 @@ import { blackholeEquations } from "../../lib/equation-data";
 import { buildEquationsSection, updateEquationValues, removeEquationsSection } from "../../lib/equations";
 import { VRPanel } from "../../lib/VRPanel";
 import { VRTutorial } from "../../lib/vr-tutorial";
+import { integrateGeodesic, type GeodesicResult } from "../../lib/geodesic";
 import vertexShader from "../../shaders/blackhole.vert.glsl?raw";
 import fragmentShader from "../../shaders/blackhole.frag.glsl?raw";
 import vrVertexShader from "../../shaders/blackhole-vr.vert.glsl?raw";
@@ -63,6 +64,21 @@ export class BlackHoleScene implements Scene {
   private savedBackground: THREE.Color | THREE.Texture | null = null;
   private vrSphereOriginalGeo: THREE.BufferGeometry | null = null;
   private modeButtonIndex = -1; // VR panel button index for passthrough/skybox toggle
+
+  // Geodesic mode state
+  private geodesicMode = false;
+  private geodesicGroup!: THREE.Group;
+  private bhHorizonMesh!: THREE.Mesh;
+  private photonSphereRing!: THREE.Line;
+  private iscoRing!: THREE.Line;
+  private geodesicTrails: THREE.Line[] = [];
+  private activeTrail: { line: THREE.Line; points: THREE.Vector3[]; index: number; result: GeodesicResult } | null = null;
+  private launchIndicator: THREE.ArrowHelper | null = null;
+  private geodesicRaycaster = new THREE.Raycaster();
+  private geodesicClickSphere!: THREE.Mesh; // invisible sphere for click raycasting
+  private isAiming = false;
+  private aimStart = new THREE.Vector2();
+  private aimHitPoint = new THREE.Vector3();
 
   private boundHandlers: { el: EventTarget; type: string; fn: EventListener }[] = [];
   private initialized = false;
@@ -141,6 +157,38 @@ export class BlackHoleScene implements Scene {
       this.vrSphere.visible = false;
       scene.add(this.vrSphere);
 
+      // ─── Geodesic mode objects ───
+      this.geodesicGroup = new THREE.Group();
+      this.geodesicGroup.visible = false;
+      scene.add(this.geodesicGroup);
+
+      // Dark sphere at event horizon
+      const horizonGeo = new THREE.SphereGeometry(this.mass, 32, 24);
+      this.bhHorizonMesh = new THREE.Mesh(horizonGeo, new THREE.MeshBasicMaterial({
+        color: 0x0a0a0a,
+        transparent: true,
+        opacity: 0.9,
+      }));
+      this.geodesicGroup.add(this.bhHorizonMesh);
+
+      // Photon sphere ring at r = 1.5 rs
+      const photonR = 1.5 * this.mass;
+      this.photonSphereRing = this.createWireframeRing(photonR, 0x6366f1);
+      this.geodesicGroup.add(this.photonSphereRing);
+
+      // ISCO ring at r = 3 rs
+      const iscoR = 3 * this.mass;
+      this.iscoRing = this.createWireframeRing(iscoR, 0x22d3ee);
+      this.geodesicGroup.add(this.iscoRing);
+
+      // Invisible click sphere for raycasting (extends to ~20 rs)
+      const clickGeo = new THREE.SphereGeometry(this.mass * 20, 16, 12);
+      this.geodesicClickSphere = new THREE.Mesh(clickGeo, new THREE.MeshBasicMaterial({
+        visible: false,
+        side: THREE.DoubleSide,
+      }));
+      this.geodesicGroup.add(this.geodesicClickSphere);
+
       // Load starfield equirectangular panorama (ESO Milky Way, CC-BY 4.0)
       new THREE.TextureLoader().load("textures/milkyway.jpg", (tex) => {
         tex.minFilter = THREE.LinearFilter;
@@ -155,6 +203,7 @@ export class BlackHoleScene implements Scene {
       // Re-add meshes to scene on re-entry
       scene.add(this.quad);
       scene.add(this.vrSphere);
+      scene.add(this.geodesicGroup);
     }
 
     // ─── Disable OrbitControls — we handle camera ourselves ───
@@ -536,42 +585,173 @@ export class BlackHoleScene implements Scene {
     this.grabbing = false;
   }
 
+  private createWireframeRing(radius: number, color: number): THREE.Line {
+    const segments = 64;
+    const ringPoints: THREE.Vector3[] = [];
+    for (let i = 0; i <= segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      ringPoints.push(new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius));
+    }
+    const geo = new THREE.BufferGeometry().setFromPoints(ringPoints);
+    return new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.6 }));
+  }
+
+  private setGeodesicMode(active: boolean) {
+    this.geodesicMode = active;
+    // Toggle visibility
+    this.quad.visible = !active;
+    this.geodesicGroup.visible = active;
+
+    // Update geodesic BH representation radii for current mass
+    if (active) {
+      this.updateGeodesicRadii();
+      // Use a dark background for geodesic mode
+      this.ctx.scene.background = new THREE.Color(0x050510);
+    } else {
+      this.ctx.scene.background = null;
+      // Clear active animation
+      this.activeTrail = null;
+      // Remove launch indicator
+      if (this.launchIndicator) {
+        this.geodesicGroup.remove(this.launchIndicator);
+        this.launchIndicator.dispose();
+        this.launchIndicator = null;
+      }
+    }
+
+    // Update panel buttons
+    const lensingBtn = this.panelEl?.querySelector("#bh-mode-lensing") as HTMLElement | null;
+    const geodesicBtn = this.panelEl?.querySelector("#bh-mode-geodesic") as HTMLElement | null;
+    if (lensingBtn) lensingBtn.classList.toggle("active", !active);
+    if (geodesicBtn) geodesicBtn.classList.toggle("active", active);
+
+    // Update hint
+    const hint = this.panelEl?.querySelector(".bh-hint");
+    if (hint) {
+      hint.textContent = active
+        ? "Click to place photon. Drag to aim."
+        : "Drag to orbit. Scroll to zoom.";
+    }
+
+    // Show/hide lensing-only controls
+    const lensingControls = this.panelEl?.querySelectorAll(".bh-lensing-only");
+    lensingControls?.forEach((el) => {
+      (el as HTMLElement).style.display = active ? "none" : "";
+    });
+  }
+
+  private updateGeodesicRadii() {
+    const rs = this.mass;
+
+    // Update horizon sphere
+    this.bhHorizonMesh.geometry.dispose();
+    this.bhHorizonMesh.geometry = new THREE.SphereGeometry(rs, 32, 24);
+
+    // Update photon sphere ring
+    this.geodesicGroup.remove(this.photonSphereRing);
+    this.photonSphereRing.geometry.dispose();
+    this.photonSphereRing = this.createWireframeRing(1.5 * rs, 0x6366f1);
+    this.geodesicGroup.add(this.photonSphereRing);
+
+    // Update ISCO ring
+    this.geodesicGroup.remove(this.iscoRing);
+    this.iscoRing.geometry.dispose();
+    this.iscoRing = this.createWireframeRing(3 * rs, 0x22d3ee);
+    this.geodesicGroup.add(this.iscoRing);
+
+    // Update click sphere
+    this.geodesicClickSphere.geometry.dispose();
+    this.geodesicClickSphere.geometry = new THREE.SphereGeometry(rs * 20, 16, 12);
+  }
+
+  private clearGeodesicTrails() {
+    for (const trail of this.geodesicTrails) {
+      this.geodesicGroup.remove(trail);
+      trail.geometry.dispose();
+      (trail.material as THREE.Material).dispose();
+    }
+    this.geodesicTrails = [];
+    this.activeTrail = null;
+  }
+
+  private launchPhoton(hitPoint: THREE.Vector3, direction: THREE.Vector3) {
+    const rs = this.mass;
+    const result = integrateGeodesic(hitPoint, direction, rs);
+
+    // Color by outcome
+    const color = result.outcome === "captured" ? 0x6366f1 : 0x22d3ee; // indigo : cyan
+
+    // Create line with full geometry but only show first point initially
+    const geo = new THREE.BufferGeometry().setFromPoints(result.points);
+    geo.setDrawRange(0, 2);
+    const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 });
+    const line = new THREE.Line(geo, mat);
+    this.geodesicGroup.add(line);
+    this.geodesicTrails.push(line);
+
+    // Animate
+    this.activeTrail = { line, points: result.points, index: 2, result };
+
+    // Limit total trails to 20
+    while (this.geodesicTrails.length > 20) {
+      const old = this.geodesicTrails.shift()!;
+      this.geodesicGroup.remove(old);
+      old.geometry.dispose();
+      (old.material as THREE.Material).dispose();
+    }
+
+    // Update info display
+    const info = this.panelEl?.querySelector(".bh-geodesic-info");
+    if (info) {
+      info.textContent = result.outcome === "captured"
+        ? "Captured by black hole"
+        : result.outcome === "scattered"
+          ? "Scattered to infinity"
+          : "Unstable orbit";
+    }
+  }
+
   private buildPanel() {
     this.panelEl = document.createElement("div");
     this.panelEl.id = "blackhole-panel";
     this.panelEl.className = "glass";
     this.panelEl.innerHTML = `
       <h3 class="bh-title">Black Hole</h3>
+      <div class="bh-mode-toggle">
+        <button class="bh-mode-btn active" id="bh-mode-lensing">Lensing</button>
+        <button class="bh-mode-btn" id="bh-mode-geodesic">Geodesic</button>
+      </div>
       <div class="bh-params">
         <div class="bh-row">
           <label>Mass</label>
           <input type="range" class="bh-slider" id="bh-mass" min="50" max="500" value="150" />
           <span class="bh-val" id="bh-mass-val">1.5 r<sub>s</sub></span>
         </div>
-        <div class="bh-row">
+        <div class="bh-row bh-lensing-only">
           <label>Spin</label>
           <input type="range" class="bh-slider" id="bh-spin" min="0" max="998" value="0" />
           <span class="bh-val" id="bh-spin-val">0.00 a/M</span>
         </div>
-        <div class="bh-row">
+        <div class="bh-row bh-lensing-only">
           <label class="bh-toggle-label">
             <input type="checkbox" id="bh-disk" checked />
             Accretion Disk
           </label>
         </div>
-        <div class="bh-row">
+        <div class="bh-row bh-lensing-only">
           <label class="bh-toggle-label">
             <input type="checkbox" id="bh-starfield" />
             Starfield
           </label>
         </div>
-        <div class="bh-row">
+        <div class="bh-row bh-lensing-only">
           <label class="bh-toggle-label">
             <input type="checkbox" id="bh-ar" />
             AR Mode
           </label>
         </div>
       </div>
+      <div class="bh-geodesic-info"></div>
       <div class="bh-hint">Drag to orbit. Scroll to zoom.</div>
     `;
     document.body.appendChild(this.panelEl);
@@ -624,6 +804,12 @@ export class BlackHoleScene implements Scene {
         this.stopCameraFeed();
       }
     });
+
+    // Mode toggle: Lensing / Geodesic
+    const lensingBtn = this.panelEl.querySelector("#bh-mode-lensing") as HTMLButtonElement;
+    const geodesicBtn = this.panelEl.querySelector("#bh-mode-geodesic") as HTMLButtonElement;
+    lensingBtn.addEventListener("click", () => this.setGeodesicMode(false));
+    geodesicBtn.addEventListener("click", () => this.setGeodesicMode(true));
   }
 
   private async startCameraFeed() {
@@ -740,16 +926,62 @@ export class BlackHoleScene implements Scene {
     this.boundHandlers.push({ el, type, fn });
   }
 
+  private getNDC(clientX: number, clientY: number): THREE.Vector2 {
+    return new THREE.Vector2(
+      (clientX / window.innerWidth) * 2 - 1,
+      -(clientY / window.innerHeight) * 2 + 1,
+    );
+  }
+
+  private tryGeodesicHit(ndc: THREE.Vector2): THREE.Vector3 | null {
+    this.geodesicRaycaster.setFromCamera(ndc, this.orbitCamera);
+    const hits = this.geodesicRaycaster.intersectObject(this.geodesicClickSphere);
+    return hits.length > 0 ? hits[0].point.clone() : null;
+  }
+
   private setupInteraction(ctx: SceneContext) {
     const canvas = ctx.renderer.domElement;
 
-    // Mouse drag to orbit
+    // Mouse drag to orbit / geodesic click-to-launch
     this.addHandler(canvas, "mousedown", ((e: MouseEvent) => {
+      if (this.geodesicMode) {
+        const ndc = this.getNDC(e.clientX, e.clientY);
+        const hit = this.tryGeodesicHit(ndc);
+        if (hit) {
+          this.isAiming = true;
+          this.aimStart.set(e.clientX, e.clientY);
+          this.aimHitPoint.copy(hit);
+          // Show arrow indicator
+          const dir = hit.clone().normalize().negate(); // default: toward BH
+          if (this.launchIndicator) {
+            this.geodesicGroup.remove(this.launchIndicator);
+            this.launchIndicator.dispose();
+          }
+          this.launchIndicator = new THREE.ArrowHelper(dir, hit, 1.5, 0xffffff, 0.3, 0.15);
+          this.geodesicGroup.add(this.launchIndicator);
+          return;
+        }
+      }
       this.isDragging = true;
       this.prevMouse.set(e.clientX, e.clientY);
     }) as EventListener);
 
     this.addHandler(window, "mousemove", ((e: MouseEvent) => {
+      if (this.isAiming && this.launchIndicator) {
+        // Update aim direction based on drag
+        const dx = e.clientX - this.aimStart.x;
+        const dy = e.clientY - this.aimStart.y;
+        // Compute direction in camera space and transform to world
+        const camRight = new THREE.Vector3();
+        const camUp = new THREE.Vector3();
+        this.orbitCamera.matrixWorld.extractBasis(camRight, camUp, new THREE.Vector3());
+        const dir = this.aimHitPoint.clone().normalize().negate();
+        dir.addScaledVector(camRight, dx * 0.003);
+        dir.addScaledVector(camUp, -dy * 0.003);
+        dir.normalize();
+        this.launchIndicator.setDirection(dir);
+        return;
+      }
       if (!this.isDragging) return;
       const dx = e.clientX - this.prevMouse.x;
       const dy = e.clientY - this.prevMouse.y;
@@ -760,17 +992,56 @@ export class BlackHoleScene implements Scene {
         this.targetSpherical.phi - dy * 0.012));
     }) as EventListener);
 
-    this.addHandler(window, "mouseup", (() => {
+    this.addHandler(window, "mouseup", ((e: MouseEvent) => {
+      if (this.isAiming) {
+        this.isAiming = false;
+        // Compute final launch direction
+        const dx = e.clientX - this.aimStart.x;
+        const dy = e.clientY - this.aimStart.y;
+        const camRight = new THREE.Vector3();
+        const camUp = new THREE.Vector3();
+        this.orbitCamera.matrixWorld.extractBasis(camRight, camUp, new THREE.Vector3());
+        const dir = this.aimHitPoint.clone().normalize().negate();
+        dir.addScaledVector(camRight, dx * 0.003);
+        dir.addScaledVector(camUp, -dy * 0.003);
+        dir.normalize();
+        // Remove indicator
+        if (this.launchIndicator) {
+          this.geodesicGroup.remove(this.launchIndicator);
+          this.launchIndicator.dispose();
+          this.launchIndicator = null;
+        }
+        this.launchPhoton(this.aimHitPoint, dir);
+        return;
+      }
       this.isDragging = false;
     }) as EventListener);
 
-    // Touch support — single finger orbit, two finger pinch zoom
+    // Touch support — single finger orbit / geodesic tap+drag, two finger pinch zoom
     this.addHandler(canvas, "touchstart", ((e: TouchEvent) => {
       if (e.touches.length === 1) {
+        if (this.geodesicMode) {
+          const ndc = this.getNDC(e.touches[0].clientX, e.touches[0].clientY);
+          const hit = this.tryGeodesicHit(ndc);
+          if (hit) {
+            this.isAiming = true;
+            this.aimStart.set(e.touches[0].clientX, e.touches[0].clientY);
+            this.aimHitPoint.copy(hit);
+            if (this.launchIndicator) {
+              this.geodesicGroup.remove(this.launchIndicator);
+              this.launchIndicator.dispose();
+            }
+            const dir = hit.clone().normalize().negate();
+            this.launchIndicator = new THREE.ArrowHelper(dir, hit, 1.5, 0xffffff, 0.3, 0.15);
+            this.geodesicGroup.add(this.launchIndicator);
+            return;
+          }
+        }
         this.isDragging = true;
         this.prevMouse.set(e.touches[0].clientX, e.touches[0].clientY);
       } else if (e.touches.length === 2) {
         this.isDragging = false;
+        this.isAiming = false;
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
         this.pinchStartDist = Math.sqrt(dx * dx + dy * dy);
@@ -790,6 +1061,19 @@ export class BlackHoleScene implements Scene {
         this.pinchStartDist = dist;
         return;
       }
+      if (this.isAiming && this.launchIndicator && e.touches.length === 1) {
+        const dx = e.touches[0].clientX - this.aimStart.x;
+        const dy = e.touches[0].clientY - this.aimStart.y;
+        const camRight = new THREE.Vector3();
+        const camUp = new THREE.Vector3();
+        this.orbitCamera.matrixWorld.extractBasis(camRight, camUp, new THREE.Vector3());
+        const dir = this.aimHitPoint.clone().normalize().negate();
+        dir.addScaledVector(camRight, dx * 0.003);
+        dir.addScaledVector(camUp, -dy * 0.003);
+        dir.normalize();
+        this.launchIndicator.setDirection(dir);
+        return;
+      }
       if (!this.isDragging || e.touches.length !== 1) return;
       const tdx = e.touches[0].clientX - this.prevMouse.x;
       const tdy = e.touches[0].clientY - this.prevMouse.y;
@@ -800,7 +1084,28 @@ export class BlackHoleScene implements Scene {
         this.targetSpherical.phi - tdy * 0.012));
     }) as EventListener, { passive: false });
 
-    this.addHandler(canvas, "touchend", (() => {
+    this.addHandler(canvas, "touchend", ((e: TouchEvent) => {
+      if (this.isAiming) {
+        this.isAiming = false;
+        // Use last touch position or aim start for final direction
+        const touch = e.changedTouches[0];
+        const dx = touch.clientX - this.aimStart.x;
+        const dy = touch.clientY - this.aimStart.y;
+        const camRight = new THREE.Vector3();
+        const camUp = new THREE.Vector3();
+        this.orbitCamera.matrixWorld.extractBasis(camRight, camUp, new THREE.Vector3());
+        const dir = this.aimHitPoint.clone().normalize().negate();
+        dir.addScaledVector(camRight, dx * 0.003);
+        dir.addScaledVector(camUp, -dy * 0.003);
+        dir.normalize();
+        if (this.launchIndicator) {
+          this.geodesicGroup.remove(this.launchIndicator);
+          this.launchIndicator.dispose();
+          this.launchIndicator = null;
+        }
+        this.launchPhoton(this.aimHitPoint, dir);
+        return;
+      }
       this.isDragging = false;
     }) as EventListener);
 
@@ -871,14 +1176,27 @@ export class BlackHoleScene implements Scene {
       }
     }
 
+    // Animate geodesic trail
+    if (this.activeTrail) {
+      const trail = this.activeTrail;
+      // Advance ~10 points per frame for smooth animation
+      const advance = Math.min(10, trail.points.length - trail.index);
+      if (advance > 0) {
+        trail.index += advance;
+        trail.line.geometry.setDrawRange(0, trail.index);
+      } else {
+        this.activeTrail = null; // animation complete
+      }
+    }
+
     // Smooth camera interpolation (desktop only)
     if (!isPresenting) {
       this.spherical.theta += (this.targetSpherical.theta - this.spherical.theta) * 0.08;
       this.spherical.phi += (this.targetSpherical.phi - this.spherical.phi) * 0.08;
       this.spherical.radius += (this.targetSpherical.radius - this.spherical.radius) * 0.08;
 
-      // Slow auto-rotation when not dragging (disabled in AR mode)
-      if (!this.isDragging && !this.arModeActive) {
+      // Slow auto-rotation when not dragging (disabled in AR and geodesic modes)
+      if (!this.isDragging && !this.arModeActive && !this.geodesicMode) {
         this.targetSpherical.theta += dt * 0.03;
       }
 
@@ -955,6 +1273,16 @@ export class BlackHoleScene implements Scene {
 
     this.ctx.scene.remove(this.quad);
     this.ctx.scene.remove(this.vrSphere);
+
+    // Clean up geodesic mode objects
+    this.clearGeodesicTrails();
+    if (this.launchIndicator) {
+      this.geodesicGroup.remove(this.launchIndicator);
+      this.launchIndicator.dispose();
+      this.launchIndicator = null;
+    }
+    this.ctx.scene.remove(this.geodesicGroup);
+    this.geodesicMode = false;
 
     if (this.vrPanel) {
       this.ctx.xrManager?.unregisterPanel(this.vrPanel);
