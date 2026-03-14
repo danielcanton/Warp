@@ -19,6 +19,7 @@ import { mergerEquations } from "../../lib/equation-data";
 import { buildEquationsSection, updateEquationValues, removeEquationsSection } from "../../lib/equations";
 import { computeQNMModes } from "../../lib/qnm";
 import { WaveformPlot } from "../../lib/waveform-plot";
+import { MMTimeline, MM_MARKERS } from "../../lib/mm-timeline";
 import vertexShader from "../../shaders/spacetime.vert.glsl?raw";
 import fragmentShader from "../../shaders/spacetime.frag.glsl?raw";
 
@@ -186,6 +187,7 @@ export class MergerScene implements Scene {
 
   private unsubViewMode: (() => void) | null = null;
   private waveformPlot: WaveformPlot | null = null;
+  private mmTimeline: MMTimeline | null = null;
 
   // Intro animation
   private introProgress = 0;
@@ -271,6 +273,16 @@ export class MergerScene implements Scene {
       this.waveformPlot = new WaveformPlot();
       const panelBody = document.querySelector("#event-info .panel-body");
       if (panelBody) panelBody.appendChild(this.waveformPlot.container);
+
+      // Multi-messenger timeline (appended to tour overlay, before nav)
+      this.mmTimeline = new MMTimeline();
+      const tourNav = this.tourOverlay.querySelector(".tour-nav");
+      if (tourNav) {
+        this.tourOverlay.insertBefore(this.mmTimeline.getElement(), tourNav);
+      } else {
+        this.tourOverlay.appendChild(this.mmTimeline.getElement());
+      }
+      this.mmTimeline.hide();
     }
 
     // ─── Build 3D objects (only first time — re-add on subsequent inits) ───
@@ -1182,6 +1194,24 @@ export class MergerScene implements Scene {
     this.tourPrevBtn.disabled = this.activeTourStep === 0;
     this.tourNextBtn.disabled = this.activeTourStep === this.activeTour.steps.length - 1;
     this.selectEvent(event);
+
+    // Show multi-messenger timeline only for GW170817 steps (Student + Researcher)
+    if (this.mmTimeline) {
+      const mode = getViewMode();
+      const isGW170817 = step.event === "GW170817";
+      const showTimeline = isGW170817 && mode !== "explorer";
+      if (showTimeline) {
+        this.mmTimeline.show();
+        // Map tour step index to MM marker step index:
+        // For now, GW170817 appears as a single step in tours, so show the full sequence.
+        // Use the tour step index within the current tour to pick a marker,
+        // but since GW170817 is just one step, default to final marker (show full timeline).
+        const mmStepIndex = MM_MARKERS.length - 1;
+        this.mmTimeline.setStep(mmStepIndex);
+      } else {
+        this.mmTimeline.hide();
+      }
+    }
   }
 
   private nextTourStep() {
@@ -1202,6 +1232,7 @@ export class MergerScene implements Scene {
     this.tourOverlay.classList.remove("show");
     this.tourMenu.classList.remove("show");
     this.tourMenuOpen = false;
+    if (this.mmTimeline) this.mmTimeline.hide();
   }
 
   // ─── Onboarding ─────────────────────────────────────────────────────
@@ -1534,6 +1565,11 @@ export class MergerScene implements Scene {
       this.shockwaveMaterial.opacity = 0;
     }
 
+    // Render multi-messenger timeline if visible
+    if (this.mmTimeline) {
+      this.mmTimeline.render();
+    }
+
     this.ctx.controls.update();
   }
 
@@ -1602,6 +1638,12 @@ export class MergerScene implements Scene {
     if (this.waveformPlot) {
       this.waveformPlot.dispose();
       this.waveformPlot = null;
+    }
+
+    // Clean up multi-messenger timeline
+    if (this.mmTimeline) {
+      this.mmTimeline.dispose();
+      this.mmTimeline = null;
     }
 
     // Clean up export
