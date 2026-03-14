@@ -149,8 +149,8 @@ sceneManager.switchScene(startScene);
 
 const initialMode = initViewMode();
 
-const gearBtn = document.getElementById("gear-btn")!;
-const dropdown = document.getElementById("view-mode-dropdown")!;
+const sidebarModeBtn = document.getElementById("sidebar-mode-btn")!;
+const dropdown = document.getElementById("sidebar-mode-dropdown")!;
 const modeOptions = dropdown.querySelectorAll<HTMLButtonElement>(".mode-option");
 
 // Set initial active state from resolved mode
@@ -161,8 +161,15 @@ function updateModeUI(mode: ViewMode): void {
 }
 updateModeUI(initialMode);
 
-gearBtn.addEventListener("click", (e) => {
+// Position dropdown next to the mode button
+function positionDropdown() {
+  const rect = sidebarModeBtn.getBoundingClientRect();
+  dropdown.style.top = `${rect.top}px`;
+}
+
+sidebarModeBtn.addEventListener("click", (e) => {
   e.stopPropagation();
+  positionDropdown();
   dropdown.classList.toggle("show");
 });
 
@@ -176,13 +183,54 @@ modeOptions.forEach((btn) => {
 
 // Close dropdown on click outside
 document.addEventListener("click", (e) => {
-  if (!(e.target as HTMLElement).closest("#view-mode-gear")) {
+  if (!(e.target as HTMLElement).closest("#sidebar-mode-btn") &&
+      !(e.target as HTMLElement).closest("#sidebar-mode-dropdown")) {
     dropdown.classList.remove("show");
   }
 });
 
 // Sync UI when mode changes programmatically
 onViewModeChange(updateModeUI);
+
+// ─── Sidebar toggle ─────────────────────────────────────────────────
+
+const sidebarToggle = document.getElementById("sidebar-toggle");
+if (sidebarToggle) {
+  // Restore sidebar state from localStorage
+  if (localStorage.getItem("warplab-sidebar-expanded") === "true") {
+    document.body.classList.add("sidebar-expanded");
+  }
+  sidebarToggle.addEventListener("click", () => {
+    document.body.classList.toggle("sidebar-expanded");
+    localStorage.setItem(
+      "warplab-sidebar-expanded",
+      String(document.body.classList.contains("sidebar-expanded"))
+    );
+  });
+  // Auto-collapse on narrow screens
+  if (window.innerWidth < 1024) {
+    document.body.classList.remove("sidebar-expanded");
+  }
+}
+
+// ─── Sidebar about button ───────────────────────────────────────────
+
+const sidebarAboutBtn = document.getElementById("sidebar-about-btn");
+if (sidebarAboutBtn && aboutOverlay) {
+  sidebarAboutBtn.addEventListener("click", () => aboutOverlay.classList.toggle("show"));
+}
+
+// ─── Sidebar tours button ───────────────────────────────────────────
+
+const sidebarTourBtn = document.getElementById("sidebar-tour-btn");
+if (sidebarTourBtn) {
+  sidebarTourBtn.addEventListener("click", () => {
+    const tourMenu = document.getElementById("tour-menu");
+    if (tourMenu) {
+      tourMenu.style.display = tourMenu.style.display === "none" ? "" : "none";
+    }
+  });
+}
 
 // ─── Mobile Bar & Menu ───────────────────────────────────────────────
 

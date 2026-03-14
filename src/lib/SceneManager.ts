@@ -8,7 +8,17 @@ export class SceneManager {
 
   constructor(ctx: SceneContext) {
     this.ctx = ctx;
-    this.selectorEl = document.getElementById("scene-selector");
+    this.selectorEl = document.getElementById("sidebar");
+
+    // Wire up static sidebar scene buttons
+    if (this.selectorEl) {
+      this.selectorEl.querySelectorAll<HTMLButtonElement>(".scene-item").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.dataset.sceneId;
+          if (id) this.switchScene(id);
+        });
+      });
+    }
   }
 
   register(scene: Scene) {
@@ -18,21 +28,9 @@ export class SceneManager {
 
   private updateSelector() {
     if (!this.selectorEl) return;
-    const container = this.selectorEl.querySelector(".scene-tabs");
-    if (!container) return;
-
-    container.innerHTML = "";
-    for (const scene of this.scenes.values()) {
-      const btn = document.createElement("button");
-      btn.className = "scene-tab";
-      btn.textContent = scene.label;
-      btn.dataset.sceneId = scene.id;
-      if (this.activeScene?.id === scene.id) {
-        btn.classList.add("active");
-      }
-      btn.addEventListener("click", () => this.switchScene(scene.id));
-      container.appendChild(btn);
-    }
+    this.selectorEl.querySelectorAll<HTMLButtonElement>(".scene-item").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.sceneId === this.activeScene?.id);
+    });
   }
 
   async switchScene(id: string) {
