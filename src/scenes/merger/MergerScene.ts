@@ -312,6 +312,7 @@ export class MergerScene implements Scene {
 
       // Population scatter chart (appended to stats tab)
       this.populationScatter = new PopulationScatter();
+      this.populationScatter.setViewMode(getViewMode());
       this.eventStatsContent.appendChild(this.populationScatter.container);
       this.populationScatter.setOnSelectEvent((event) => {
         this.selectEvent(event);
@@ -371,6 +372,7 @@ export class MergerScene implements Scene {
         this.ensureEquationsSection(mode);
         if (this.currentEvent) this.updateWaveformPlot(this.currentEvent, mode);
         this.updateNoiseCurvePlot(mode);
+        if (this.populationScatter) this.populationScatter.setViewMode(mode);
       });
     }
 

@@ -3,6 +3,7 @@
 // Follows the NoiseCurvePlot pattern: HiDPI canvas, container div, show/hide.
 
 import { classifyEvent, type GWEvent } from "./waveform";
+import type { ViewMode } from "./view-mode";
 
 const COLORS: Record<string, string> = {
   BBH: "rgba(99, 102, 241, 0.85)",   // indigo
@@ -14,6 +15,18 @@ const COLORS_HIGHLIGHT: Record<string, string> = {
   BBH: "rgba(129, 132, 255, 1)",
   BNS: "rgba(255, 188, 41, 1)",
   NSBH: "rgba(46, 215, 159, 1)",
+};
+
+const COLORS_ELLIPSE: Record<string, string> = {
+  BBH: "rgba(99, 102, 241, 0.12)",
+  BNS: "rgba(245, 158, 11, 0.12)",
+  NSBH: "rgba(16, 185, 129, 0.12)",
+};
+
+const COLORS_ELLIPSE_STROKE: Record<string, string> = {
+  BBH: "rgba(99, 102, 241, 0.35)",
+  BNS: "rgba(245, 158, 11, 0.35)",
+  NSBH: "rgba(16, 185, 129, 0.35)",
 };
 
 const STYLE = {
@@ -32,6 +45,7 @@ export class PopulationScatter {
   private selectedName: string | null = null;
   private onSelectEvent: ((event: GWEvent) => void) | null = null;
   private resizeObserver: ResizeObserver;
+  private viewMode: ViewMode = "explorer";
 
   // Cached layout for hit testing
   private pointPositions: { x: number; y: number; event: GWEvent }[] = [];
@@ -92,6 +106,13 @@ export class PopulationScatter {
 
   setOnSelectEvent(cb: (event: GWEvent) => void): void {
     this.onSelectEvent = cb;
+  }
+
+  setViewMode(mode: ViewMode): void {
+    if (this.viewMode !== mode) {
+      this.viewMode = mode;
+      this.draw();
+    }
   }
 
   show(): void {
@@ -198,6 +219,11 @@ export class PopulationScatter {
     ctx.stroke();
     ctx.setLineDash([]);
 
+    // ─── 90% CI posterior ellipses (Researcher only) ──────
+    if (this.viewMode === "researcher") {
+      this.drawEllipses(ctx, toX, toY, m1Max, m2Max, plotW, plotH);
+    }
+
     // ─── Data points ──────────────────────────
     this.pointPositions = [];
     const pointRadius = 4;
@@ -285,6 +311,68 @@ export class PopulationScatter {
     ctx.lineTo(padL, padT + plotH);
     ctx.lineTo(padL + plotW, padT + plotH);
     ctx.stroke();
+  }
+
+  /** Draw 90% CI posterior ellipses with chirp-mass anti-correlation tilt */
+  private drawEllipses(
+    ctx: CanvasRenderingContext2D,
+    toX: (m1: number) => number,
+    toY: (m2: number) => number,
+    m1Max: number,
+    m2Max: number,
+    plotW: number,
+    plotH: number,
+  ): void {
+    // 1.645 = z-score for 90% CI (two-sided)
+    const Z90 = 1.645;
+
+    for (const ev of this.events) {
+      // Compute 1-sigma from 90% CI bounds
+      const sigma_m1 = (ev.mass_1_source_upper - ev.mass_1_source_lower) / (2 * Z90);
+      const sigma_m2 = (ev.mass_2_source_upper - ev.mass_2_source_lower) / (2 * Z90);
+
+      // Skip if uncertainties are missing or zero
+      if (sigma_m1 <= 0 || sigma_m2 <= 0) continue;
+
+      // Rotation angle from chirp mass constraint: Mc = (m1*m2)^(3/5) / (m1+m2)^(1/5) = const
+      // Partial derivatives along Mc = const contour give the tilt direction.
+      // dMc/dm1 = 0 and dMc/dm2 = 0 along contour → dm2/dm1 = -(∂Mc/∂m1)/(∂Mc/∂m2)
+      const m1 = ev.mass_1_source;
+      const m2 = ev.mass_2_source;
+      const S = m1 + m2;
+      // dm2/dm1 along Mc=const: -(3m2*S - m1*m2) / (3m1*S - m1*m2)
+      //                        = -(3*S/m1 - 1) / (3*S/m2 - 1)  — simplified
+      const dm2_dm1 = -(3 * m2 * S - m1 * m2) / (3 * m1 * S - m1 * m2);
+
+      // Convert slope to pixel-space angle (axes have different scales)
+      const scaleX = plotW / m1Max;
+      const scaleY = plotH / m2Max;
+      const theta = Math.atan2(dm2_dm1 * scaleY, scaleX);
+
+      // Semi-axes in pixel space (90% CI = 1.645 sigma, and we already divided by 1.645,
+      // so multiply back by 1.645 to get the 90% ellipse radius)
+      const a = sigma_m1 * Z90 * scaleX;
+      const b = sigma_m2 * Z90 * scaleY;
+
+      const cx = toX(m1);
+      const cy = toY(m2);
+      const type = classifyEvent(ev);
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(-theta); // negative because canvas y-axis is flipped
+
+      ctx.beginPath();
+      ctx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
+
+      ctx.fillStyle = COLORS_ELLIPSE[type] ?? COLORS_ELLIPSE.BBH;
+      ctx.fill();
+      ctx.strokeStyle = COLORS_ELLIPSE_STROKE[type] ?? COLORS_ELLIPSE_STROKE.BBH;
+      ctx.lineWidth = 0.75;
+      ctx.stroke();
+
+      ctx.restore();
+    }
   }
 
   dispose(): void {
