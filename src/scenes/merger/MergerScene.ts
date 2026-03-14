@@ -23,7 +23,7 @@ import { MMTimeline, MM_MARKERS } from "../../lib/mm-timeline";
 import { MMSkymap } from "../../lib/mm-skymap";
 import { getMultiMessengerData } from "../../lib/multi-messenger";
 import { NoiseCurvePlot } from "../../lib/noise-curve";
-import { PopulationScatter, ChirpMassHistogram } from "../../lib/population-charts";
+import { PopulationScatter, ChirpMassHistogram, ChiEffHistogram, ChirpMassDistanceScatter } from "../../lib/population-charts";
 import vertexShader from "../../shaders/spacetime.vert.glsl?raw";
 import fragmentShader from "../../shaders/spacetime.frag.glsl?raw";
 
@@ -221,6 +221,8 @@ export class MergerScene implements Scene {
   private noiseCurvePlot: NoiseCurvePlot | null = null;
   private populationScatter: PopulationScatter | null = null;
   private chirpMassHistogram: ChirpMassHistogram | null = null;
+  private chiEffHistogram: ChiEffHistogram | null = null;
+  private chirpMassDistanceScatter: ChirpMassDistanceScatter | null = null;
   private eventListContent!: HTMLElement;
   private eventStatsContent!: HTMLElement;
   private eventTabButtons!: NodeListOf<HTMLButtonElement>;
@@ -328,6 +330,23 @@ export class MergerScene implements Scene {
         if (this.viewMode === "map") this.setViewMode("event");
       });
 
+      // Chi_eff histogram (researcher mode only)
+      this.chiEffHistogram = new ChiEffHistogram();
+      this.eventStatsContent.appendChild(this.chiEffHistogram.container);
+      this.chiEffHistogram.setOnSelectEvent((event) => {
+        this.selectEvent(event);
+        if (this.viewMode === "map") this.setViewMode("event");
+      });
+
+      // Chirp mass vs distance scatter (researcher mode only)
+      this.chirpMassDistanceScatter = new ChirpMassDistanceScatter();
+      this.chirpMassDistanceScatter.setViewMode(getViewMode());
+      this.eventStatsContent.appendChild(this.chirpMassDistanceScatter.container);
+      this.chirpMassDistanceScatter.setOnSelectEvent((event) => {
+        this.selectEvent(event);
+        if (this.viewMode === "map") this.setViewMode("event");
+      });
+
       // Waveform plot (appended to info panel body)
       this.waveformPlot = new WaveformPlot();
       const panelBody = document.querySelector("#event-info .panel-body");
@@ -382,6 +401,17 @@ export class MergerScene implements Scene {
         if (this.currentEvent) this.updateWaveformPlot(this.currentEvent, mode);
         this.updateNoiseCurvePlot(mode);
         if (this.populationScatter) this.populationScatter.setViewMode(mode);
+        if (this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.setViewMode(mode);
+        // Show/hide researcher-only charts
+        if (this.activeEventTab === "stats") {
+          if (mode === "researcher") {
+            if (this.chiEffHistogram) this.chiEffHistogram.show();
+            if (this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.show();
+          } else {
+            if (this.chiEffHistogram) this.chiEffHistogram.hide();
+            if (this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.hide();
+          }
+        }
       });
     }
 
@@ -832,9 +862,14 @@ export class MergerScene implements Scene {
         if (tabName === "stats") {
           if (this.populationScatter) this.populationScatter.show();
           if (this.chirpMassHistogram) this.chirpMassHistogram.show();
+          const isResearcher = getViewMode() === "researcher";
+          if (isResearcher && this.chiEffHistogram) this.chiEffHistogram.show();
+          if (isResearcher && this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.show();
         } else {
           if (this.populationScatter) this.populationScatter.hide();
           if (this.chirpMassHistogram) this.chirpMassHistogram.hide();
+          if (this.chiEffHistogram) this.chiEffHistogram.hide();
+          if (this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.hide();
         }
       });
     });
@@ -1193,6 +1228,8 @@ export class MergerScene implements Scene {
     // Update population scatter selection
     if (this.populationScatter) this.populationScatter.setSelectedEvent(event.commonName);
     if (this.chirpMassHistogram) this.chirpMassHistogram.setSelectedEvent(event.commonName);
+    if (this.chiEffHistogram) this.chiEffHistogram.setSelectedEvent(event.commonName);
+    if (this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.setSelectedEvent(event.commonName);
 
     // ─── Populate mobile info sheet ───
     this.updateMobileSheet(event, type);
@@ -1590,6 +1627,8 @@ export class MergerScene implements Scene {
       this.universeMap.populate(this.events);
       if (this.populationScatter) this.populationScatter.setEvents(this.events);
       if (this.chirpMassHistogram) this.chirpMassHistogram.setEvents(this.events);
+      if (this.chiEffHistogram) this.chiEffHistogram.setEvents(this.events);
+      if (this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.setEvents(this.events);
       this.renderEventList();
 
       const urlEvent = new URLSearchParams(window.location.search).get("event");
@@ -1648,6 +1687,8 @@ export class MergerScene implements Scene {
       this.universeMap.populate(this.events);
       if (this.populationScatter) this.populationScatter.setEvents(this.events);
       if (this.chirpMassHistogram) this.chirpMassHistogram.setEvents(this.events);
+      if (this.chiEffHistogram) this.chiEffHistogram.setEvents(this.events);
+      if (this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.setEvents(this.events);
       this.selectEvent(fallback);
       this.renderEventList();
 
@@ -1859,6 +1900,18 @@ export class MergerScene implements Scene {
     if (this.chirpMassHistogram) {
       this.chirpMassHistogram.dispose();
       this.chirpMassHistogram = null;
+    }
+
+    // Clean up chi_eff histogram
+    if (this.chiEffHistogram) {
+      this.chiEffHistogram.dispose();
+      this.chiEffHistogram = null;
+    }
+
+    // Clean up chirp mass vs distance scatter
+    if (this.chirpMassDistanceScatter) {
+      this.chirpMassDistanceScatter.dispose();
+      this.chirpMassDistanceScatter = null;
     }
 
     // Clean up multi-messenger timeline
