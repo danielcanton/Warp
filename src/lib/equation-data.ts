@@ -104,6 +104,58 @@ export const blackholeEquations: EquationDef[] = [
   },
 ];
 
+// ─── Cosmology ──────────────────────────────────────────────────────
+
+export const cosmologyEquations: EquationDef[] = [
+  {
+    id: "friedmann",
+    latex: String.raw`H^2 = \frac{8\pi G}{3}\,\rho - \frac{k\,c^2}{a^2} + \frac{\Lambda\,c^2}{3}`,
+    label: "How the universe expands",
+    modes: ["student", "researcher"],
+    compute: (p) => {
+      const H0 = p.H0 ?? 67.4;
+      return `H₀ = ${H0.toFixed(1)} km/s/Mpc`;
+    },
+  },
+  {
+    id: "critical-density",
+    latex: String.raw`\rho_c = \frac{3\,H_0^2}{8\pi G}`,
+    label: "The density that makes the universe flat",
+    modes: ["student", "researcher"],
+    compute: (p) => {
+      const H0 = p.H0 ?? 67.4;
+      // ρ_c ≈ 1.878 × 10^-29 × h^2 g/cm³, where h = H0/100
+      const h = H0 / 100;
+      const rho = 1.878e-29 * h * h;
+      return `ρ_c ≈ ${rho.toExponential(2)} g/cm³`;
+    },
+  },
+  {
+    id: "deceleration",
+    latex: String.raw`q_0 = \frac{\Omega_m}{2} - \Omega_\Lambda`,
+    label: "Is expansion speeding up or slowing down?",
+    modes: ["student", "researcher"],
+    compute: (p) => {
+      const Om = p.Omega_m ?? 0.315;
+      const OL = p.Omega_Lambda ?? 0.685;
+      const q = Om / 2 - OL;
+      return `q₀ = ${q.toFixed(3)}${q < 0 ? " (accelerating)" : " (decelerating)"}`;
+    },
+  },
+  {
+    id: "fluid",
+    latex: String.raw`\dot{\rho} + 3\,H\!\left(\rho + \frac{p}{c^2}\right) = 0`,
+    label: "How energy density dilutes with expansion",
+    modes: ["researcher"],
+  },
+  {
+    id: "equation-of-state",
+    latex: String.raw`p = w\,\rho\,c^2 \quad (w_m = 0,\; w_r = \tfrac{1}{3},\; w_\Lambda = -1)`,
+    label: "Each component dilutes differently",
+    modes: ["researcher"],
+  },
+];
+
 // ─── N-Body ──────────────────────────────────────────────────────────
 
 export const nbodyEquations: EquationDef[] = [
