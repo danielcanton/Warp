@@ -52,19 +52,26 @@
         z-index: 10;
         font-size: 13px;
         line-height: 1.8;
-        padding: 16px 20px;
+        padding: 0;
         min-width: 240px;
         max-width: 340px;
+        max-height: calc(100vh - 48px);
         overflow: hidden;
       }
       #event-info .panel-body {
-        padding: 0;
+        padding: 16px 20px;
+        max-height: calc(100vh - 96px);
+        overflow-y: auto;
       }
+      #event-info .panel-body::-webkit-scrollbar { width: 4px; }
+      #event-info .panel-body::-webkit-scrollbar-track { background: transparent; }
+      #event-info .panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
       .info-header {
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
-        margin-bottom: 6px;
+        margin-bottom: 0;
+        padding: 16px 20px 6px;
         cursor: grab;
         user-select: none;
       }
@@ -1124,6 +1131,8 @@
           flex-wrap: wrap;
           align-items: center;
           gap: 6px 10px;
+          max-height: none;
+          overflow-y: visible;
         }
         #event-info .info-header {
           width: 100%;
@@ -1706,10 +1715,11 @@
       .sidebar-toggle svg {
         width: 14px;
         height: 14px;
+        transform: rotate(180deg);
         transition: transform 0.25s ease;
       }
       body.sidebar-expanded .sidebar-toggle svg {
-        transform: rotate(180deg);
+        transform: rotate(0deg);
       }
       /* ─── View Mode Button (top-right floating) ─── */
       #view-mode-btn {
