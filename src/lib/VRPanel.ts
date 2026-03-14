@@ -64,6 +64,11 @@ export class VRPanel {
     this.render();
   }
 
+  /** Number of buttons currently registered. */
+  get buttonCount(): number {
+    return this.buttons.length;
+  }
+
   /** Add an interactive button region. */
   addButton(button: VRPanelButton) {
     this.buttons.push(button);

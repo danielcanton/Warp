@@ -120,6 +120,11 @@ export class VeffPlot {
     this.dotR = r;
   }
 
+  /** Expose the canvas for VR texture mirroring */
+  getCanvas(): HTMLCanvasElement {
+    return this.canvas;
+  }
+
   /** Compute V_eff at given r based on particle type */
   private veff(r: number): number {
     if (r <= this.rs) return 0;

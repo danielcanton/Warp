@@ -160,6 +160,46 @@ export const blackholeEquations: EquationDef[] = [
   },
 ];
 
+// ─── Geodesic Mode Equations ─────────────────────────────────────────
+
+export const geodesicEquations: EquationDef[] = [
+  {
+    id: "veff-null",
+    latex: String.raw`V_{\text{eff}} = \left(1 - \frac{r_s}{r}\right)\frac{L^2}{r^2}`,
+    label: "The barrier photons must overcome",
+    modes: ["student", "researcher"],
+  },
+  {
+    id: "veff-timelike",
+    latex: String.raw`V_{\text{eff}} = \left(1 - \frac{r_s}{r}\right)\!\left(1 + \frac{L^2}{r^2}\right)`,
+    label: "Determines bound vs plunging orbits",
+    modes: ["student", "researcher"],
+  },
+  {
+    id: "orbital-equation",
+    latex: String.raw`\left(\frac{du}{d\phi}\right)^{\!2} + u^2 = \frac{E^2}{L^2} + r_s\,u^3`,
+    label: "The GR correction to Newtonian orbits",
+    modes: ["researcher"],
+  },
+];
+
+// ─── Penrose Mode Equations ──────────────────────────────────────────
+
+export const penroseEquations: EquationDef[] = [
+  {
+    id: "kruskal-coordinates",
+    latex: String.raw`T^2 - X^2 = \left(1 - \frac{r}{r_s}\right)e^{r/r_s}`,
+    label: "Maps the Penrose diagram to Schwarzschild",
+    modes: ["researcher"],
+  },
+  {
+    id: "tortoise-coordinate",
+    latex: String.raw`r^* = r + r_s \ln\!\left|\frac{r}{r_s} - 1\right|`,
+    label: "Why the horizon is at coordinate infinity",
+    modes: ["researcher"],
+  },
+];
+
 // ─── Cosmology ──────────────────────────────────────────────────────
 
 export const cosmologyEquations: EquationDef[] = [

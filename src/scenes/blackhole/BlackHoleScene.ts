@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { Scene, SceneContext } from "../types";
 import { getViewMode, onViewModeChange, type ViewMode } from "../../lib/view-mode";
-import { blackholeEquations } from "../../lib/equation-data";
+import { blackholeEquations, geodesicEquations, penroseEquations } from "../../lib/equation-data";
 import { buildEquationsSection, updateEquationValues, removeEquationsSection } from "../../lib/equations";
 import { VRPanel } from "../../lib/VRPanel";
 import { VRTutorial } from "../../lib/vr-tutorial";
@@ -79,6 +79,14 @@ export class BlackHoleScene implements Scene {
   private geodesicParticleType: ParticleType = "photon";
   private geodesicEnergy = 1.0; // E²/m²c⁴ for massive particles
   private boundTrailAnimPhase: Map<THREE.Line, number> = new Map();
+  private vrGeodesicMode = false;
+  private vrGeodesicBtnIndex = -1;
+  private vrAiming = false;
+  private vrAimOrigin = new THREE.Vector3();
+  private vrAimDirection = new THREE.Vector3();
+  private vrLaunchIndicator: THREE.ArrowHelper | null = null;
+  private vrVeffMesh: THREE.Mesh | null = null;
+  private vrVeffTexture: THREE.CanvasTexture | null = null;
 
   private static readonly MAX_TRAILS = 10;
   private static readonly OUTCOME_COLORS: Record<GeodesicOutcome, number> = {
@@ -283,7 +291,7 @@ export class BlackHoleScene implements Scene {
 
   private setupVRPanel(ctx: SceneContext) {
     const xr = ctx.xrManager!;
-    const panelHeight = xr.supportsAR ? 1.3 : 1.0; // taller for AR (4 rows), spin row added
+    const panelHeight = xr.supportsAR ? 1.6 : 1.3; // taller for Geodesic button + AR rows
     this.vrPanel = new VRPanel(1.4, panelHeight);
     this.vrPanel.setTitle("Black Hole");
 
@@ -364,16 +372,32 @@ export class BlackHoleScene implements Scene {
       },
     });
 
-    // Row 3: Mode toggle + Exit VR
+    // Row 3: Geodesic toggle (NOT Penrose — 2D overlay doesn't work in VR)
     const row3Y = 1.00;
+    this.vrGeodesicBtnIndex = this.vrPanel.buttonCount;
+    this.vrPanel.addButton({
+      label: "Geodesic: OFF",
+      x: startX,
+      y: row3Y,
+      w: btnW * 2 + gap,
+      h: btnH,
+      onClick: () => {
+        this.vrGeodesicMode = !this.vrGeodesicMode;
+        this.setGeodesicMode(this.vrGeodesicMode);
+        this.vrPanel?.updateButton(this.vrGeodesicBtnIndex, this.vrGeodesicMode ? "Geodesic: ON" : "Geodesic: OFF");
+      },
+    });
+
+    // Row 4: Mode toggle + Exit VR
+    const row4Y = 1.30;
 
     // Mode toggle — only shown for AR sessions (passthrough capable)
     if (xr.supportsAR) {
-      this.modeButtonIndex = 3; // buttons[0]=Mass, [1]=Disk, [2]=Spin, [3]=Mode
+      this.modeButtonIndex = this.vrPanel.buttonCount; // dynamic index
       this.vrPanel.addButton({
         label: "Mode: PT",
         x: startX,
-        y: row3Y,
+        y: row4Y,
         w: btnW,
         h: btnH,
         onClick: () => {
@@ -390,7 +414,7 @@ export class BlackHoleScene implements Scene {
     this.vrPanel.addButton({
       label: "Exit VR",
       x: xr.supportsAR ? startX + btnW + gap : startX,
-      y: row3Y,
+      y: row4Y,
       w: btnW,
       h: btnH,
       onClick: () => {
@@ -398,13 +422,13 @@ export class BlackHoleScene implements Scene {
       },
     });
 
-    // Row 4: Reset Pos (only for AR sessions — repositions BH in passthrough mode)
+    // Row 5: Reset Pos (only for AR sessions — repositions BH in passthrough mode)
     if (xr.supportsAR) {
-      const row4Y = 1.30;
+      const row5Y = 1.60;
       this.vrPanel.addButton({
         label: "Reset Pos",
         x: startX,
-        y: row4Y,
+        y: row5Y,
         w: btnW,
         h: btnH,
         onClick: () => {
@@ -419,9 +443,31 @@ export class BlackHoleScene implements Scene {
 
     xr.registerPanel(this.vrPanel);
 
-    // Grab & drag black hole with controller/hand
+    // Grab & drag black hole / VR geodesic launch with controller
     const grabRaycaster = new THREE.Raycaster();
     xr.onControllerSelectStart = (origin, direction, _controllerIndex) => {
+      // VR Geodesic mode: controller ray to place launch point
+      if (this.vrGeodesicMode && this.geodesicMode) {
+        grabRaycaster.set(origin, direction);
+        const intersects = grabRaycaster.intersectObject(this.geodesicClickSphere);
+        if (intersects.length > 0) {
+          this.vrAiming = true;
+          this.vrAimOrigin.copy(intersects[0].point);
+          this.vrAimDirection.copy(direction);
+          // Show arrow indicator at hit point
+          const dir = intersects[0].point.clone().normalize().negate();
+          if (this.vrLaunchIndicator) {
+            this.geodesicGroup.remove(this.vrLaunchIndicator);
+            this.vrLaunchIndicator.dispose();
+          }
+          this.vrLaunchIndicator = new THREE.ArrowHelper(dir, intersects[0].point, 1.5, 0xffffff, 0.3, 0.15);
+          this.geodesicGroup.add(this.vrLaunchIndicator);
+          xr.pulseHaptics(0.2, 30);
+          return true;
+        }
+      }
+
+      // Passthrough grab mode
       if (!this.passthroughActive) return false;
 
       grabRaycaster.set(origin, direction);
@@ -437,7 +483,23 @@ export class BlackHoleScene implements Scene {
       return false;
     };
 
-    xr.onControllerSelectEnd = () => {
+    xr.onControllerSelectEnd = (origin, direction) => {
+      // VR Geodesic mode: release to launch
+      if (this.vrAiming) {
+        this.vrAiming = false;
+        // Compute direction from drag (current ray direction vs original)
+        const launchDir = direction.clone().normalize();
+        // Remove indicator
+        if (this.vrLaunchIndicator) {
+          this.geodesicGroup.remove(this.vrLaunchIndicator);
+          this.vrLaunchIndicator.dispose();
+          this.vrLaunchIndicator = null;
+        }
+        this.launchPhoton(this.vrAimOrigin, launchDir);
+        xr.pulseHaptics(0.4, 60);
+        return;
+      }
+
       if (this.grabbing) {
         this.grabbing = false;
         this.grabControllerIndex = -1;
@@ -620,8 +682,11 @@ export class BlackHoleScene implements Scene {
 
   private setGeodesicMode(active: boolean) {
     this.geodesicMode = active;
-    // Toggle visibility
-    this.quad.visible = !active;
+    // Toggle visibility — in VR, keep vrSphere visible alongside geodesic group
+    const isVR = this.ctx.renderer.xr.isPresenting;
+    if (!isVR) {
+      this.quad.visible = !active;
+    }
     this.geodesicGroup.visible = active;
 
     // Update geodesic BH representation radii for current mass
@@ -678,6 +743,9 @@ export class BlackHoleScene implements Scene {
     geodesicControls?.forEach((el) => {
       (el as HTMLElement).style.display = active ? "" : "none";
     });
+
+    // Refresh equations for the new sub-mode
+    this.ensureEquationsSection(getViewMode());
   }
 
   private setPenroseMode(active: boolean) {
@@ -720,6 +788,9 @@ export class BlackHoleScene implements Scene {
     geodesicControls?.forEach((el) => {
       (el as HTMLElement).style.display = "none";
     });
+
+    // Refresh equations for the new sub-mode
+    this.ensureEquationsSection(getViewMode());
   }
 
   private updateGeodesicRadii() {
@@ -1393,6 +1464,37 @@ export class BlackHoleScene implements Scene {
     // Render V_eff plot
     if (this.geodesicMode && this.veffPlot) {
       this.veffPlot.render();
+
+      // In VR, mirror V_eff onto a floating 3D panel
+      if (isPresenting) {
+        if (!this.vrVeffMesh) {
+          const veffCanvas = this.veffPlot.getCanvas();
+          this.vrVeffTexture = new THREE.CanvasTexture(veffCanvas);
+          this.vrVeffTexture.minFilter = THREE.LinearFilter;
+          const planeGeo = new THREE.PlaneGeometry(0.6, 0.48);
+          const planeMat = new THREE.MeshBasicMaterial({
+            map: this.vrVeffTexture,
+            transparent: true,
+            side: THREE.DoubleSide,
+          });
+          this.vrVeffMesh = new THREE.Mesh(planeGeo, planeMat);
+          // Position to the right and slightly below eye level
+          this.vrVeffMesh.position.set(1.2, 1.0, -1.5);
+          this.ctx.scene.add(this.vrVeffMesh);
+        }
+        // Update texture each frame
+        if (this.vrVeffTexture) {
+          this.vrVeffTexture.needsUpdate = true;
+        }
+      }
+    } else if (this.vrVeffMesh) {
+      // Remove VR V_eff panel when not in geodesic mode
+      this.ctx.scene.remove(this.vrVeffMesh);
+      this.vrVeffMesh.geometry.dispose();
+      (this.vrVeffMesh.material as THREE.Material).dispose();
+      this.vrVeffTexture?.dispose();
+      this.vrVeffMesh = null;
+      this.vrVeffTexture = null;
     }
 
     // Render Penrose diagram
@@ -1451,13 +1553,21 @@ export class BlackHoleScene implements Scene {
     return { mass: this.getMassSolarMasses(), spin: this.spin };
   }
 
+  /** Get the equations appropriate for the current BH sub-mode */
+  private getActiveEquations() {
+    if (this.geodesicMode) return geodesicEquations;
+    if (this.penroseMode) return penroseEquations;
+    return blackholeEquations;
+  }
+
   private async ensureEquationsSection(mode: ViewMode): Promise<void> {
     if (!this.panelEl) return;
     removeEquationsSection(this.panelEl);
 
     if (mode === "explorer") return;
 
-    const section = await buildEquationsSection(blackholeEquations, mode, this.getEquationParams());
+    const equations = this.getActiveEquations();
+    const section = await buildEquationsSection(equations, mode, this.getEquationParams());
     if (section) this.panelEl.appendChild(section);
   }
 
@@ -1465,7 +1575,8 @@ export class BlackHoleScene implements Scene {
     if (!this.panelEl) return;
     const section = this.panelEl.querySelector<HTMLElement>(".info-equations");
     if (!section) return;
-    updateEquationValues(section, blackholeEquations, this.getEquationParams());
+    const equations = this.getActiveEquations();
+    updateEquationValues(section, equations, this.getEquationParams());
   }
 
   dispose(): void {
@@ -1496,6 +1607,20 @@ export class BlackHoleScene implements Scene {
       this.launchIndicator.dispose();
       this.launchIndicator = null;
     }
+    if (this.vrLaunchIndicator) {
+      this.geodesicGroup.remove(this.vrLaunchIndicator);
+      this.vrLaunchIndicator.dispose();
+      this.vrLaunchIndicator = null;
+    }
+    if (this.vrVeffMesh) {
+      this.ctx.scene.remove(this.vrVeffMesh);
+      this.vrVeffMesh.geometry.dispose();
+      (this.vrVeffMesh.material as THREE.Material).dispose();
+      this.vrVeffTexture?.dispose();
+      this.vrVeffMesh = null;
+      this.vrVeffTexture = null;
+    }
+    this.vrGeodesicMode = false;
     this.ctx.scene.remove(this.geodesicGroup);
     this.geodesicMode = false;
 
