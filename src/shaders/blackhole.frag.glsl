@@ -8,6 +8,7 @@ varying vec2 vUv;
 
 uniform float uTime;
 uniform float uMass;           // Schwarzschild radius scale (0.5 - 5.0)
+uniform float uSpin;           // Kerr spin parameter a/M (0.0 - 0.998)
 uniform float uShowDisk;       // 0 or 1 — toggle accretion disk
 uniform vec2 uResolution;
 uniform mat4 uCameraMatrix;    // inverse view matrix (camera world transform)
@@ -63,11 +64,31 @@ float starField(vec3 dir) {
   return stars;
 }
 
+// ─── Kerr metric helpers ────────────────────────────────────────────
+
+// Compute ISCO radius for Kerr metric (prograde orbit)
+float computeISCO(float rs, float spin) {
+  float M = rs * 0.5;
+  if (spin < 0.001) return 3.0 * rs;  // Schwarzschild ISCO = 6M = 3rs
+  float s2 = spin * spin;
+  float z1 = 1.0 + pow(1.0 - s2, 1.0 / 3.0) *
+    (pow(1.0 + spin, 1.0 / 3.0) + pow(max(1.0 - spin, 0.001), 1.0 / 3.0));
+  float z2 = sqrt(3.0 * s2 + z1 * z1);
+  float iscoOverM = 3.0 + z2 - sqrt((3.0 - z1) * (3.0 + z1 + 2.0 * z2));
+  return M * iscoOverM;
+}
+
+// Compute prograde photon sphere radius for Kerr metric
+float computePhotonSphere(float rs, float spin) {
+  float M = rs * 0.5;
+  return 2.0 * M * (1.0 + cos(2.0 / 3.0 * acos(clamp(-spin, -1.0, 1.0))));
+}
+
 // ─── Accretion disk ─────────────────────────────────────────────────
 
 // Temperature-based coloring: hot inner → cool outer
 vec3 diskColor(float r, float rs) {
-  float innerEdge = rs * 3.0;  // ISCO for Schwarzschild
+  float innerEdge = computeISCO(rs, uSpin);
   float outerEdge = rs * 15.0;
 
   // Normalized radius within disk
@@ -101,7 +122,7 @@ vec3 diskColor(float r, float rs) {
 // Check if ray hits the thin accretion disk (y ≈ 0 plane)
 bool hitDisk(vec3 pos, float rs, out vec3 color) {
   float r = length(pos);
-  float innerEdge = rs * 3.0;
+  float innerEdge = computeISCO(rs, uSpin);
   float outerEdge = rs * 15.0;
 
   if (r > innerEdge && r < outerEdge && abs(pos.y) < 0.05) {
@@ -120,11 +141,10 @@ bool hitDisk(vec3 pos, float rs, out vec3 color) {
 
 // ─── Geodesic integration ───────────────────────────────────────────
 
-// Schwarzschild effective potential gradient (for null geodesics)
-// d²r/dλ² = -dV/dr where V_eff = L²/(2r²)(1 - rs/r)
-// We integrate in Cartesian coordinates using the acceleration:
-//   a = -(3/2) * rs * L² / r^5 * pos  (leading-order approximation)
-// This is the key GR effect that bends light around the black hole.
+// Kerr metric geodesic integration (Boyer-Lindquist → Cartesian)
+// At uSpin=0, reduces to Schwarzschild: a = -(3/2) * rs * L² / r⁵ * pos
+// At uSpin>0, Σ replaces r² in the metric and frame dragging is added.
+// Spin axis aligned with +Y.
 
 void main() {
   // ─── Ray setup ────────────────────────────────────────────────────
@@ -144,6 +164,12 @@ void main() {
   float rs = uMass;  // Schwarzschild radius
   vec3 bhPos = vec3(0.0);  // Black hole at origin
 
+  // Kerr metric parameters
+  float M = rs * 0.5;            // mass in geometric units
+  float a = uSpin * M;           // spin angular momentum per unit mass
+  float a2 = a * a;
+  float rHorizon = M + sqrt(max(M * M - a2, 0.0));  // outer event horizon
+
   // ─── Ray march with geodesic bending ────────────────────────────
   vec3 pos = ro;
   vec3 vel = rd;
@@ -158,10 +184,10 @@ void main() {
     float r = length(toCenter);
 
     // Adaptive step size: smaller near the horizon
-    stepSize = max(0.02, min(0.3, (r - rs) * 0.3));
+    stepSize = max(0.02, min(0.3, (r - rHorizon) * 0.3));
 
     // Event horizon — ray absorbed
-    if (r < rs * 1.01) {
+    if (r < rHorizon * 1.01) {
       absorbed = true;
       break;
     }
@@ -172,14 +198,28 @@ void main() {
       break;
     }
 
-    // Gravitational lensing: geodesic equation approximation
-    // For Schwarzschild metric, the deflection for a photon:
-    // a = -(3/2) * rs * |L|² / r^5 * pos
-    // where L = pos × vel (angular momentum)
+    // Kerr geodesic acceleration
+    // Boyer-Lindquist quantities (spin axis = +Y)
+    float cosTheta = pos.y / r;
+    float cos2Theta = cosTheta * cosTheta;
+    float sin2Theta = 1.0 - cos2Theta;
+    float sigma = r * r + a2 * cos2Theta;
+
     vec3 L = cross(pos, vel);
     float L2 = dot(L, L);
-    float r5 = r * r * r * r * r;
-    vec3 accel = -1.5 * rs * L2 / r5 * pos;
+
+    // Modified gravitational acceleration: Σ² replaces r⁴ in denominator
+    // At a=0: sigma=r², so sigma²·r = r⁵ → recovers Schwarzschild
+    vec3 accel = -1.5 * rs * L2 / (sigma * sigma * r) * pos;
+
+    // Frame dragging (Lense-Thirring effect)
+    // ω = 2Mar / ((r²+a²)² - a²Δsin²θ)
+    float rr = r * r;
+    float delta = rr - rs * r + a2;
+    float ra2 = rr + a2;
+    float omegaDen = ra2 * ra2 - a2 * delta * sin2Theta;
+    float omega = a * rs * r / max(omegaDen, 0.001);
+    accel += omega * cross(vec3(0.0, 1.0, 0.0), vel);
 
     // Leapfrog integration (symplectic — conserves energy)
     vel += accel * stepSize;
@@ -200,16 +240,17 @@ void main() {
   // ─── Shading ────────────────────────────────────────────────────
 
   // Einstein ring glow (for non-absorbed rays)
+  float photonSphere = computePhotonSphere(rs, uSpin);
   float ringGlow = 0.0;
   if (!absorbed) {
     float closest = length(cross(ro - bhPos, vel));
-    float photonSphere = rs * 1.5;
     ringGlow = exp(-pow((closest - photonSphere) / (rs * 0.3), 2.0)) * 0.8;
   }
 
-  // Photon ring
+  // Photon ring — critical impact parameter scales with photon sphere
+  float criticalB = photonSphere * (1.0 + 0.73 * (1.0 - uSpin));  // ≈2.6rs at a=0
   float impactParam = length(cross(ro - bhPos, rd));
-  float photonRing = exp(-pow((impactParam - rs * 2.6) / (rs * 0.15), 2.0)) * 0.3;
+  float photonRing = exp(-pow((impactParam - criticalB) / (rs * 0.15), 2.0)) * 0.3;
 
   // ─── AR mode: camera background with black hole shadow ─────────
   if (uUseCamera > 0.5) {

@@ -13,6 +13,7 @@ varying vec3 vCameraPos;
 
 uniform float uTime;
 uniform float uMass;
+uniform float uSpin;           // Kerr spin parameter a/M (0.0 - 0.998)
 uniform float uShowDisk;
 
 // Passthrough uniforms
@@ -60,10 +61,28 @@ float starField(vec3 dir) {
   return stars;
 }
 
+// ─── Kerr metric helpers ────────────────────────────────────────────
+
+float computeISCO(float rs, float spin) {
+  float M = rs * 0.5;
+  if (spin < 0.001) return 3.0 * rs;
+  float s2 = spin * spin;
+  float z1 = 1.0 + pow(1.0 - s2, 1.0 / 3.0) *
+    (pow(1.0 + spin, 1.0 / 3.0) + pow(max(1.0 - spin, 0.001), 1.0 / 3.0));
+  float z2 = sqrt(3.0 * s2 + z1 * z1);
+  float iscoOverM = 3.0 + z2 - sqrt((3.0 - z1) * (3.0 + z1 + 2.0 * z2));
+  return M * iscoOverM;
+}
+
+float computePhotonSphere(float rs, float spin) {
+  float M = rs * 0.5;
+  return 2.0 * M * (1.0 + cos(2.0 / 3.0 * acos(clamp(-spin, -1.0, 1.0))));
+}
+
 // ─── Accretion disk ─────────────────────────────────────────────────
 
 vec3 diskColor(float r, float rs) {
-  float innerEdge = rs * 3.0;
+  float innerEdge = computeISCO(rs, uSpin);
   float outerEdge = rs * 15.0;
   float t = clamp((r - innerEdge) / (outerEdge - innerEdge), 0.0, 1.0);
   float temp = pow(1.0 - t, 0.75);
@@ -87,7 +106,7 @@ vec3 diskColor(float r, float rs) {
 
 bool hitDisk(vec3 pos, float rs, out vec3 color) {
   float r = length(pos);
-  float innerEdge = rs * 3.0;
+  float innerEdge = computeISCO(rs, uSpin);
   float outerEdge = rs * 15.0;
 
   if (r > innerEdge && r < outerEdge && abs(pos.y) < 0.05) {
@@ -120,15 +139,18 @@ void main() {
 
   // Black hole parameters
   float rs = uMass;
-  // BH position is always uBHCenter (set by scene for both modes)
   vec3 bhPos = uBHCenter;
+
+  // Kerr metric parameters
+  float M = rs * 0.5;
+  float a = uSpin * M;
+  float a2 = a * a;
+  float rHorizon = M + sqrt(max(M * M - a2, 0.0));
 
   // Early exit radius — localized sphere in passthrough, large distance in skybox
   float exitRadius = uPassthrough > 0.5 ? uSphereRadius * 1.1 : MAX_DIST;
 
   // Ray march with geodesic bending
-  // In passthrough mode, camera is outside the localized sphere — start at sphere surface
-  // In skybox mode, BH is positioned far enough from camera that no clamping is needed
   vec3 pos;
   if (uPassthrough > 0.5) {
     pos = vWorldPos;
@@ -150,9 +172,9 @@ void main() {
     vec3 toCenter = bhPos - pos;
     float r = length(pos - bhPos);
 
-    stepSize = max(0.02, min(0.3, (r - rs) * 0.3));
+    stepSize = max(0.02, min(0.3, (r - rHorizon) * 0.3));
 
-    if (r < rs * 1.01) {
+    if (r < rHorizon * 1.01) {
       absorbed = true;
       break;
     }
@@ -162,12 +184,26 @@ void main() {
       break;
     }
 
-    // Geodesic acceleration (relative to BH center)
+    // Kerr geodesic acceleration (relative to BH center)
     vec3 relPos = pos - bhPos;
+    float cosTheta = relPos.y / r;
+    float cos2Theta = cosTheta * cosTheta;
+    float sin2Theta = 1.0 - cos2Theta;
+    float sigma = r * r + a2 * cos2Theta;
+
     vec3 L = cross(relPos, vel);
     float L2 = dot(L, L);
-    float r5 = r * r * r * r * r;
-    vec3 accel = -1.5 * rs * L2 / r5 * relPos;
+
+    // Modified acceleration: Σ² replaces r⁴ in denominator
+    vec3 accel = -1.5 * rs * L2 / (sigma * sigma * r) * relPos;
+
+    // Frame dragging (Lense-Thirring)
+    float rr = r * r;
+    float delta = rr - rs * r + a2;
+    float ra2 = rr + a2;
+    float omegaDen = ra2 * ra2 - a2 * delta * sin2Theta;
+    float omega = a * rs * r / max(omegaDen, 0.001);
+    accel += omega * cross(vec3(0.0, 1.0, 0.0), vel);
 
     vel += accel * stepSize;
     vel = normalize(vel);
@@ -187,17 +223,18 @@ void main() {
   vec3 rayEntry = uPassthrough > 0.5 ? vWorldPos : ro;
 
   // Einstein ring glow
+  float photonSphere = computePhotonSphere(rs, uSpin);
   float ringGlow = 0.0;
   if (!absorbed) {
     vec3 relEntry = rayEntry - bhPos;
     float closest = length(cross(relEntry, vel));
-    float photonSphere = rs * 1.5;
     ringGlow = exp(-pow((closest - photonSphere) / (rs * 0.3), 2.0)) * 0.8;
   }
 
-  // Photon ring
+  // Photon ring — critical impact parameter scales with photon sphere
+  float criticalB = photonSphere * (1.0 + 0.73 * (1.0 - uSpin));
   float impactParam = length(cross(rayEntry - bhPos, rd));
-  float photonRing = exp(-pow((impactParam - rs * 2.6) / (rs * 0.15), 2.0)) * 0.3;
+  float photonRing = exp(-pow((impactParam - criticalB) / (rs * 0.15), 2.0)) * 0.3;
 
   // ─── Passthrough mode ───────────────────────────────────────────
 

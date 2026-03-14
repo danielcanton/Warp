@@ -34,6 +34,7 @@ export class BlackHoleScene implements Scene {
   private spherical = new THREE.Spherical(15, Math.PI / 2.2, 0);
   private targetSpherical = new THREE.Spherical(15, Math.PI / 2.2, 0);
   private mass = 1.5; // Schwarzschild radius scale
+  private spin = 0; // Kerr spin parameter a/M (0 to 0.998)
   private showDisk = true;
   private elapsed = 0;
   private pinchStartDist = 0; // for pinch-zoom
@@ -84,6 +85,7 @@ export class BlackHoleScene implements Scene {
         uniforms: {
           uTime: { value: 0 },
           uMass: { value: this.mass },
+          uSpin: { value: this.spin },
           uShowDisk: { value: 1.0 },
           uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
           uCameraMatrix: { value: this.orbitCamera.matrixWorld },
@@ -111,6 +113,7 @@ export class BlackHoleScene implements Scene {
         uniforms: {
           uTime: { value: 0 },
           uMass: { value: this.mass },
+          uSpin: { value: this.spin },
           uShowDisk: { value: 1.0 },
           uCameraPosVR: { value: new THREE.Vector3() },
           // Passthrough uniforms
@@ -194,7 +197,7 @@ export class BlackHoleScene implements Scene {
 
   private setupVRPanel(ctx: SceneContext) {
     const xr = ctx.xrManager!;
-    const panelHeight = xr.supportsAR ? 1.0 : 0.7; // taller for AR (3 rows)
+    const panelHeight = xr.supportsAR ? 1.3 : 1.0; // taller for AR (4 rows), spin row added
     this.vrPanel = new VRPanel(1.4, panelHeight);
     this.vrPanel.setTitle("Black Hole");
 
@@ -247,16 +250,43 @@ export class BlackHoleScene implements Scene {
       },
     });
 
-    // Row 2: Mode toggle + Exit VR
+    // Row 2: Spin
     const row2Y = 0.70;
+    const spinValues = [0, 0.3, 0.6, 0.9, 0.998];
+    let spinIdx = 0;
+    this.vrPanel.addButton({
+      label: `Spin: ${this.spin.toFixed(2)}`,
+      x: startX,
+      y: row2Y,
+      w: btnW * 2 + gap,
+      h: btnH,
+      onClick: () => {
+        spinIdx = (spinIdx + 1) % spinValues.length;
+        this.spin = spinValues[spinIdx];
+        this.bhMaterial.uniforms.uSpin.value = this.spin;
+        this.vrMaterial.uniforms.uSpin.value = this.spin;
+        // Button index: 0=Mass, 1=Disk, 2=Spin
+        this.vrPanel?.updateButton(2, `Spin: ${this.spin.toFixed(2)}`);
+        // Sync desktop slider
+        const slider = this.panelEl?.querySelector("#bh-spin") as HTMLInputElement | null;
+        if (slider) {
+          slider.value = String(this.spin * 1000);
+          const valEl = this.panelEl?.querySelector("#bh-spin-val");
+          if (valEl) valEl.innerHTML = `${this.spin.toFixed(2)} a/M`;
+        }
+      },
+    });
+
+    // Row 3: Mode toggle + Exit VR
+    const row3Y = 1.00;
 
     // Mode toggle — only shown for AR sessions (passthrough capable)
     if (xr.supportsAR) {
-      this.modeButtonIndex = 2; // buttons[0]=Mass, [1]=Disk, [2]=Mode
+      this.modeButtonIndex = 3; // buttons[0]=Mass, [1]=Disk, [2]=Spin, [3]=Mode
       this.vrPanel.addButton({
         label: "Mode: PT",
         x: startX,
-        y: row2Y,
+        y: row3Y,
         w: btnW,
         h: btnH,
         onClick: () => {
@@ -273,7 +303,7 @@ export class BlackHoleScene implements Scene {
     this.vrPanel.addButton({
       label: "Exit VR",
       x: xr.supportsAR ? startX + btnW + gap : startX,
-      y: row2Y,
+      y: row3Y,
       w: btnW,
       h: btnH,
       onClick: () => {
@@ -281,13 +311,13 @@ export class BlackHoleScene implements Scene {
       },
     });
 
-    // Row 3: Reset Pos (only for AR sessions — repositions BH in passthrough mode)
+    // Row 4: Reset Pos (only for AR sessions — repositions BH in passthrough mode)
     if (xr.supportsAR) {
-      const row3Y = 1.00;
+      const row4Y = 1.30;
       this.vrPanel.addButton({
         label: "Reset Pos",
         x: startX,
-        y: row3Y,
+        y: row4Y,
         w: btnW,
         h: btnH,
         onClick: () => {
@@ -499,6 +529,11 @@ export class BlackHoleScene implements Scene {
           <span class="bh-val" id="bh-mass-val">1.5 r<sub>s</sub></span>
         </div>
         <div class="bh-row">
+          <label>Spin</label>
+          <input type="range" class="bh-slider" id="bh-spin" min="0" max="998" value="0" />
+          <span class="bh-val" id="bh-spin-val">0.00 a/M</span>
+        </div>
+        <div class="bh-row">
           <label class="bh-toggle-label">
             <input type="checkbox" id="bh-disk" checked />
             Accretion Disk
@@ -525,6 +560,16 @@ export class BlackHoleScene implements Scene {
       this.vrMaterial.uniforms.uMass.value = this.mass;
       // Update equation computed values live
       this.updateEquationValuesForMass();
+    });
+
+    // Spin slider
+    const spinSlider = this.panelEl.querySelector("#bh-spin") as HTMLInputElement;
+    const spinVal = this.panelEl.querySelector("#bh-spin-val")!;
+    spinSlider.addEventListener("input", () => {
+      this.spin = parseInt(spinSlider.value) / 1000;
+      spinVal.innerHTML = `${this.spin.toFixed(2)} a/M`;
+      this.bhMaterial.uniforms.uSpin.value = this.spin;
+      this.vrMaterial.uniforms.uSpin.value = this.spin;
     });
 
     // Disk toggle
