@@ -8,11 +8,16 @@ export interface Galaxy {
   acceleration: Vector3;
   color: Color;
   type: "spiral" | "elliptical";
+  trail: Vector3[];
+  trailIndex: number;
+  hasTrail: boolean;
 }
 
 const G = 1.0;
 const SOFTENING = 0.5;
 const SUBSTEPS = 8;
+const MAX_TRAIL = 300;
+const TOP_TRAIL_COUNT = 10;
 
 let nextId = 0;
 
@@ -41,6 +46,9 @@ export class CosmologySystem {
       acceleration: new Vector3(),
       color,
       type,
+      trail: [],
+      trailIndex: 0,
+      hasTrail: false,
     };
 
     this.galaxies.push(galaxy);
@@ -55,6 +63,32 @@ export class CosmologySystem {
     const subDt = dt / SUBSTEPS;
     for (let s = 0; s < SUBSTEPS; s++) {
       this.velocityVerletStep(subDt);
+    }
+    // Update trails for tracked galaxies
+    for (const g of this.galaxies) {
+      if (!g.hasTrail) continue;
+      if (g.trail.length < MAX_TRAIL) {
+        g.trail.push(g.position.clone());
+      } else {
+        g.trail[g.trailIndex] = g.position.clone();
+      }
+      g.trailIndex = (g.trailIndex + 1) % MAX_TRAIL;
+    }
+  }
+
+  /** Mark the top N most massive galaxies for trail rendering. */
+  assignTrails() {
+    // Reset all
+    for (const g of this.galaxies) {
+      g.hasTrail = false;
+      g.trail = [];
+      g.trailIndex = 0;
+    }
+    // Sort by mass descending, pick top N
+    const sorted = [...this.galaxies].sort((a, b) => b.mass - a.mass);
+    const count = Math.min(TOP_TRAIL_COUNT, sorted.length);
+    for (let i = 0; i < count; i++) {
+      sorted[i].hasTrail = true;
     }
   }
 

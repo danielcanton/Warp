@@ -2,9 +2,10 @@ import * as THREE from "three";
 import type { Scene, SceneContext } from "../types";
 import { CosmologySystem } from "./CosmologySystem";
 import { CosmologyPanel } from "./CosmologyPanel";
+import { cosmologyPresets } from "./presets";
+import { makeTrailMaterial } from "../../shaders/fresnel";
 
-const GALAXY_COUNT = 50;
-const CLUSTER_RADIUS = 12;
+const MAX_TRAIL = 300;
 
 export class CosmologyScene implements Scene {
   readonly id = "cosmology";
@@ -24,13 +25,8 @@ export class CosmologyScene implements Scene {
   private cameraTarget = new THREE.Vector3();
   private boundHandlers: { el: EventTarget; type: string; fn: EventListener }[] = [];
   private initialized = false;
-
-  // Snapshot for reset
-  private initialPositions: THREE.Vector3[] = [];
-  private initialVelocities: THREE.Vector3[] = [];
-  private initialMasses: number[] = [];
-  private initialTypes: ("spiral" | "elliptical")[] = [];
-  private initialColors: THREE.Color[] = [];
+  private trailLines = new Map<string, THREE.Line>();
+  private glowTexture!: THREE.Texture;
 
   async init(ctx: SceneContext): Promise<void> {
     this.ctx = ctx;
@@ -40,10 +36,12 @@ export class CosmologyScene implements Scene {
     scene.fog = new THREE.FogExp2(0x000005, 0.005);
 
     if (firstInit) {
+      this.glowTexture = this.createGlowTexture();
       this.buildSceneObjects(scene);
       this.panel = new CosmologyPanel({
+        onPresetChange: (i) => this.loadPreset(i),
         onPlayPause: () => { this.isPlaying = !this.isPlaying; },
-        onReset: () => this.reset(),
+        onReset: () => this.loadPreset(0),
         onSpeedChange: (s) => { this.speed = s; },
       });
     } else {
@@ -81,7 +79,7 @@ export class CosmologyScene implements Scene {
     this.setupInteraction(ctx);
 
     if (firstInit) {
-      this.loadOurUniverse();
+      this.loadPreset(0);
       this.initialized = true;
     }
   }
@@ -119,6 +117,7 @@ export class CosmologyScene implements Scene {
     const pointsGeometry = new THREE.BufferGeometry();
     pointsGeometry.setAttribute("position", new THREE.Float32BufferAttribute([], 3));
     pointsGeometry.setAttribute("color", new THREE.Float32BufferAttribute([], 3));
+    pointsGeometry.setAttribute("size", new THREE.Float32BufferAttribute([], 1));
     const pointsMaterial = new THREE.PointsMaterial({
       size: 0.8,
       sizeAttenuation: true,
@@ -127,66 +126,29 @@ export class CosmologyScene implements Scene {
       opacity: 0.95,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
+      map: this.glowTexture,
     });
     this.points = new THREE.Points(pointsGeometry, pointsMaterial);
     this.group.add(this.points);
   }
 
-  private loadOurUniverse() {
-    this.system.clear();
+  private loadPreset(index: number) {
+    // Clear trail visuals
+    for (const [, line] of this.trailLines) {
+      this.group.remove(line);
+    }
+    this.trailLines.clear();
 
-    for (let i = 0; i < GALAXY_COUNT; i++) {
-      // Distribute in a roughly spherical cluster
-      const r = CLUSTER_RADIUS * Math.cbrt(Math.random());
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
+    cosmologyPresets[index].load(this.system);
+    this.system.assignTrails();
 
-      const x = r * Math.sin(phi) * Math.cos(theta);
-      const y = r * Math.sin(phi) * Math.sin(theta) * 0.6; // slightly flattened
-      const z = r * Math.cos(phi);
-
-      const isElliptical = Math.random() < 0.3;
-      const mass = isElliptical
-        ? 1.5 + Math.random() * 3.5 // ellipticals are more massive
-        : 0.5 + Math.random() * 2.0;
-
-      // Small random initial velocity for some orbital motion
-      const speed = 0.3 + Math.random() * 0.4;
-      const vTheta = Math.random() * Math.PI * 2;
-      const vx = speed * Math.cos(vTheta);
-      const vz = speed * Math.sin(vTheta);
-
-      this.system.addGalaxy({
-        mass,
-        position: new THREE.Vector3(x, y, z),
-        velocity: new THREE.Vector3(vx, 0, vz),
-        type: isElliptical ? "elliptical" : "spiral",
-      });
+    // Create trail lines for galaxies that have trails
+    for (const g of this.system.galaxies) {
+      if (g.hasTrail) {
+        this.trailLines.set(g.id, this.createTrailLine(g.color));
+      }
     }
 
-    this.saveSnapshot();
-    this.syncPoints();
-  }
-
-  private saveSnapshot() {
-    this.initialPositions = this.system.galaxies.map(g => g.position.clone());
-    this.initialVelocities = this.system.galaxies.map(g => g.velocity.clone());
-    this.initialMasses = this.system.galaxies.map(g => g.mass);
-    this.initialTypes = this.system.galaxies.map(g => g.type);
-    this.initialColors = this.system.galaxies.map(g => g.color.clone());
-  }
-
-  private reset() {
-    this.system.clear();
-    for (let i = 0; i < this.initialPositions.length; i++) {
-      this.system.addGalaxy({
-        mass: this.initialMasses[i],
-        position: this.initialPositions[i].clone(),
-        velocity: this.initialVelocities[i].clone(),
-        type: this.initialTypes[i],
-        color: this.initialColors[i].clone(),
-      });
-    }
     this.syncPoints();
   }
 
@@ -196,7 +158,6 @@ export class CosmologyScene implements Scene {
 
     const positions = new Float32Array(n * 3);
     const colors = new Float32Array(n * 3);
-    const sizes = new Float32Array(n);
 
     for (let i = 0; i < n; i++) {
       const g = galaxies[i];
@@ -207,8 +168,6 @@ export class CosmologyScene implements Scene {
       colors[i * 3] = g.color.r;
       colors[i * 3 + 1] = g.color.g;
       colors[i * 3 + 2] = g.color.b;
-
-      sizes[i] = 0.4 + g.mass * 0.3;
     }
 
     const geom = this.points.geometry;
@@ -216,8 +175,39 @@ export class CosmologyScene implements Scene {
     geom.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
     geom.computeBoundingSphere();
 
-    // Encode mass in point size via material
-    (this.points.material as THREE.PointsMaterial).size = 0.8;
+    (this.points.material as THREE.PointsMaterial).size = 0.6;
+  }
+
+  private createGlowTexture(): THREE.Texture {
+    const size = 64;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d")!;
+    const center = size / 2;
+    const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
+    gradient.addColorStop(0, "rgba(255,255,255,1)");
+    gradient.addColorStop(0.2, "rgba(255,255,255,0.8)");
+    gradient.addColorStop(0.5, "rgba(255,255,255,0.3)");
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  private createTrailLine(color: THREE.Color): THREE.Line {
+    const material = makeTrailMaterial(color.getHex());
+    const positions = new Float32Array(MAX_TRAIL * 3);
+    const alphas = new Float32Array(MAX_TRAIL);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("aAlpha", new THREE.BufferAttribute(alphas, 1));
+    geometry.setDrawRange(0, 0);
+    const line = new THREE.Line(geometry, material);
+    this.group.add(line);
+    return line;
   }
 
   private addHandler(el: EventTarget, type: string, fn: EventListener) {
@@ -255,6 +245,46 @@ export class CosmologyScene implements Scene {
       this.syncPoints();
     }
 
+    // Update trail lines for tracked galaxies
+    for (const g of galaxies) {
+      if (!g.hasTrail) continue;
+      const line = this.trailLines.get(g.id);
+      if (!line || g.trail.length < 2) continue;
+
+      const geom = line.geometry;
+      const trailPosAttr = geom.getAttribute("position") as THREE.BufferAttribute;
+      const alphaAttr = geom.getAttribute("aAlpha") as THREE.BufferAttribute;
+      const posArray = trailPosAttr.array as Float32Array;
+      const alphaArray = alphaAttr.array as Float32Array;
+
+      const len = g.trail.length;
+      let writeIdx = 0;
+
+      if (len < MAX_TRAIL) {
+        for (let i = 0; i < len; i++) {
+          const p = g.trail[i];
+          posArray[writeIdx * 3] = p.x;
+          posArray[writeIdx * 3 + 1] = p.y;
+          posArray[writeIdx * 3 + 2] = p.z;
+          alphaArray[writeIdx] = (i / len) * 0.6;
+          writeIdx++;
+        }
+      } else {
+        for (let i = 0; i < len; i++) {
+          const p = g.trail[(g.trailIndex + i) % len];
+          posArray[writeIdx * 3] = p.x;
+          posArray[writeIdx * 3 + 1] = p.y;
+          posArray[writeIdx * 3 + 2] = p.z;
+          alphaArray[writeIdx] = (i / len) * 0.6;
+          writeIdx++;
+        }
+      }
+
+      trailPosAttr.needsUpdate = true;
+      alphaAttr.needsUpdate = true;
+      geom.setDrawRange(0, writeIdx);
+    }
+
     // Smooth camera toward center of mass
     const com = this.system.getCenterOfMass();
     this.cameraTarget.lerp(com, 0.02);
@@ -276,6 +306,11 @@ export class CosmologyScene implements Scene {
       el.removeEventListener(type, fn);
     }
     this.boundHandlers = [];
+
+    for (const [, line] of this.trailLines) {
+      this.group.remove(line);
+    }
+    this.trailLines.clear();
 
     this.ctx.scene.remove(this.group);
     this.ctx.scene.remove(this.stars);

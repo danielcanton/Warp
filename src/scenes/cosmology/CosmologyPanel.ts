@@ -1,4 +1,7 @@
+import { cosmologyPresets } from "./presets";
+
 export interface CosmologyPanelCallbacks {
+  onPresetChange: (index: number) => void;
   onPlayPause: () => void;
   onReset: () => void;
   onSpeedChange: (speed: number) => void;
@@ -26,6 +29,10 @@ export class CosmologyPanel {
     panel.id = "cosmology-panel";
     panel.className = "glass";
 
+    const presetOptions = cosmologyPresets
+      .map((p, i) => `<option value="${i}">${p.name}</option>`)
+      .join("");
+
     panel.innerHTML = `
       <div class="cos-header">
         <h3 class="cos-title">Cosmology</h3>
@@ -36,9 +43,7 @@ export class CosmologyPanel {
         <div class="cos-section">
           <div class="cos-row">
             <label>Preset</label>
-            <select class="cos-select" id="cos-preset">
-              <option value="0">Our Universe</option>
-            </select>
+            <select class="cos-select" id="cos-preset">${presetOptions}</select>
           </div>
         </div>
 
@@ -75,6 +80,12 @@ export class CosmologyPanel {
       panel.classList.add("cos-collapsed");
       expandBtn.innerHTML = "&#9650;";
     }
+
+    // Preset
+    const presetSelect = panel.querySelector("#cos-preset") as HTMLSelectElement;
+    presetSelect.addEventListener("change", () => {
+      this.callbacks.onPresetChange(parseInt(presetSelect.value));
+    });
 
     // Play/Pause
     this.playBtn.addEventListener("click", () => {
