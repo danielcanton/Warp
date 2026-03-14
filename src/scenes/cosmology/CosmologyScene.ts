@@ -4,19 +4,25 @@ import { CosmologySystem } from "./CosmologySystem";
 import { CosmologyPanel } from "./CosmologyPanel";
 import { cosmologyPresets } from "./presets";
 import { makeTrailMaterial } from "../../shaders/fresnel";
+import { VRPanel } from "../../lib/VRPanel";
+import { VRTutorial } from "../../lib/vr-tutorial";
 
 const MAX_TRAIL = 300;
 
 export class CosmologyScene implements Scene {
   readonly id = "cosmology";
   readonly label = "Cosmology";
-  readonly supportsXR = false;
+  readonly supportsXR = true;
 
   private ctx!: SceneContext;
   private group = new THREE.Group();
   private stars!: THREE.Points;
   private points!: THREE.Points;
   private panel!: CosmologyPanel;
+  private vrPanel: VRPanel | null = null;
+  private vrTutorial: VRTutorial | null = null;
+  private passthroughActive = false;
+  private currentPresetIndex = 0;
 
   private system = new CosmologySystem();
   private isPlaying = true;
@@ -52,25 +58,27 @@ export class CosmologyScene implements Scene {
     }
     document.body.appendChild(this.panel.element);
 
-    // Camera
-    camera.position.set(0, 20, 35);
+    // Camera — position inside the cluster so galaxies surround the user
+    camera.position.set(0, 2, 8);
     camera.lookAt(0, 0, 0);
     controls.target.set(0, 0, 0);
     controls.enabled = true;
     controls.maxPolarAngle = Math.PI * 0.85;
-    controls.minDistance = 5;
+    controls.minDistance = 1;
     controls.maxDistance = 150;
 
-    // Hide merger-specific UI and VR button (Cosmology doesn't support XR)
+    // Hide merger-specific UI
     for (const id of ["event-info", "event-list", "time-controls", "map-legend", "help-overlay", "map-toggle", "tour-toggle", "events-toggle"]) {
       const el = document.getElementById(id);
       if (el) el.style.display = "none";
     }
     const uiBar = document.getElementById("ui");
     if (uiBar) uiBar.style.display = "flex";
-    // Hide VR button — this scene doesn't support XR
-    const vrBtn = document.getElementById("vr-button");
-    if (vrBtn) vrBtn.style.display = "none";
+
+    // Set up VR panel if XR manager is available
+    if (ctx.xrManager && !this.vrPanel) {
+      this.setupVRPanel(ctx);
+    }
 
     const loadingScreen = document.getElementById("loading-screen");
     if (loadingScreen) {
@@ -83,6 +91,178 @@ export class CosmologyScene implements Scene {
     if (firstInit) {
       this.loadPreset(0);
       this.initialized = true;
+    }
+  }
+
+  private setupVRPanel(ctx: SceneContext) {
+    const xr = ctx.xrManager!;
+    this.vrPanel = new VRPanel(1.4, 1.1);
+    this.vrPanel.setTitle("Cosmology");
+
+    const btnH = 0.16;
+    const btnW = 0.22;
+    const gap = 0.02;
+    const startX = 0.03;
+
+    // Row 1: Play/Pause, Speed, Preset cycle
+    const btnY = 0.32;
+
+    // Button 0: Play/Pause
+    this.vrPanel.addButton({
+      label: this.isPlaying ? "\u23F8" : "\u25B6",
+      x: startX, y: btnY, w: btnW * 0.7, h: btnH,
+      onClick: () => {
+        this.isPlaying = !this.isPlaying;
+        this.panel.setPlaying(this.isPlaying);
+        this.vrPanel?.updateButton(0, this.isPlaying ? "\u23F8" : "\u25B6");
+      },
+    });
+
+    // Button 1: Speed cycle
+    this.vrPanel.addButton({
+      label: `${this.speed}x`,
+      x: startX + (btnW * 0.7 + gap), y: btnY, w: btnW * 0.7, h: btnH,
+      onClick: () => {
+        const speeds = [0.1, 0.25, 0.5, 1, 2, 5, 10];
+        const idx = speeds.indexOf(this.speed);
+        this.speed = speeds[(idx + 1) % speeds.length];
+        this.vrPanel?.updateButton(1, `${this.speed}x`);
+      },
+    });
+
+    // Button 2: Preset cycle
+    this.vrPanel.addButton({
+      label: cosmologyPresets[this.currentPresetIndex].name,
+      x: startX + (btnW * 0.7 + gap) * 2, y: btnY, w: btnW * 1.8, h: btnH,
+      onClick: () => {
+        this.currentPresetIndex = (this.currentPresetIndex + 1) % cosmologyPresets.length;
+        this.loadPreset(this.currentPresetIndex);
+        this.vrPanel?.updateButton(2, cosmologyPresets[this.currentPresetIndex].name);
+      },
+    });
+
+    // Row 2: Dark Matter toggle, Dark Energy toggle
+    const row2Y = 0.52;
+
+    // Button 3: Dark Matter toggle (100%/0%)
+    this.vrPanel.addButton({
+      label: "DM: 100%",
+      x: startX, y: row2Y, w: btnW * 1.2, h: btnH,
+      onClick: () => {
+        const current = this.system.darkMatterFraction;
+        const next = current > 0.5 ? 0 : 1;
+        this.system.darkMatterFraction = next;
+        this.vrPanel?.updateButton(3, `DM: ${Math.round(next * 100)}%`);
+      },
+    });
+
+    // Button 4: Dark Energy toggle (100%/0%)
+    this.vrPanel.addButton({
+      label: "DE: 100%",
+      x: startX + (btnW * 1.2 + gap), y: row2Y, w: btnW * 1.2, h: btnH,
+      onClick: () => {
+        const current = this.system.darkEnergyFraction;
+        const next = current > 0.5 ? 0 : 1;
+        this.system.darkEnergyFraction = next;
+        this.vrPanel?.updateButton(4, `DE: ${Math.round(next * 100)}%`);
+      },
+    });
+
+    // Button 5: Reset
+    this.vrPanel.addButton({
+      label: "\u21BA Reset",
+      x: startX + (btnW * 1.2 + gap) * 2, y: row2Y, w: btnW, h: btnH,
+      onClick: () => {
+        this.currentPresetIndex = 0;
+        this.loadPreset(0);
+        this.system.darkMatterFraction = 1;
+        this.system.darkEnergyFraction = 1;
+        this.vrPanel?.updateButton(2, cosmologyPresets[0].name);
+        this.vrPanel?.updateButton(3, "DM: 100%");
+        this.vrPanel?.updateButton(4, "DE: 100%");
+      },
+    });
+
+    // Row 3: Exit VR, Passthrough (if AR)
+    const row3Y = 0.72;
+
+    // Button 6: Exit VR
+    this.vrPanel.addButton({
+      label: "Exit VR",
+      x: startX, y: row3Y, w: btnW, h: btnH,
+      onClick: () => {
+        this.ctx.renderer.xr.getSession()?.end();
+      },
+    });
+
+    // Passthrough toggle — only for AR sessions
+    if (xr.supportsAR) {
+      const ptBtnIdx = 7;
+      this.vrPanel.addButton({
+        label: "Passthrough: OFF",
+        x: startX + (btnW + gap), y: row3Y, w: btnW * 2, h: btnH,
+        onClick: () => {
+          this.passthroughActive = !this.passthroughActive;
+          if (this.passthroughActive) {
+            this.ctx.scene.background = null;
+            this.ctx.renderer.setClearColor(0x000000, 0);
+          } else {
+            this.ctx.scene.background = new THREE.Color(0x000005);
+            this.ctx.renderer.setClearColor(0x000005, 1);
+          }
+          this.vrPanel?.updateButton(ptBtnIdx, `Passthrough: ${this.passthroughActive ? "ON" : "OFF"}`);
+        },
+      });
+    }
+
+    xr.registerPanel(this.vrPanel);
+
+    this.vrTutorial = new VRTutorial();
+
+    xr.onMenuPress = () => {
+      if (this.vrTutorial?.dismiss()) return;
+      if (!this.vrPanel) return;
+      this.vrPanel.toggle();
+      if (this.vrPanel.visible) {
+        this.ctx.camera.updateWorldMatrix(true, false);
+        this.vrPanel.positionInFront(this.ctx.camera, 2, 0);
+      }
+    };
+
+    xr.onSessionStart = () => {
+      // Scale galaxy sprites up for VR visibility
+      (this.points.material as THREE.PointsMaterial).size = 1.2;
+
+      if (this.vrPanel) {
+        this.vrPanel.positionInFront(ctx.camera, 2, 0);
+        ctx.scene.add(this.vrPanel.mesh);
+      }
+      // Block AR camera passthrough by default
+      this.ctx.scene.background = new THREE.Color(0x000005);
+      this.ctx.renderer.setClearColor(0x000005, 1);
+
+      setTimeout(() => this.vrTutorial?.show(ctx.camera, ctx.scene), 200);
+    };
+
+    xr.onSessionEnd = () => {
+      // Restore desktop sprite size
+      (this.points.material as THREE.PointsMaterial).size = 0.6;
+
+      if (this.vrPanel) ctx.scene.remove(this.vrPanel.mesh);
+      this.vrTutorial?.hide(ctx.scene);
+      // Restore opaque state if passthrough was active
+      if (this.passthroughActive) {
+        this.ctx.scene.background = new THREE.Color(0x000005);
+        this.ctx.renderer.setClearColor(0x000005, 1);
+        this.passthroughActive = false;
+      }
+    };
+
+    // If already in VR (scene switch mid-session)
+    if (xr.isPresenting && this.vrPanel) {
+      this.vrPanel.positionInFront(ctx.camera, 2, 0);
+      ctx.scene.add(this.vrPanel.mesh);
+      (this.points.material as THREE.PointsMaterial).size = 1.2;
     }
   }
 
@@ -135,6 +315,8 @@ export class CosmologyScene implements Scene {
   }
 
   private loadPreset(index: number) {
+    this.currentPresetIndex = index;
+
     // Clear trail visuals
     for (const [, line] of this.trailLines) {
       this.group.remove(line);
@@ -177,7 +359,8 @@ export class CosmologyScene implements Scene {
     geom.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
     geom.computeBoundingSphere();
 
-    (this.points.material as THREE.PointsMaterial).size = 0.6;
+    const isVR = this.ctx?.renderer.xr.isPresenting;
+    (this.points.material as THREE.PointsMaterial).size = isVR ? 1.2 : 0.6;
   }
 
   private createGlowTexture(): THREE.Texture {
@@ -287,11 +470,13 @@ export class CosmologyScene implements Scene {
       geom.setDrawRange(0, writeIdx);
     }
 
-    // Smooth camera toward center of mass
-    const com = this.system.getCenterOfMass();
-    this.cameraTarget.lerp(com, 0.02);
-    this.ctx.controls.target.copy(this.cameraTarget);
-    this.ctx.controls.update();
+    // Smooth camera toward center of mass (desktop only)
+    if (!this.ctx.renderer.xr.isPresenting) {
+      const com = this.system.getCenterOfMass();
+      this.cameraTarget.lerp(com, 0.02);
+      this.ctx.controls.target.copy(this.cameraTarget);
+      this.ctx.controls.update();
+    }
 
     // Update panel
     this.panel.updateInfo(galaxies.length);
@@ -308,6 +493,23 @@ export class CosmologyScene implements Scene {
       el.removeEventListener(type, fn);
     }
     this.boundHandlers = [];
+
+    // Clean up VR panel
+    if (this.vrPanel) {
+      this.ctx.xrManager?.unregisterPanel(this.vrPanel);
+      this.ctx.scene.remove(this.vrPanel.mesh);
+      this.vrPanel.dispose();
+      this.vrPanel = null;
+    }
+    if (this.ctx.xrManager) {
+      this.ctx.xrManager.onMenuPress = null;
+      this.ctx.xrManager.onSessionStart = null;
+      this.ctx.xrManager.onSessionEnd = null;
+    }
+    if (this.vrTutorial) {
+      this.vrTutorial.dispose(this.ctx.scene);
+      this.vrTutorial = null;
+    }
 
     for (const [, line] of this.trailLines) {
       this.group.remove(line);
