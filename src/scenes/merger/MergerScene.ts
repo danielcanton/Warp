@@ -66,6 +66,31 @@ const tours: Tour[] = [
       { event: "GW200115", description: "The second confirmed NSBH merger, detected just 10 days after GW200105. Together they proved this class of merger really exists in nature." },
     ],
   },
+  {
+    name: "GW170817: The Multi-Messenger Revolution",
+    steps: [
+      {
+        event: "GW170817",
+        description: "The detection \u2014 On August 17, 2017, LIGO Hanford, LIGO Livingston, and Virgo detected gravitational waves from merging neutron stars for the first time. The signal lasted ~100 seconds, far longer than black hole mergers, revealing the inspiral of two objects just 1.1\u20131.6 solar masses each. Three detectors pinpointed the source to a 28 square degree patch of sky.",
+      },
+      {
+        event: "GW170817",
+        description: "The gamma-ray burst \u2014 Just 1.7 seconds after the merger, NASA\u2019s Fermi satellite and ESA\u2019s INTEGRAL detected a short gamma-ray burst (GRB 170817A). This confirmed a decades-old hypothesis: short GRBs are produced by neutron star collisions. The tiny delay \u2014 1.7 seconds across 130 million light-years \u2014 proved that gravitational waves travel at the speed of light to one part in 10\u00b9\u2075.",
+      },
+      {
+        event: "GW170817",
+        description: "The kilonova \u2014 Within 11 hours, telescopes worldwide found a new point of light (AT 2017gfo) in the galaxy NGC 4993. Over the following days it faded from blue to red as freshly forged heavy elements cooled. This \u201Ckilonova\u201D confirmed that neutron star mergers are cosmic forges: the r-process nucleosynthesis site where gold, platinum, and uranium are created.",
+      },
+      {
+        event: "GW170817",
+        description: "The Hubble constant \u2014 Because gravitational waves encode the absolute distance to the source (a \u201Cstandard siren\u201D), and the host galaxy NGC 4993 gives the recession velocity, GW170817 provided an independent measurement of the Hubble constant: H\u2080 = 70 +12/\u22128 km/s/Mpc. With more events like this, standard sirens may resolve the tension between CMB and supernova-based measurements.",
+      },
+      {
+        event: "GW170817",
+        description: "The legacy \u2014 GW170817 was observed by over 70 observatories across every band of the electromagnetic spectrum and in gravitational waves. It launched the era of multi-messenger astronomy with gravitational waves, proved neutron star mergers produce short GRBs and kilonovae, confirmed GW travel at light speed, provided a new cosmic distance ladder rung, and showed where the universe makes its heaviest elements.",
+      },
+    ],
+  },
 ];
 
 export class MergerScene implements Scene {
@@ -901,9 +926,9 @@ export class MergerScene implements Scene {
 
     // Researcher-only rows
     if (mode === "researcher") {
-      if (mmData.h0) rows.push(["H\u2080", mmData.h0]);
-      if (mmData.ejectaMass) rows.push(["Ejecta mass", mmData.ejectaMass]);
-      if (mmData.grbDelay) rows.push(["GRB delay", mmData.grbDelay]);
+      rows.push(["H\u2080", mmData.h0Measurement]);
+      rows.push(["Ejecta mass", mmData.ejectaMass]);
+      rows.push(["GRB delay", mmData.grbDelay]);
     }
 
     for (const [param, value] of rows) {
@@ -1017,9 +1042,9 @@ export class MergerScene implements Scene {
           html += `<div class="sheet-row"><span class="sheet-param">EM Counterpart</span><span class="sheet-value">${mmData.emCounterpart}</span></div>`;
           html += `<div class="sheet-row"><span class="sheet-param">Host Galaxy</span><span class="sheet-value">${mmData.hostGalaxy}</span></div>`;
           if (mode === "researcher") {
-            if (mmData.h0) html += `<div class="sheet-row"><span class="sheet-param">H\u2080</span><span class="sheet-value">${mmData.h0}</span></div>`;
-            if (mmData.ejectaMass) html += `<div class="sheet-row"><span class="sheet-param">Ejecta mass</span><span class="sheet-value">${mmData.ejectaMass}</span></div>`;
-            if (mmData.grbDelay) html += `<div class="sheet-row"><span class="sheet-param">GRB delay</span><span class="sheet-value">${mmData.grbDelay}</span></div>`;
+            html += `<div class="sheet-row"><span class="sheet-param">H\u2080</span><span class="sheet-value">${mmData.h0Measurement}</span></div>`;
+            html += `<div class="sheet-row"><span class="sheet-param">Ejecta mass</span><span class="sheet-value">${mmData.ejectaMass}</span></div>`;
+            html += `<div class="sheet-row"><span class="sheet-param">GRB delay</span><span class="sheet-value">${mmData.grbDelay}</span></div>`;
           }
         }
       }
@@ -1278,17 +1303,27 @@ export class MergerScene implements Scene {
       const showTimeline = isGW170817 && mode !== "explorer";
       if (showTimeline) {
         this.mmTimeline.show();
-        // Map tour step index to MM marker step index:
-        // For now, GW170817 appears as a single step in tours, so show the full sequence.
-        // Use the tour step index within the current tour to pick a marker,
-        // but since GW170817 is just one step, default to final marker (show full timeline).
-        const mmStepIndex = MM_MARKERS.length - 1;
+
+        // Count how many GW170817 steps precede the current step in this tour
+        // to determine which timeline marker to highlight.
+        const gw170817Steps = this.activeTour!.steps
+          .slice(0, this.activeTourStep + 1)
+          .filter((s) => s.event === "GW170817");
+        const mmSubStepIndex = gw170817Steps.length - 1;
+
+        // Map sub-step to timeline marker index:
+        // 0 = GW detection (marker 0), 1 = GRB (marker 1), 2 = kilonova (markers 2-3),
+        // 3 = Hubble constant (all markers), 4 = legacy (all markers)
+        const markerMap = [0, 1, 3, MM_MARKERS.length - 1, MM_MARKERS.length - 1];
+        const mmStepIndex = markerMap[Math.min(mmSubStepIndex, markerMap.length - 1)];
         this.mmTimeline.setStep(mmStepIndex);
 
-        // Sky localization: show all 3 regions sequentially for GW170817
+        // Sky localization: progressively reveal regions as the narrative advances
         if (this.mmSkymap) {
           this.mmSkymap.show();
-          this.mmSkymap.setRevealCount(3);
+          // Step 0: 1 region (LIGO only), step 1-2: 2 regions, step 3+: all 3
+          const revealCount = mmSubStepIndex === 0 ? 1 : mmSubStepIndex <= 2 ? 2 : 3;
+          this.mmSkymap.setRevealCount(revealCount);
         }
       } else {
         this.mmTimeline.hide();
