@@ -17,6 +17,8 @@ import { getViewMode, onViewModeChange, type ViewMode } from "../../lib/view-mod
 import { performExport } from "../../lib/export";
 import { mergerEquations } from "../../lib/equation-data";
 import { buildEquationsSection, updateEquationValues, removeEquationsSection } from "../../lib/equations";
+import { computeQNMModes } from "../../lib/qnm";
+import { WaveformPlot } from "../../lib/waveform-plot";
 import vertexShader from "../../shaders/spacetime.vert.glsl?raw";
 import fragmentShader from "../../shaders/spacetime.frag.glsl?raw";
 
@@ -183,6 +185,7 @@ export class MergerScene implements Scene {
   private savedBackground: THREE.Color | THREE.Texture | null = null;
 
   private unsubViewMode: (() => void) | null = null;
+  private waveformPlot: WaveformPlot | null = null;
 
   // Intro animation
   private introProgress = 0;
@@ -263,6 +266,11 @@ export class MergerScene implements Scene {
       this.sheetTypeBadge = document.getElementById("sheet-type-badge");
       this.sheetFullContent = document.querySelector(".sheet-full-content");
       this.mobileInfoSheet = document.getElementById("mobile-info-sheet");
+
+      // Waveform plot (appended to info panel body)
+      this.waveformPlot = new WaveformPlot();
+      const panelBody = document.querySelector("#event-info .panel-body");
+      if (panelBody) panelBody.appendChild(this.waveformPlot.container);
     }
 
     // ─── Build 3D objects (only first time — re-add on subsequent inits) ───
@@ -287,6 +295,7 @@ export class MergerScene implements Scene {
         this.applyControlsModeGating(mode);
         this.renderEventList();
         this.ensureEquationsSection(mode);
+        if (this.currentEvent) this.updateWaveformPlot(this.currentEvent, mode);
       });
     }
 
@@ -1006,6 +1015,9 @@ export class MergerScene implements Scene {
     // Update equations with current event values
     this.ensureEquationsSection(mode);
 
+    // Update waveform plot with QNM modes
+    this.updateWaveformPlot(event, mode);
+
     // ─── Populate mobile info sheet ───
     this.updateMobileSheet(event, type);
 
@@ -1527,6 +1539,26 @@ export class MergerScene implements Scene {
     return null; // Merger uses global DOM elements from app.html
   }
 
+  private updateWaveformPlot(event: GWEvent, mode: ViewMode): void {
+    if (!this.waveformPlot || !this.currentWaveform) return;
+
+    // Compute QNM modes — show only fundamental in student, both in researcher
+    const modesKeys = mode === "researcher" ? ["2,2,0", "2,2,1"] : ["2,2,0"];
+    const qnmModes = computeQNMModes(
+      event.mass_1_source,
+      event.mass_2_source,
+      event.chi_eff ?? 0,
+      0,
+      modesKeys,
+    );
+
+    this.waveformPlot.update({
+      waveform: this.currentWaveform,
+      qnmModes,
+      viewMode: mode,
+    });
+  }
+
   dispose(): void {
     // Remove event handlers
     for (const { el, type, fn } of this.boundHandlers) {
@@ -1559,6 +1591,12 @@ export class MergerScene implements Scene {
     // Stop audio & playback
     this.isPlaying = false;
     this.audio.stop();
+
+    // Clean up waveform plot
+    if (this.waveformPlot) {
+      this.waveformPlot.dispose();
+      this.waveformPlot = null;
+    }
 
     // Clean up export
     this.exportBtn.classList.remove("visible");
