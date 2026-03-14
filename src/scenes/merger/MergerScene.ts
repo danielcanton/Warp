@@ -1744,6 +1744,7 @@ export class MergerScene implements Scene {
     this.noiseCurvePlot.update({
       waveform: this.currentWaveform,
       viewMode: mode,
+      catalogSNR: this.currentEvent?.network_matched_filter_snr,
     });
   }
 

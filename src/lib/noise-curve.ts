@@ -205,11 +205,54 @@ export function getALIGOCharacteristicStrain(): { frequencies: number[]; hc: num
   return { frequencies, hc };
 }
 
+// ─── aLIGO interpolation helper ───────────────────────────────────────
+
+/** Log-log interpolate aLIGO ASD at an arbitrary frequency. */
+function interpolateALIGO_ASD(f: number): number {
+  if (f <= ALIGO_DATA[0][0]) return ALIGO_DATA[0][1];
+  if (f >= ALIGO_DATA[ALIGO_DATA.length - 1][0]) return ALIGO_DATA[ALIGO_DATA.length - 1][1];
+  for (let i = 0; i < ALIGO_DATA.length - 1; i++) {
+    const [f0, a0] = ALIGO_DATA[i];
+    const [f1, a1] = ALIGO_DATA[i + 1];
+    if (f >= f0 && f <= f1) {
+      const t = Math.log(f / f0) / Math.log(f1 / f0);
+      return Math.exp(Math.log(a0) + t * Math.log(a1 / a0));
+    }
+  }
+  return ALIGO_DATA[ALIGO_DATA.length - 1][1];
+}
+
+// ─── SNR computation ─────────────────────────────────────────────────
+
+/**
+ * Compute optimal matched-filter SNR: rho^2 = 4 * integral(|h_tilde(f)|^2 / S_n(f)) df
+ * Using characteristic strain: rho^2 = integral( (h_c(f))^2 / (h_n(f))^2 ) d(ln f)
+ * where h_n(f) = sqrt(f * S_n(f)) is the detector characteristic strain.
+ */
+export function computeOptimalSNR(strain: CharacteristicStrain): number {
+  const fMin = 10;
+  const fMax = 5000;
+  let rhoSq = 0;
+  for (let k = 1; k < strain.frequencies.length - 1; k++) {
+    const f = strain.frequencies[k];
+    if (f < fMin || f > fMax || strain.hc[k] <= 0) continue;
+    const asd = interpolateALIGO_ASD(f);
+    const hn = Math.sqrt(f) * asd; // detector characteristic strain
+    const ratio = strain.hc[k] / hn;
+    const df = strain.frequencies[k + 1] - strain.frequencies[k];
+    // rho^2 = 4 * integral(|h_tilde|^2 / S_n df) = integral(h_c^2 / h_n^2 * df/f) approximately
+    // More precisely using trapezoidal on d(ln f) = df/f
+    rhoSq += ratio * ratio * (df / f);
+  }
+  return Math.sqrt(rhoSq);
+}
+
 // ─── Noise Curve Plot ─────────────────────────────────────────────────
 
 export interface NoiseCurvePlotOptions {
   waveform: WaveformData;
   viewMode: ViewMode;
+  catalogSNR?: number;
 }
 
 const COLORS = {
@@ -217,6 +260,7 @@ const COLORS = {
   aligoFill: "rgba(255, 255, 255, 0.03)",
   signal: "#6ec6ff",
   signalGlow: "rgba(110, 198, 255, 0.15)",
+  snrShading: "rgba(110, 198, 255, 0.08)",
   grid: "rgba(255,255,255,0.06)",
   axis: "rgba(255,255,255,0.12)",
   text: "rgba(255,255,255,0.4)",
@@ -233,6 +277,7 @@ export class NoiseCurvePlot {
   private ctx: CanvasRenderingContext2D;
   private options: NoiseCurvePlotOptions | null = null;
   private cachedStrain: CharacteristicStrain | null = null;
+  private computedSNR: number | null = null;
   private resizeObserver: ResizeObserver;
 
   constructor() {
@@ -267,9 +312,11 @@ export class NoiseCurvePlot {
 
     if (visible) {
       this.cachedStrain = computeCharacteristicStrain(options.waveform);
+      this.computedSNR = computeOptimalSNR(this.cachedStrain);
       this.draw();
     } else {
       this.cachedStrain = null;
+      this.computedSNR = null;
     }
   }
 
@@ -390,6 +437,34 @@ export class NoiseCurvePlot {
     const labelY = toY(aligo.hc[labelIdx]) - 5;
     ctx.fillText("aLIGO", labelX, labelY);
 
+    // ─── SNR integral shading (signal > noise region) ───
+    ctx.fillStyle = COLORS.snrShading;
+    const shadingTop: { x: number; y: number }[] = [];
+    const shadingBot: { x: number; y: number }[] = [];
+    for (let k = 1; k < strain.frequencies.length; k++) {
+      const f = strain.frequencies[k];
+      if (f < fMin || f > fMax || strain.hc[k] <= 0) continue;
+      const aligoAsd = interpolateALIGO_ASD(f);
+      const aligoHc = Math.sqrt(f) * aligoAsd;
+      if (strain.hc[k] > aligoHc) {
+        const x = toX(f);
+        shadingTop.push({ x, y: toY(strain.hc[k]) });
+        shadingBot.push({ x, y: toY(aligoHc) });
+      }
+    }
+    if (shadingTop.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(shadingTop[0].x, shadingTop[0].y);
+      for (let i = 1; i < shadingTop.length; i++) {
+        ctx.lineTo(shadingTop[i].x, shadingTop[i].y);
+      }
+      for (let i = shadingBot.length - 1; i >= 0; i--) {
+        ctx.lineTo(shadingBot[i].x, shadingBot[i].y);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+
     // ─── Event signal ─────────────────────────────
     // Glow
     ctx.strokeStyle = COLORS.signalGlow;
@@ -453,6 +528,19 @@ export class NoiseCurvePlot {
     ctx.font = "bold 8px -apple-system, system-ui, sans-serif";
     ctx.textAlign = "right";
     ctx.fillText("h_c(f)", padL + plotW, padT + 10);
+
+    // ─── SNR annotations ───────────────────────────
+    const snrY = padT + 22;
+    ctx.font = "8px -apple-system, system-ui, sans-serif";
+    ctx.textAlign = "right";
+    if (this.computedSNR !== null) {
+      ctx.fillStyle = COLORS.signal;
+      ctx.fillText(`SNR (computed): ${this.computedSNR.toFixed(1)}`, padL + plotW, snrY);
+    }
+    if (this.options?.catalogSNR != null) {
+      ctx.fillStyle = COLORS.text;
+      ctx.fillText(`SNR (catalog): ${this.options.catalogSNR.toFixed(1)}`, padL + plotW, snrY + 11);
+    }
   }
 
   dispose(): void {
