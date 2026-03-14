@@ -95,7 +95,7 @@ export class XRManager {
 
   /**
    * Check XR support and create the VR button.
-   * Always uses immersive-vr for reliable opaque rendering.
+   * Uses immersive-ar on Quest 3 (passthrough) with immersive-vr fallback.
    * Returns the button element, or null if unsupported.
    */
   async createButton(): Promise<HTMLElement | null> {
@@ -106,8 +106,13 @@ export class XRManager {
     const vrSupported = await xr.isSessionSupported("immersive-vr").catch(() => false);
     if (!vrSupported) return null;
 
-    const sessionMode: XRSessionMode = "immersive-vr";
-    this._supportsAR = false;
+    // Check AR (passthrough) support — Quest 3 supports immersive-ar
+    const arSupported = await xr.isSessionSupported("immersive-ar").catch(() => false);
+    this._supportsAR = arSupported;
+
+    // Use immersive-ar when available (enables passthrough toggle within session)
+    // Scenes start with opaque background so it looks like VR by default
+    let sessionMode: XRSessionMode = arSupported ? "immersive-ar" : "immersive-vr";
 
     this.renderer.xr.enabled = true;
 
@@ -129,12 +134,17 @@ export class XRManager {
       session.addEventListener("end", onSessionEnded);
       this.renderer.xr.setReferenceSpaceType("local-floor");
 
-      // Set high-res framebuffer for sharp VR rendering
+      // Set high-res framebuffer for sharp VR/AR rendering
       const gl = this.renderer.getContext();
-      const glLayer = new XRWebGLLayer(session, gl, {
+      const glLayerInit: XRWebGLLayerInit = {
         framebufferScaleFactor: XRWebGLLayer.getNativeFramebufferScaleFactor(session),
         antialias: true,
-      });
+      };
+      // AR sessions need alpha support for passthrough compositing
+      if (sessionMode === "immersive-ar") {
+        glLayerInit.alpha = true;
+      }
+      const glLayer = new XRWebGLLayer(session, gl, glLayerInit);
       session.updateRenderState({ baseLayer: glLayer });
 
       this.renderer.xr.setSession(session);
@@ -156,7 +166,7 @@ export class XRManager {
     });
 
     this.renderer.xr.addEventListener("sessionstart", () => {
-      this._isARSession = false;
+      this._isARSession = sessionMode === "immersive-ar";
       this._hasCameraAccess = false;
       this.setupControllers();
       this.setupHands();
