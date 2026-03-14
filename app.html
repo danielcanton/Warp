@@ -1050,7 +1050,7 @@
         border-radius: 20px;
       }
       /* Embed: scene selector hidden (scene chosen via ?scene= param) */
-      body.embed #sidebar { display: none !important; }
+      body.embed #sidebar, body.embed .sidebar-toggle { display: none !important; }
       body.embed { --sidebar-current: 0px; }
       /* Embed: compact panels for non-merger scenes */
       body.embed #blackhole-panel {
@@ -1248,7 +1248,7 @@
         .loading-title { font-size: 20px; }
 
         /* ── Hide desktop elements replaced by mobile bar ── */
-        #sidebar { display: none !important; }
+        #sidebar, .sidebar-toggle { display: none !important; }
         #ui { display: none !important; }
         #event-info { display: none !important; }
 
@@ -1682,9 +1682,9 @@
         width: 0;
       }
       .sidebar-toggle {
-        position: absolute;
+        position: fixed;
         top: 20px;
-        right: -12px;
+        left: calc(var(--sidebar-current) - 12px);
         width: 24px;
         height: 24px;
         border-radius: 50%;
@@ -1696,7 +1696,7 @@
         align-items: center;
         justify-content: center;
         z-index: 31;
-        transition: all 0.15s;
+        transition: all 0.25s ease;
         padding: 0;
       }
       .sidebar-toggle:hover {
@@ -2127,7 +2127,7 @@
 
       /* ─── Mobile overrides for new panels ─── */
       @media (max-width: 768px) {
-        #sidebar { display: none !important; }
+        #sidebar, .sidebar-toggle { display: none !important; }
         #sandbox-panel {
           top: auto; bottom: calc(48px + env(safe-area-inset-bottom, 0px));
           left: 12px; right: 12px;
@@ -2247,12 +2247,13 @@
       <div class="loading-status" id="loading-status">Connecting to LIGO/Virgo/KAGRA...</div>
     </div>
 
+    <!-- Sidebar toggle (outside nav to avoid overflow:hidden clipping) -->
+    <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+
     <!-- Sidebar -->
     <nav id="sidebar" class="glass">
-      <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-      </button>
-
       <!-- Scenes -->
       <div class="sidebar-section sidebar-scenes">
         <button class="sidebar-item scene-item" data-scene-id="merger" title="Merger">
