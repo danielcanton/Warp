@@ -21,6 +21,7 @@ import { computeQNMModes } from "../../lib/qnm";
 import { WaveformPlot } from "../../lib/waveform-plot";
 import { MMTimeline, MM_MARKERS } from "../../lib/mm-timeline";
 import { MMSkymap } from "../../lib/mm-skymap";
+import { getMultiMessengerData } from "../../lib/multi-messenger";
 import vertexShader from "../../shaders/spacetime.vert.glsl?raw";
 import fragmentShader from "../../shaders/spacetime.frag.glsl?raw";
 
@@ -872,6 +873,49 @@ export class MergerScene implements Scene {
     if (catalog) catalog.style.display = showStudent ? "" : "none";
   }
 
+  /** Build or remove the multi-messenger annotation section in the info panel */
+  private updateMultiMessengerSection(event: GWEvent, mode: ViewMode): void {
+    const panelBody = this.eventInfoEl.querySelector<HTMLElement>(".panel-body");
+    if (!panelBody) return;
+
+    // Remove any existing MM section
+    const existing = panelBody.querySelector(".mm-section");
+    if (existing) existing.remove();
+
+    // Only show for events with EM counterpart data, and not in explorer mode
+    if (mode === "explorer") return;
+    const mmData = getMultiMessengerData(event.commonName);
+    if (!mmData) return;
+
+    const section = document.createElement("div");
+    section.className = "mm-section";
+
+    // Divider with label
+    section.innerHTML = `<hr class="info-divider"><div class="info-detail" style="color:rgba(167,139,250,0.7);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Multi-Messenger</div>`;
+
+    // Basic rows (student + researcher)
+    const rows: [string, string][] = [
+      ["EM Counterpart", mmData.emCounterpart],
+      ["Host Galaxy", mmData.hostGalaxy],
+    ];
+
+    // Researcher-only rows
+    if (mode === "researcher") {
+      if (mmData.h0) rows.push(["H\u2080", mmData.h0]);
+      if (mmData.ejectaMass) rows.push(["Ejecta mass", mmData.ejectaMass]);
+      if (mmData.grbDelay) rows.push(["GRB delay", mmData.grbDelay]);
+    }
+
+    for (const [param, value] of rows) {
+      const row = document.createElement("div");
+      row.className = "info-detail";
+      row.innerHTML = `<span class="param">${param} </span><span class="value">${value}</span>`;
+      section.appendChild(row);
+    }
+
+    panelBody.appendChild(section);
+  }
+
   /** Build or rebuild the equations section inside the info panel */
   private async ensureEquationsSection(mode: ViewMode): Promise<void> {
     const panelBody = this.eventInfoEl.querySelector<HTMLElement>(".panel-body");
@@ -960,9 +1004,27 @@ export class MergerScene implements Scene {
         ["Confidence", event.p_astro > 0 ? (event.p_astro >= 0.99 ? "> 0.99" : event.p_astro.toFixed(2)) : "\u2014"],
       ];
 
-      this.sheetFullContent.innerHTML = rows
+      let html = rows
         .map(([p, v]) => `<div class="sheet-row"><span class="sheet-param">${p}</span><span class="sheet-value">${v}</span></div>`)
         .join("");
+
+      // Multi-messenger rows for mobile sheet
+      const mode = getViewMode();
+      if (mode !== "explorer") {
+        const mmData = getMultiMessengerData(event.commonName);
+        if (mmData) {
+          html += `<div class="sheet-row" style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.06);padding-top:6px"><span class="sheet-param" style="color:rgba(167,139,250,0.7);font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Multi-Messenger</span><span class="sheet-value"></span></div>`;
+          html += `<div class="sheet-row"><span class="sheet-param">EM Counterpart</span><span class="sheet-value">${mmData.emCounterpart}</span></div>`;
+          html += `<div class="sheet-row"><span class="sheet-param">Host Galaxy</span><span class="sheet-value">${mmData.hostGalaxy}</span></div>`;
+          if (mode === "researcher") {
+            if (mmData.h0) html += `<div class="sheet-row"><span class="sheet-param">H\u2080</span><span class="sheet-value">${mmData.h0}</span></div>`;
+            if (mmData.ejectaMass) html += `<div class="sheet-row"><span class="sheet-param">Ejecta mass</span><span class="sheet-value">${mmData.ejectaMass}</span></div>`;
+            if (mmData.grbDelay) html += `<div class="sheet-row"><span class="sheet-param">GRB delay</span><span class="sheet-value">${mmData.grbDelay}</span></div>`;
+          }
+        }
+      }
+
+      this.sheetFullContent.innerHTML = html;
     }
 
     // Auto-peek on new event
@@ -1038,6 +1100,9 @@ export class MergerScene implements Scene {
 
     // Update equations with current event values
     this.ensureEquationsSection(mode);
+
+    // Multi-messenger annotations (only for events with EM counterpart data)
+    this.updateMultiMessengerSection(event, mode);
 
     // Update waveform plot with QNM modes
     this.updateWaveformPlot(event, mode);
