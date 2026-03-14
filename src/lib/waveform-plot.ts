@@ -20,6 +20,7 @@ const COLORS = {
   fundamental: "#6ec6ff",
   overtone: "#ff9e64",
   annotation: "rgba(255,255,255,0.7)",
+  cursor: "#ffffff",
 };
 
 /**
@@ -31,6 +32,7 @@ export class WaveformPlot {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private options: WaveformPlotOptions | null = null;
+  private cursorNorm = -1; // normalized playback position [0,1], -1 = hidden
   private resizeObserver: ResizeObserver;
 
   constructor() {
@@ -57,6 +59,14 @@ export class WaveformPlot {
     this.container.style.display = visible ? "block" : "none";
 
     if (visible) this.draw();
+  }
+
+  /** Update the playback cursor position. Called each frame from the scene update loop. */
+  setCursorTime(normalizedTime: number): void {
+    this.cursorNorm = normalizedTime;
+    if (this.options && this.options.viewMode !== "explorer") {
+      this.draw();
+    }
   }
 
   private draw(): void {
@@ -155,6 +165,19 @@ export class WaveformPlot {
     // ─── Researcher mode: QNM overlays ──────────────────────────
     if (viewMode === "researcher" && qnmModes.length > 0) {
       this.drawQNMOverlays(qnmModes, waveform, plotW, plotH, padL, padT, zeroY, maxVal, N);
+    }
+
+    // ─── Playback cursor ──────────────────────────────────────
+    if (this.cursorNorm >= 0 && this.cursorNorm <= 1) {
+      const cursorX = padL + this.cursorNorm * plotW;
+      ctx.strokeStyle = COLORS.cursor;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(cursorX, padT);
+      ctx.lineTo(cursorX, padT + plotH);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
     }
   }
 

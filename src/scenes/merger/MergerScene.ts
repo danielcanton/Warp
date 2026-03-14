@@ -1523,6 +1523,11 @@ export class MergerScene implements Scene {
         this.timeLabel.textContent = `${(this.playbackTime * this.currentWaveform.duration).toFixed(2)}s`;
       }
 
+      // Update waveform plot playback cursor
+      if (this.waveformPlot) {
+        this.waveformPlot.setCursorTime(this.playbackTime);
+      }
+
     } else {
       this.ctx.bloom.intensity = 1.8;
       this.ctx.gwDistortion.intensity = 0;
