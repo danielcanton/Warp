@@ -7,6 +7,7 @@ import { VRPanel } from "../../lib/VRPanel";
 import { VRTutorial } from "../../lib/vr-tutorial";
 import { integrateGeodesic, integrateTimelikeGeodesic, type GeodesicResult, type GeodesicOutcome, type ParticleType } from "../../lib/geodesic";
 import { VeffPlot } from "../../lib/veff-plot";
+import { PenroseDiagram } from "../../lib/penrose";
 import vertexShader from "../../shaders/blackhole.vert.glsl?raw";
 import fragmentShader from "../../shaders/blackhole.frag.glsl?raw";
 import vrVertexShader from "../../shaders/blackhole-vr.vert.glsl?raw";
@@ -92,6 +93,10 @@ export class BlackHoleScene implements Scene {
   private isAiming = false;
   private aimStart = new THREE.Vector2();
   private aimHitPoint = new THREE.Vector3();
+
+  // Penrose diagram state
+  private penroseMode = false;
+  private penroseDiagram: PenroseDiagram | null = null;
 
   private boundHandlers: { el: EventTarget; type: string; fn: EventListener }[] = [];
   private initialized = false;
@@ -479,6 +484,9 @@ export class BlackHoleScene implements Scene {
     this.quad.visible = false;
     this.vrSphere.visible = true;
 
+    // Hide Penrose diagram in VR
+    this.penroseDiagram?.hide();
+
     // Sync VR material uniforms
     this.vrMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
     this.vrMaterial.uniforms.uUseStarfield.value = this.useStarfield ? 1.0 : 0.0;
@@ -646,8 +654,10 @@ export class BlackHoleScene implements Scene {
     // Update panel buttons
     const lensingBtn = this.panelEl?.querySelector("#bh-mode-lensing") as HTMLElement | null;
     const geodesicBtn = this.panelEl?.querySelector("#bh-mode-geodesic") as HTMLElement | null;
-    if (lensingBtn) lensingBtn.classList.toggle("active", !active);
+    const penroseBtn = this.panelEl?.querySelector("#bh-mode-penrose") as HTMLElement | null;
+    if (lensingBtn) lensingBtn.classList.toggle("active", !active && !this.penroseMode);
     if (geodesicBtn) geodesicBtn.classList.toggle("active", active);
+    if (penroseBtn) penroseBtn.classList.toggle("active", false);
 
     // Update hint
     const hint = this.panelEl?.querySelector(".bh-hint");
@@ -667,6 +677,48 @@ export class BlackHoleScene implements Scene {
     const geodesicControls = this.panelEl?.querySelectorAll(".bh-geodesic-only");
     geodesicControls?.forEach((el) => {
       (el as HTMLElement).style.display = active ? "" : "none";
+    });
+  }
+
+  private setPenroseMode(active: boolean) {
+    this.penroseMode = active;
+
+    if (active) {
+      // Create Penrose diagram if needed
+      if (!this.penroseDiagram) {
+        this.penroseDiagram = new PenroseDiagram();
+      }
+      this.penroseDiagram.show();
+    } else {
+      this.penroseDiagram?.hide();
+    }
+
+    // Update panel buttons
+    const lensingBtn = this.panelEl?.querySelector("#bh-mode-lensing") as HTMLElement | null;
+    const geodesicBtn = this.panelEl?.querySelector("#bh-mode-geodesic") as HTMLElement | null;
+    const penroseBtn = this.panelEl?.querySelector("#bh-mode-penrose") as HTMLElement | null;
+    if (lensingBtn) lensingBtn.classList.toggle("active", !active && !this.geodesicMode);
+    if (geodesicBtn) geodesicBtn.classList.toggle("active", false);
+    if (penroseBtn) penroseBtn.classList.toggle("active", active);
+
+    // Update hint
+    const hint = this.panelEl?.querySelector(".bh-hint");
+    if (hint && active) {
+      hint.textContent = "Click on diagram to place worldlines.";
+    } else if (hint && !active && !this.geodesicMode) {
+      hint.textContent = "Drag to orbit. Scroll to zoom.";
+    }
+
+    // Hide lensing controls in Penrose mode
+    const lensingControls = this.panelEl?.querySelectorAll(".bh-lensing-only");
+    lensingControls?.forEach((el) => {
+      (el as HTMLElement).style.display = active ? "none" : "";
+    });
+
+    // Hide geodesic controls in Penrose mode
+    const geodesicControls = this.panelEl?.querySelectorAll(".bh-geodesic-only");
+    geodesicControls?.forEach((el) => {
+      (el as HTMLElement).style.display = "none";
     });
   }
 
@@ -771,6 +823,7 @@ export class BlackHoleScene implements Scene {
       <div class="bh-mode-toggle">
         <button class="bh-mode-btn active" id="bh-mode-lensing">Lensing</button>
         <button class="bh-mode-btn" id="bh-mode-geodesic">Geodesic</button>
+        <button class="bh-mode-btn" id="bh-mode-penrose">Penrose</button>
       </div>
       <div class="bh-params">
         <div class="bh-row">
@@ -872,11 +925,13 @@ export class BlackHoleScene implements Scene {
       }
     });
 
-    // Mode toggle: Lensing / Geodesic
+    // Mode toggle: Lensing / Geodesic / Penrose
     const lensingBtn = this.panelEl.querySelector("#bh-mode-lensing") as HTMLButtonElement;
     const geodesicBtn = this.panelEl.querySelector("#bh-mode-geodesic") as HTMLButtonElement;
-    lensingBtn.addEventListener("click", () => this.setGeodesicMode(false));
-    geodesicBtn.addEventListener("click", () => this.setGeodesicMode(true));
+    const penroseBtn = this.panelEl.querySelector("#bh-mode-penrose") as HTMLButtonElement;
+    lensingBtn.addEventListener("click", () => { this.setPenroseMode(false); this.setGeodesicMode(false); });
+    geodesicBtn.addEventListener("click", () => { this.setPenroseMode(false); this.setGeodesicMode(true); });
+    penroseBtn.addEventListener("click", () => { this.setGeodesicMode(false); this.setPenroseMode(true); });
 
     // Clear trails button
     const clearBtn = this.panelEl.querySelector("#bh-clear-trails") as HTMLButtonElement;
@@ -1340,6 +1395,11 @@ export class BlackHoleScene implements Scene {
       this.veffPlot.render();
     }
 
+    // Render Penrose diagram
+    if (this.penroseMode && this.penroseDiagram) {
+      this.penroseDiagram.render();
+    }
+
     // Smooth camera interpolation (desktop only)
     if (!isPresenting) {
       this.spherical.theta += (this.targetSpherical.theta - this.spherical.theta) * 0.08;
@@ -1444,6 +1504,13 @@ export class BlackHoleScene implements Scene {
       this.veffPlot.dispose();
       this.veffPlot = null;
     }
+
+    // Clean up Penrose diagram
+    if (this.penroseDiagram) {
+      this.penroseDiagram.dispose();
+      this.penroseDiagram = null;
+    }
+    this.penroseMode = false;
 
     if (this.vrPanel) {
       this.ctx.xrManager?.unregisterPanel(this.vrPanel);
