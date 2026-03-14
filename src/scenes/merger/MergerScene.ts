@@ -22,6 +22,7 @@ import { WaveformPlot } from "../../lib/waveform-plot";
 import { MMTimeline, MM_MARKERS } from "../../lib/mm-timeline";
 import { MMSkymap } from "../../lib/mm-skymap";
 import { getMultiMessengerData } from "../../lib/multi-messenger";
+import { NoiseCurvePlot } from "../../lib/noise-curve";
 import vertexShader from "../../shaders/spacetime.vert.glsl?raw";
 import fragmentShader from "../../shaders/spacetime.frag.glsl?raw";
 
@@ -216,6 +217,7 @@ export class MergerScene implements Scene {
   private waveformPlot: WaveformPlot | null = null;
   private mmTimeline: MMTimeline | null = null;
   private mmSkymap: MMSkymap | null = null;
+  private noiseCurvePlot: NoiseCurvePlot | null = null;
 
   // Intro animation
   private introProgress = 0;
@@ -302,6 +304,10 @@ export class MergerScene implements Scene {
       const panelBody = document.querySelector("#event-info .panel-body");
       if (panelBody) panelBody.appendChild(this.waveformPlot.container);
 
+      // Noise curve plot (appended after waveform plot, researcher mode only)
+      this.noiseCurvePlot = new NoiseCurvePlot();
+      if (panelBody) panelBody.appendChild(this.noiseCurvePlot.container);
+
       // Multi-messenger timeline (appended to tour overlay, before nav)
       this.mmTimeline = new MMTimeline();
       const tourNav = this.tourOverlay.querySelector(".tour-nav");
@@ -345,6 +351,7 @@ export class MergerScene implements Scene {
         this.renderEventList();
         this.ensureEquationsSection(mode);
         if (this.currentEvent) this.updateWaveformPlot(this.currentEvent, mode);
+        this.updateNoiseCurvePlot(mode);
       });
     }
 
@@ -1132,6 +1139,9 @@ export class MergerScene implements Scene {
     // Update waveform plot with QNM modes
     this.updateWaveformPlot(event, mode);
 
+    // Update noise curve plot (researcher mode)
+    this.updateNoiseCurvePlot(mode);
+
     // ─── Populate mobile info sheet ───
     this.updateMobileSheet(event, type);
 
@@ -1729,6 +1739,14 @@ export class MergerScene implements Scene {
     });
   }
 
+  private updateNoiseCurvePlot(mode: ViewMode): void {
+    if (!this.noiseCurvePlot || !this.currentWaveform) return;
+    this.noiseCurvePlot.update({
+      waveform: this.currentWaveform,
+      viewMode: mode,
+    });
+  }
+
   dispose(): void {
     // Remove event handlers
     for (const { el, type, fn } of this.boundHandlers) {
@@ -1766,6 +1784,12 @@ export class MergerScene implements Scene {
     if (this.waveformPlot) {
       this.waveformPlot.dispose();
       this.waveformPlot = null;
+    }
+
+    // Clean up noise curve plot
+    if (this.noiseCurvePlot) {
+      this.noiseCurvePlot.dispose();
+      this.noiseCurvePlot = null;
     }
 
     // Clean up multi-messenger timeline
