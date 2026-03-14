@@ -208,6 +208,17 @@ export class PopulationScatter {
       ctx.stroke();
     }
 
+    // ─── Mass gap shading (3–5 M☉) on both axes ──────
+    ctx.fillStyle = "rgba(239, 68, 68, 0.07)";
+    // Horizontal band: m2 in [3, 5]
+    const gapTop = toY(5);
+    const gapBot = toY(3);
+    ctx.fillRect(padL, gapTop, plotW, gapBot - gapTop);
+    // Vertical band: m1 in [3, 5]
+    const gapLeft = toX(3);
+    const gapRight = toX(5);
+    ctx.fillRect(gapLeft, padT, gapRight - gapLeft, plotH);
+
     // ─── Equal mass line (m1 = m2) ────────────
     ctx.strokeStyle = "rgba(255,255,255,0.08)";
     ctx.lineWidth = 1;
@@ -373,6 +384,361 @@ export class PopulationScatter {
 
       ctx.restore();
     }
+  }
+
+  dispose(): void {
+    this.resizeObserver.disconnect();
+    this.container.remove();
+  }
+}
+
+// ─── Chirp Mass Histogram ──────────────────────────────────────────────
+// Bar chart of chirp mass distribution with mass gap shading.
+
+interface HistBin {
+  lo: number;
+  hi: number;
+  events: GWEvent[];
+  dominant: string; // dominant event type key
+}
+
+export class ChirpMassHistogram {
+  readonly container: HTMLDivElement;
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private events: GWEvent[] = [];
+  private selectedName: string | null = null;
+  private highlightedBin: number = -1;
+  private onSelectEvent: ((event: GWEvent) => void) | null = null;
+  private onHighlightEvents: ((events: GWEvent[]) => void) | null = null;
+  private resizeObserver: ResizeObserver;
+
+  private bins: HistBin[] = [];
+  private padL = 40;
+  private padR = 12;
+  private padT = 10;
+  private padB = 28;
+
+  constructor() {
+    this.container = document.createElement("div");
+    this.container.id = "chirp-mass-histogram";
+    this.container.style.cssText = "display:none;width:100%;margin-top:12px;";
+
+    // Title
+    const title = document.createElement("div");
+    title.style.cssText =
+      "font-size:9px;color:rgba(255,255,255,0.4);margin-bottom:4px;font-family:-apple-system,system-ui,sans-serif;";
+    title.textContent = "Chirp mass distribution (Mc in M☉)";
+    this.container.appendChild(title);
+
+    this.canvas = document.createElement("canvas");
+    this.canvas.style.cssText = "width:100%;height:180px;display:block;border-radius:6px;cursor:crosshair;";
+    this.container.appendChild(this.canvas);
+
+    this.ctx = this.canvas.getContext("2d")!;
+
+    this.resizeObserver = new ResizeObserver(() => this.draw());
+    this.resizeObserver.observe(this.canvas);
+
+    this.canvas.addEventListener("click", (e) => this.handleClick(e));
+  }
+
+  setEvents(events: GWEvent[]): void {
+    this.events = events;
+    this.computeBins();
+    this.draw();
+  }
+
+  setSelectedEvent(name: string | null): void {
+    this.selectedName = name;
+    this.draw();
+  }
+
+  setOnSelectEvent(cb: (event: GWEvent) => void): void {
+    this.onSelectEvent = cb;
+  }
+
+  setOnHighlightEvents(cb: (events: GWEvent[]) => void): void {
+    this.onHighlightEvents = cb;
+  }
+
+  show(): void {
+    this.container.style.display = "block";
+    this.draw();
+  }
+
+  hide(): void {
+    this.container.style.display = "none";
+  }
+
+  private computeBins(): void {
+    if (this.events.length === 0) {
+      this.bins = [];
+      return;
+    }
+
+    // Determine range
+    let mcMin = Infinity;
+    let mcMax = -Infinity;
+    for (const ev of this.events) {
+      if (ev.chirp_mass_source <= 0) continue;
+      if (ev.chirp_mass_source < mcMin) mcMin = ev.chirp_mass_source;
+      if (ev.chirp_mass_source > mcMax) mcMax = ev.chirp_mass_source;
+    }
+    if (mcMin === Infinity) {
+      this.bins = [];
+      return;
+    }
+
+    // Nice bin edges: ~15-20 bins
+    const range = mcMax - mcMin;
+    const nBins = Math.max(8, Math.min(20, Math.round(range / 2)));
+    const binW = range / nBins;
+    const start = Math.floor(mcMin / binW) * binW;
+
+    this.bins = [];
+    for (let i = 0; i <= nBins; i++) {
+      this.bins.push({
+        lo: start + i * binW,
+        hi: start + (i + 1) * binW,
+        events: [],
+        dominant: "BBH",
+      });
+    }
+
+    for (const ev of this.events) {
+      if (ev.chirp_mass_source <= 0) continue;
+      const idx = Math.min(
+        Math.floor((ev.chirp_mass_source - start) / binW),
+        this.bins.length - 1,
+      );
+      if (idx >= 0) this.bins[idx].events.push(ev);
+    }
+
+    // Determine dominant type per bin
+    for (const bin of this.bins) {
+      const counts: Record<string, number> = {};
+      for (const ev of bin.events) {
+        const t = classifyEvent(ev);
+        counts[t] = (counts[t] || 0) + 1;
+      }
+      let maxType = "BBH";
+      let maxCount = 0;
+      for (const [t, c] of Object.entries(counts)) {
+        if (c > maxCount) {
+          maxType = t;
+          maxCount = c;
+        }
+      }
+      bin.dominant = maxType;
+    }
+  }
+
+  private handleClick(e: MouseEvent): void {
+    const rect = this.canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const binIdx = this.hitTestBin(mx);
+
+    if (binIdx >= 0 && binIdx < this.bins.length) {
+      const bin = this.bins[binIdx];
+      if (bin.events.length > 0) {
+        this.highlightedBin = this.highlightedBin === binIdx ? -1 : binIdx;
+        this.draw();
+
+        if (this.highlightedBin >= 0 && this.onHighlightEvents) {
+          this.onHighlightEvents(bin.events);
+        }
+
+        // Select first event in bin if single-clicking
+        if (this.onSelectEvent && bin.events.length > 0) {
+          this.onSelectEvent(bin.events[0]);
+        }
+      }
+    }
+  }
+
+  private hitTestBin(mx: number): number {
+    if (this.bins.length === 0) return -1;
+
+    const rect = this.canvas.getBoundingClientRect();
+    const W = rect.width;
+    const plotW = W - this.padL - this.padR;
+
+    const start = this.bins[0].lo;
+    const end = this.bins[this.bins.length - 1].hi;
+    const range = end - start;
+    if (range <= 0) return -1;
+
+    const barW = plotW / this.bins.length;
+
+    for (let i = 0; i < this.bins.length; i++) {
+      const x0 = this.padL + i * barW;
+      const x1 = x0 + barW;
+      if (mx >= x0 && mx < x1) return i;
+    }
+    return -1;
+  }
+
+  private draw(): void {
+    const canvas = this.canvas;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0) return;
+
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+
+    const ctx = this.ctx;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const W = rect.width;
+    const H = rect.height;
+    const padL = this.padL;
+    const padR = this.padR;
+    const padT = this.padT;
+    const padB = this.padB;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    ctx.clearRect(0, 0, W, H);
+
+    if (this.bins.length === 0) return;
+
+    // Y-axis max
+    let countMax = 0;
+    for (const bin of this.bins) {
+      if (bin.events.length > countMax) countMax = bin.events.length;
+    }
+    countMax = Math.max(countMax, 1);
+    // Round up to nice number
+    countMax = Math.ceil(countMax / 2) * 2 + 1;
+
+    const start = this.bins[0].lo;
+    const end = this.bins[this.bins.length - 1].hi;
+    const range = end - start;
+    const barW = plotW / this.bins.length;
+
+    const toX = (mc: number) => padL + ((mc - start) / range) * plotW;
+    const toY = (count: number) => padT + plotH - (count / countMax) * plotH;
+
+    // ─── Mass gap shading (3–5 M☉) ──────
+    if (start < 5 && end > 3) {
+      const gapL = Math.max(toX(3), padL);
+      const gapR = Math.min(toX(5), padL + plotW);
+      if (gapR > gapL) {
+        ctx.fillStyle = "rgba(239, 68, 68, 0.10)";
+        ctx.fillRect(gapL, padT, gapR - gapL, plotH);
+
+        // Label
+        ctx.fillStyle = "rgba(239, 68, 68, 0.5)";
+        ctx.font = "bold 8px -apple-system, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("mass gap", (gapL + gapR) / 2, padT + 12);
+      }
+    }
+
+    // ─── Grid ─────────────────────────────────
+    ctx.strokeStyle = STYLE.grid;
+    ctx.lineWidth = 0.5;
+    const yStep = countMax <= 10 ? 1 : countMax <= 30 ? 5 : 10;
+    for (let c = yStep; c < countMax; c += yStep) {
+      const y = toY(c);
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + plotW, y);
+      ctx.stroke();
+    }
+
+    // ─── Bars ─────────────────────────────────
+    const gap = Math.max(1, barW * 0.1);
+    for (let i = 0; i < this.bins.length; i++) {
+      const bin = this.bins[i];
+      if (bin.events.length === 0) continue;
+
+      const x0 = padL + i * barW + gap / 2;
+      const bw = barW - gap;
+      const barH = (bin.events.length / countMax) * plotH;
+      const y0 = padT + plotH - barH;
+
+      const isHighlighted = i === this.highlightedBin;
+      const containsSelected = bin.events.some(
+        (ev) => ev.commonName === this.selectedName,
+      );
+
+      // Fill with dominant type color
+      if (isHighlighted || containsSelected) {
+        ctx.fillStyle = COLORS_HIGHLIGHT[bin.dominant] ?? COLORS_HIGHLIGHT.BBH;
+        ctx.globalAlpha = 0.95;
+      } else {
+        ctx.fillStyle = COLORS[bin.dominant] ?? COLORS.BBH;
+        ctx.globalAlpha = 0.7;
+      }
+
+      ctx.beginPath();
+      ctx.roundRect(x0, y0, bw, barH, [2, 2, 0, 0]);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Highlight border
+      if (isHighlighted || containsSelected) {
+        ctx.strokeStyle = STYLE.selectedRing;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(x0, y0, bw, barH, [2, 2, 0, 0]);
+        ctx.stroke();
+      }
+
+      // Count label on top of bar
+      if (barH > 12) {
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        ctx.font = "bold 8px -apple-system, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(String(bin.events.length), x0 + bw / 2, y0 - 3);
+      }
+    }
+
+    // ─── Axes labels ──────────────────────────
+    ctx.fillStyle = STYLE.text;
+    ctx.font = "9px -apple-system, system-ui, sans-serif";
+
+    // X-axis labels (bin edges)
+    ctx.textAlign = "center";
+    const xLabelStep = Math.max(1, Math.floor(this.bins.length / 8));
+    for (let i = 0; i <= this.bins.length; i += xLabelStep) {
+      const val = i < this.bins.length ? this.bins[i].lo : this.bins[this.bins.length - 1].hi;
+      const x = padL + (i / this.bins.length) * plotW;
+      ctx.fillText(val.toFixed(0), x, H - 4);
+    }
+    // X-axis title
+    ctx.fillStyle = STYLE.label;
+    ctx.fillText("Mc (M☉)", padL + plotW / 2, H - 14);
+
+    // Y-axis labels
+    ctx.fillStyle = STYLE.text;
+    ctx.textAlign = "right";
+    for (let c = 0; c <= countMax; c += yStep) {
+      const y = toY(c);
+      if (y > padT + 4 && y < padT + plotH - 4) {
+        ctx.fillText(String(c), padL - 4, y + 3);
+      }
+    }
+    // Y-axis title
+    ctx.save();
+    ctx.fillStyle = STYLE.label;
+    ctx.translate(8, padT + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = "center";
+    ctx.fillText("Count", 0, 0);
+    ctx.restore();
+
+    // ─── Axes lines ───────────────────────────
+    ctx.strokeStyle = STYLE.axis;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, padT + plotH);
+    ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
   }
 
   dispose(): void {

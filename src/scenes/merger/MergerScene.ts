@@ -23,7 +23,7 @@ import { MMTimeline, MM_MARKERS } from "../../lib/mm-timeline";
 import { MMSkymap } from "../../lib/mm-skymap";
 import { getMultiMessengerData } from "../../lib/multi-messenger";
 import { NoiseCurvePlot } from "../../lib/noise-curve";
-import { PopulationScatter } from "../../lib/population-charts";
+import { PopulationScatter, ChirpMassHistogram } from "../../lib/population-charts";
 import vertexShader from "../../shaders/spacetime.vert.glsl?raw";
 import fragmentShader from "../../shaders/spacetime.frag.glsl?raw";
 
@@ -220,6 +220,7 @@ export class MergerScene implements Scene {
   private mmSkymap: MMSkymap | null = null;
   private noiseCurvePlot: NoiseCurvePlot | null = null;
   private populationScatter: PopulationScatter | null = null;
+  private chirpMassHistogram: ChirpMassHistogram | null = null;
   private eventListContent!: HTMLElement;
   private eventStatsContent!: HTMLElement;
   private eventTabButtons!: NodeListOf<HTMLButtonElement>;
@@ -315,6 +316,14 @@ export class MergerScene implements Scene {
       this.populationScatter.setViewMode(getViewMode());
       this.eventStatsContent.appendChild(this.populationScatter.container);
       this.populationScatter.setOnSelectEvent((event) => {
+        this.selectEvent(event);
+        if (this.viewMode === "map") this.setViewMode("event");
+      });
+
+      // Chirp mass histogram (appended to stats tab after scatter)
+      this.chirpMassHistogram = new ChirpMassHistogram();
+      this.eventStatsContent.appendChild(this.chirpMassHistogram.container);
+      this.chirpMassHistogram.setOnSelectEvent((event) => {
         this.selectEvent(event);
         if (this.viewMode === "map") this.setViewMode("event");
       });
@@ -820,10 +829,12 @@ export class MergerScene implements Scene {
         this.eventTabButtons.forEach((t) => t.classList.toggle("active", t.dataset.tab === tabName));
         this.eventListContent.style.display = tabName === "list" ? "" : "none";
         this.eventStatsContent.style.display = tabName === "stats" ? "" : "none";
-        if (tabName === "stats" && this.populationScatter) {
-          this.populationScatter.show();
-        } else if (this.populationScatter) {
-          this.populationScatter.hide();
+        if (tabName === "stats") {
+          if (this.populationScatter) this.populationScatter.show();
+          if (this.chirpMassHistogram) this.chirpMassHistogram.show();
+        } else {
+          if (this.populationScatter) this.populationScatter.hide();
+          if (this.chirpMassHistogram) this.chirpMassHistogram.hide();
         }
       });
     });
@@ -1181,6 +1192,7 @@ export class MergerScene implements Scene {
 
     // Update population scatter selection
     if (this.populationScatter) this.populationScatter.setSelectedEvent(event.commonName);
+    if (this.chirpMassHistogram) this.chirpMassHistogram.setSelectedEvent(event.commonName);
 
     // ─── Populate mobile info sheet ───
     this.updateMobileSheet(event, type);
@@ -1577,6 +1589,7 @@ export class MergerScene implements Scene {
 
       this.universeMap.populate(this.events);
       if (this.populationScatter) this.populationScatter.setEvents(this.events);
+      if (this.chirpMassHistogram) this.chirpMassHistogram.setEvents(this.events);
       this.renderEventList();
 
       const urlEvent = new URLSearchParams(window.location.search).get("event");
@@ -1634,6 +1647,7 @@ export class MergerScene implements Scene {
       this.events = [fallback];
       this.universeMap.populate(this.events);
       if (this.populationScatter) this.populationScatter.setEvents(this.events);
+      if (this.chirpMassHistogram) this.chirpMassHistogram.setEvents(this.events);
       this.selectEvent(fallback);
       this.renderEventList();
 
@@ -1839,6 +1853,12 @@ export class MergerScene implements Scene {
     if (this.populationScatter) {
       this.populationScatter.dispose();
       this.populationScatter = null;
+    }
+
+    // Clean up chirp mass histogram
+    if (this.chirpMassHistogram) {
+      this.chirpMassHistogram.dispose();
+      this.chirpMassHistogram = null;
     }
 
     // Clean up multi-messenger timeline
