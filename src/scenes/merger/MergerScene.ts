@@ -23,6 +23,7 @@ import { MMTimeline, MM_MARKERS } from "../../lib/mm-timeline";
 import { MMSkymap } from "../../lib/mm-skymap";
 import { getMultiMessengerData } from "../../lib/multi-messenger";
 import { NoiseCurvePlot } from "../../lib/noise-curve";
+import { PopulationScatter } from "../../lib/population-charts";
 import vertexShader from "../../shaders/spacetime.vert.glsl?raw";
 import fragmentShader from "../../shaders/spacetime.frag.glsl?raw";
 
@@ -218,6 +219,11 @@ export class MergerScene implements Scene {
   private mmTimeline: MMTimeline | null = null;
   private mmSkymap: MMSkymap | null = null;
   private noiseCurvePlot: NoiseCurvePlot | null = null;
+  private populationScatter: PopulationScatter | null = null;
+  private eventListContent!: HTMLElement;
+  private eventStatsContent!: HTMLElement;
+  private eventTabButtons!: NodeListOf<HTMLButtonElement>;
+  private activeEventTab: "list" | "stats" = "list";
 
   // Intro animation
   private introProgress = 0;
@@ -298,6 +304,19 @@ export class MergerScene implements Scene {
       this.sheetTypeBadge = document.getElementById("sheet-type-badge");
       this.sheetFullContent = document.querySelector(".sheet-full-content");
       this.mobileInfoSheet = document.getElementById("mobile-info-sheet");
+
+      // Event list tab elements
+      this.eventListContent = document.getElementById("event-list-content")!;
+      this.eventStatsContent = document.getElementById("event-stats-content")!;
+      this.eventTabButtons = document.querySelectorAll<HTMLButtonElement>(".event-tab");
+
+      // Population scatter chart (appended to stats tab)
+      this.populationScatter = new PopulationScatter();
+      this.eventStatsContent.appendChild(this.populationScatter.container);
+      this.populationScatter.setOnSelectEvent((event) => {
+        this.selectEvent(event);
+        if (this.viewMode === "map") this.setViewMode("event");
+      });
 
       // Waveform plot (appended to info panel body)
       this.waveformPlot = new WaveformPlot();
@@ -791,6 +810,22 @@ export class MergerScene implements Scene {
       this.renderEventList();
     });
 
+    // Event list tab toggle
+    this.eventTabButtons.forEach((tab) => {
+      this.addHandler(tab, "click", () => {
+        const tabName = tab.dataset.tab as "list" | "stats";
+        this.activeEventTab = tabName;
+        this.eventTabButtons.forEach((t) => t.classList.toggle("active", t.dataset.tab === tabName));
+        this.eventListContent.style.display = tabName === "list" ? "" : "none";
+        this.eventStatsContent.style.display = tabName === "stats" ? "" : "none";
+        if (tabName === "stats" && this.populationScatter) {
+          this.populationScatter.show();
+        } else if (this.populationScatter) {
+          this.populationScatter.hide();
+        }
+      });
+    });
+
     // Help
     this.addHandler(this.helpBtn, "click", () => this.toggleHelp());
     this.addHandler(this.helpCloseBtn, "click", () => this.toggleHelp());
@@ -1141,6 +1176,9 @@ export class MergerScene implements Scene {
 
     // Update noise curve plot (researcher mode)
     this.updateNoiseCurvePlot(mode);
+
+    // Update population scatter selection
+    if (this.populationScatter) this.populationScatter.setSelectedEvent(event.commonName);
 
     // ─── Populate mobile info sheet ───
     this.updateMobileSheet(event, type);
@@ -1536,6 +1574,7 @@ export class MergerScene implements Scene {
       if (lsStatus) lsStatus.textContent = `${this.events.length} events loaded. Preparing...`;
 
       this.universeMap.populate(this.events);
+      if (this.populationScatter) this.populationScatter.setEvents(this.events);
       this.renderEventList();
 
       const urlEvent = new URLSearchParams(window.location.search).get("event");
@@ -1592,6 +1631,7 @@ export class MergerScene implements Scene {
       };
       this.events = [fallback];
       this.universeMap.populate(this.events);
+      if (this.populationScatter) this.populationScatter.setEvents(this.events);
       this.selectEvent(fallback);
       this.renderEventList();
 
@@ -1791,6 +1831,12 @@ export class MergerScene implements Scene {
     if (this.noiseCurvePlot) {
       this.noiseCurvePlot.dispose();
       this.noiseCurvePlot = null;
+    }
+
+    // Clean up population scatter
+    if (this.populationScatter) {
+      this.populationScatter.dispose();
+      this.populationScatter = null;
     }
 
     // Clean up multi-messenger timeline

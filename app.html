@@ -354,6 +354,35 @@
       .sort-select:hover { border-color: rgba(255, 255, 255, 0.2); }
       .sort-select option { background: #1a1a2e; color: #fff; }
 
+      /* ─── Event List Tab Bar ─── */
+      .event-tab-bar {
+        display: flex;
+        gap: 2px;
+        margin-bottom: 8px;
+        background: rgba(255,255,255,0.04);
+        border-radius: 6px;
+        padding: 2px;
+      }
+      .event-tab {
+        flex: 1;
+        padding: 4px 0;
+        font-size: 10px;
+        font-weight: 500;
+        color: rgba(255,255,255,0.4);
+        background: transparent;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        font-family: -apple-system, system-ui, sans-serif;
+        letter-spacing: 0.03em;
+      }
+      .event-tab:hover { color: rgba(255,255,255,0.6); }
+      .event-tab.active {
+        background: rgba(255,255,255,0.08);
+        color: rgba(255,255,255,0.85);
+      }
+
       /* ─── Event List ─── */
       #event-list {
         position: fixed;
@@ -2406,26 +2435,33 @@
         <button class="panel-minimize-btn" data-minimize-target="event-list" title="Minimize">&#8722;</button>
       </div>
       <div class="panel-body">
-        <div id="event-count"></div>
-        <div class="search-row">
-          <input type="text" class="search-input" id="search-input" placeholder="Search events..." />
+        <div class="event-tab-bar">
+          <button class="event-tab active" data-tab="list">List</button>
+          <button class="event-tab" data-tab="stats">Stats</button>
         </div>
-        <div class="filter-bar">
-          <button class="filter-chip active" data-type="all">All</button>
-          <button class="filter-chip bbh" data-type="BBH">BBH</button>
-          <button class="filter-chip bns" data-type="BNS">BNS</button>
-          <button class="filter-chip nsbh" data-type="NSBH">NSBH</button>
+        <div id="event-list-content">
+          <div id="event-count"></div>
+          <div class="search-row">
+            <input type="text" class="search-input" id="search-input" placeholder="Search events..." />
+          </div>
+          <div class="filter-bar">
+            <button class="filter-chip active" data-type="all">All</button>
+            <button class="filter-chip bbh" data-type="BBH">BBH</button>
+            <button class="filter-chip bns" data-type="BNS">BNS</button>
+            <button class="filter-chip nsbh" data-type="NSBH">NSBH</button>
+          </div>
+          <div class="sort-row">
+            <label>Sort</label>
+            <select class="sort-select" id="sort-select">
+              <option value="snr">SNR</option>
+              <option value="mass">Mass</option>
+              <option value="distance">Distance</option>
+              <option value="date">Date</option>
+            </select>
+          </div>
+          <div id="event-list-items"></div>
         </div>
-        <div class="sort-row">
-          <label>Sort</label>
-          <select class="sort-select" id="sort-select">
-            <option value="snr">SNR</option>
-            <option value="mass">Mass</option>
-            <option value="distance">Distance</option>
-            <option value="date">Date</option>
-          </select>
-        </div>
-        <div id="event-list-items"></div>
+        <div id="event-stats-content" style="display:none;"></div>
       </div>
     </div>
 
