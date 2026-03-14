@@ -5,7 +5,8 @@ import { blackholeEquations } from "../../lib/equation-data";
 import { buildEquationsSection, updateEquationValues, removeEquationsSection } from "../../lib/equations";
 import { VRPanel } from "../../lib/VRPanel";
 import { VRTutorial } from "../../lib/vr-tutorial";
-import { integrateGeodesic, type GeodesicResult } from "../../lib/geodesic";
+import { integrateGeodesic, type GeodesicResult, type GeodesicOutcome } from "../../lib/geodesic";
+import { VeffPlot } from "../../lib/veff-plot";
 import vertexShader from "../../shaders/blackhole.vert.glsl?raw";
 import fragmentShader from "../../shaders/blackhole.frag.glsl?raw";
 import vrVertexShader from "../../shaders/blackhole-vr.vert.glsl?raw";
@@ -71,8 +72,16 @@ export class BlackHoleScene implements Scene {
   private bhHorizonMesh!: THREE.Mesh;
   private photonSphereRing!: THREE.Line;
   private iscoRing!: THREE.Line;
-  private geodesicTrails: THREE.Line[] = [];
+  private geodesicTrails: { line: THREE.Line; result: GeodesicResult; index: number; animating: boolean }[] = [];
   private activeTrail: { line: THREE.Line; points: THREE.Vector3[]; index: number; result: GeodesicResult } | null = null;
+  private veffPlot: VeffPlot | null = null;
+
+  private static readonly MAX_TRAILS = 10;
+  private static readonly OUTCOME_COLORS: Record<GeodesicOutcome, number> = {
+    captured: 0x6366f1,  // indigo
+    scattered: 0x22d3ee, // cyan
+    orbiting: 0xf59e0b,  // amber
+  };
   private launchIndicator: THREE.ArrowHelper | null = null;
   private geodesicRaycaster = new THREE.Raycaster();
   private geodesicClickSphere!: THREE.Mesh; // invisible sphere for click raycasting
@@ -608,6 +617,12 @@ export class BlackHoleScene implements Scene {
       this.updateGeodesicRadii();
       // Use a dark background for geodesic mode
       this.ctx.scene.background = new THREE.Color(0x050510);
+      // Show V_eff plot
+      if (!this.veffPlot) {
+        this.veffPlot = new VeffPlot();
+      }
+      this.veffPlot.setParams(this.mass, 5); // default L
+      this.veffPlot.show();
     } else {
       this.ctx.scene.background = null;
       // Clear active animation
@@ -618,6 +633,8 @@ export class BlackHoleScene implements Scene {
         this.launchIndicator.dispose();
         this.launchIndicator = null;
       }
+      // Hide V_eff plot
+      this.veffPlot?.hide();
     }
 
     // Update panel buttons
@@ -638,6 +655,12 @@ export class BlackHoleScene implements Scene {
     const lensingControls = this.panelEl?.querySelectorAll(".bh-lensing-only");
     lensingControls?.forEach((el) => {
       (el as HTMLElement).style.display = active ? "none" : "";
+    });
+
+    // Show/hide geodesic-only controls
+    const geodesicControls = this.panelEl?.querySelectorAll(".bh-geodesic-only");
+    geodesicControls?.forEach((el) => {
+      (el as HTMLElement).style.display = active ? "" : "none";
     });
   }
 
@@ -667,12 +690,14 @@ export class BlackHoleScene implements Scene {
 
   private clearGeodesicTrails() {
     for (const trail of this.geodesicTrails) {
-      this.geodesicGroup.remove(trail);
-      trail.geometry.dispose();
-      (trail.material as THREE.Material).dispose();
+      this.geodesicGroup.remove(trail.line);
+      trail.line.geometry.dispose();
+      (trail.line.material as THREE.Material).dispose();
     }
     this.geodesicTrails = [];
     this.activeTrail = null;
+    // Reset V_eff plot dot
+    this.veffPlot?.setDotPosition(null);
   }
 
   private launchPhoton(hitPoint: THREE.Vector3, direction: THREE.Vector3) {
@@ -680,7 +705,7 @@ export class BlackHoleScene implements Scene {
     const result = integrateGeodesic(hitPoint, direction, rs);
 
     // Color by outcome
-    const color = result.outcome === "captured" ? 0x6366f1 : 0x22d3ee; // indigo : cyan
+    const color = BlackHoleScene.OUTCOME_COLORS[result.outcome];
 
     // Create line with full geometry but only show first point initially
     const geo = new THREE.BufferGeometry().setFromPoints(result.points);
@@ -688,17 +713,24 @@ export class BlackHoleScene implements Scene {
     const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 });
     const line = new THREE.Line(geo, mat);
     this.geodesicGroup.add(line);
-    this.geodesicTrails.push(line);
+
+    const trailEntry = { line, result, index: 2, animating: true };
+    this.geodesicTrails.push(trailEntry);
 
     // Animate
     this.activeTrail = { line, points: result.points, index: 2, result };
 
-    // Limit total trails to 20
-    while (this.geodesicTrails.length > 20) {
+    // Ring buffer: remove oldest when limit reached
+    while (this.geodesicTrails.length > BlackHoleScene.MAX_TRAILS) {
       const old = this.geodesicTrails.shift()!;
-      this.geodesicGroup.remove(old);
-      old.geometry.dispose();
-      (old.material as THREE.Material).dispose();
+      this.geodesicGroup.remove(old.line);
+      old.line.geometry.dispose();
+      (old.line.material as THREE.Material).dispose();
+    }
+
+    // Update V_eff plot with this trail's L and rs
+    if (this.veffPlot) {
+      this.veffPlot.setParams(rs, result.L);
     }
 
     // Update info display
@@ -751,6 +783,9 @@ export class BlackHoleScene implements Scene {
             AR Mode
           </label>
         </div>
+      </div>
+      <div class="bh-row bh-geodesic-only" style="display:none">
+        <button class="bh-mode-btn" id="bh-clear-trails" style="width:100%">Clear Trails</button>
       </div>
       <div class="bh-geodesic-info"></div>
       <div class="bh-hint">Drag to orbit. Scroll to zoom.</div>
@@ -813,6 +848,10 @@ export class BlackHoleScene implements Scene {
     const geodesicBtn = this.panelEl.querySelector("#bh-mode-geodesic") as HTMLButtonElement;
     lensingBtn.addEventListener("click", () => this.setGeodesicMode(false));
     geodesicBtn.addEventListener("click", () => this.setGeodesicMode(true));
+
+    // Clear trails button
+    const clearBtn = this.panelEl.querySelector("#bh-clear-trails") as HTMLButtonElement;
+    clearBtn.addEventListener("click", () => this.clearGeodesicTrails());
   }
 
   private async startCameraFeed() {
@@ -1187,9 +1226,27 @@ export class BlackHoleScene implements Scene {
       if (advance > 0) {
         trail.index += advance;
         trail.line.geometry.setDrawRange(0, trail.index);
+        // Update V_eff dot at current particle radial position
+        if (this.veffPlot && trail.index < trail.points.length) {
+          const currentPos = trail.points[trail.index];
+          this.veffPlot.setDotPosition(currentPos.length());
+        }
+        // Sync trail entry index
+        const entry = this.geodesicTrails.find(t => t.line === trail.line);
+        if (entry) entry.index = trail.index;
       } else {
-        this.activeTrail = null; // animation complete
+        // Animation complete — show final dot position
+        if (this.veffPlot && trail.points.length > 0) {
+          const finalPos = trail.points[trail.points.length - 1];
+          this.veffPlot.setDotPosition(finalPos.length());
+        }
+        this.activeTrail = null;
       }
+    }
+
+    // Render V_eff plot
+    if (this.geodesicMode && this.veffPlot) {
+      this.veffPlot.render();
     }
 
     // Smooth camera interpolation (desktop only)
@@ -1290,6 +1347,12 @@ export class BlackHoleScene implements Scene {
     }
     this.ctx.scene.remove(this.geodesicGroup);
     this.geodesicMode = false;
+
+    // Clean up V_eff plot
+    if (this.veffPlot) {
+      this.veffPlot.dispose();
+      this.veffPlot = null;
+    }
 
     if (this.vrPanel) {
       this.ctx.xrManager?.unregisterPanel(this.vrPanel);

@@ -16,6 +16,7 @@ export type GeodesicOutcome = "captured" | "scattered" | "orbiting";
 export interface GeodesicResult {
   points: THREE.Vector3[];
   outcome: GeodesicOutcome;
+  L: number; // conserved angular momentum magnitude
 }
 
 const MAX_STEPS = 5000;
@@ -119,5 +120,5 @@ export function integrateGeodesic(
     points.push(pos.clone());
   }
 
-  return { points, outcome };
+  return { points, outcome, L: Math.sqrt(L2) };
 }
