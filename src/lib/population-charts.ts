@@ -422,7 +422,7 @@ export class ChirpMassHistogram {
   constructor() {
     this.container = document.createElement("div");
     this.container.id = "chirp-mass-histogram";
-    this.container.style.cssText = "display:none;width:100%;margin-top:12px;";
+    this.container.style.cssText = "display:none;width:100%;";
 
     // Title
     const title = document.createElement("div");
@@ -776,7 +776,7 @@ export class ChiEffHistogram {
   constructor() {
     this.container = document.createElement("div");
     this.container.id = "chi-eff-histogram";
-    this.container.style.cssText = "display:none;width:100%;margin-top:12px;";
+    this.container.style.cssText = "display:none;width:100%;";
 
     const title = document.createElement("div");
     title.style.cssText =
@@ -1062,7 +1062,7 @@ export class ChirpMassDistanceScatter {
   constructor() {
     this.container = document.createElement("div");
     this.container.id = "chirp-mass-distance-scatter";
-    this.container.style.cssText = "display:none;width:100%;margin-top:12px;";
+    this.container.style.cssText = "display:none;width:100%;";
 
     const title = document.createElement("div");
     title.style.cssText =

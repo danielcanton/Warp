@@ -223,6 +223,7 @@ export class MergerScene implements Scene {
   private chirpMassHistogram: ChirpMassHistogram | null = null;
   private chiEffHistogram: ChiEffHistogram | null = null;
   private chirpMassDistanceScatter: ChirpMassDistanceScatter | null = null;
+  private statsGrid!: HTMLDivElement;
   private eventListContent!: HTMLElement;
   private eventStatsContent!: HTMLElement;
   private eventTabButtons!: NodeListOf<HTMLButtonElement>;
@@ -313,18 +314,23 @@ export class MergerScene implements Scene {
       this.eventStatsContent = document.getElementById("event-stats-content")!;
       this.eventTabButtons = document.querySelectorAll<HTMLButtonElement>(".event-tab");
 
-      // Population scatter chart (appended to stats tab)
+      // Stats grid container for 2x2 desktop / single-column mobile layout
+      this.statsGrid = document.createElement("div");
+      this.statsGrid.className = "stats-grid";
+      this.eventStatsContent.appendChild(this.statsGrid);
+
+      // Population scatter chart (appended to stats grid)
       this.populationScatter = new PopulationScatter();
       this.populationScatter.setViewMode(getViewMode());
-      this.eventStatsContent.appendChild(this.populationScatter.container);
+      this.statsGrid.appendChild(this.populationScatter.container);
       this.populationScatter.setOnSelectEvent((event) => {
         this.selectEvent(event);
         if (this.viewMode === "map") this.setViewMode("event");
       });
 
-      // Chirp mass histogram (appended to stats tab after scatter)
+      // Chirp mass histogram (appended to stats grid)
       this.chirpMassHistogram = new ChirpMassHistogram();
-      this.eventStatsContent.appendChild(this.chirpMassHistogram.container);
+      this.statsGrid.appendChild(this.chirpMassHistogram.container);
       this.chirpMassHistogram.setOnSelectEvent((event) => {
         this.selectEvent(event);
         if (this.viewMode === "map") this.setViewMode("event");
@@ -332,7 +338,7 @@ export class MergerScene implements Scene {
 
       // Chi_eff histogram (researcher mode only)
       this.chiEffHistogram = new ChiEffHistogram();
-      this.eventStatsContent.appendChild(this.chiEffHistogram.container);
+      this.statsGrid.appendChild(this.chiEffHistogram.container);
       this.chiEffHistogram.setOnSelectEvent((event) => {
         this.selectEvent(event);
         if (this.viewMode === "map") this.setViewMode("event");
@@ -341,11 +347,14 @@ export class MergerScene implements Scene {
       // Chirp mass vs distance scatter (researcher mode only)
       this.chirpMassDistanceScatter = new ChirpMassDistanceScatter();
       this.chirpMassDistanceScatter.setViewMode(getViewMode());
-      this.eventStatsContent.appendChild(this.chirpMassDistanceScatter.container);
+      this.statsGrid.appendChild(this.chirpMassDistanceScatter.container);
       this.chirpMassDistanceScatter.setOnSelectEvent((event) => {
         this.selectEvent(event);
         if (this.viewMode === "map") this.setViewMode("event");
       });
+
+      // Gate Stats tab visibility based on initial view mode
+      this.applyStatsTabGating(getViewMode());
 
       // Waveform plot (appended to info panel body)
       this.waveformPlot = new WaveformPlot();
@@ -402,15 +411,10 @@ export class MergerScene implements Scene {
         this.updateNoiseCurvePlot(mode);
         if (this.populationScatter) this.populationScatter.setViewMode(mode);
         if (this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.setViewMode(mode);
-        // Show/hide researcher-only charts
+        // Gate Stats tab and chart visibility
+        this.applyStatsTabGating(mode);
         if (this.activeEventTab === "stats") {
-          if (mode === "researcher") {
-            if (this.chiEffHistogram) this.chiEffHistogram.show();
-            if (this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.show();
-          } else {
-            if (this.chiEffHistogram) this.chiEffHistogram.hide();
-            if (this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.hide();
-          }
+          this.showStatsCharts(mode);
         }
       });
     }
@@ -860,16 +864,9 @@ export class MergerScene implements Scene {
         this.eventListContent.style.display = tabName === "list" ? "" : "none";
         this.eventStatsContent.style.display = tabName === "stats" ? "" : "none";
         if (tabName === "stats") {
-          if (this.populationScatter) this.populationScatter.show();
-          if (this.chirpMassHistogram) this.chirpMassHistogram.show();
-          const isResearcher = getViewMode() === "researcher";
-          if (isResearcher && this.chiEffHistogram) this.chiEffHistogram.show();
-          if (isResearcher && this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.show();
+          this.showStatsCharts(getViewMode());
         } else {
-          if (this.populationScatter) this.populationScatter.hide();
-          if (this.chirpMassHistogram) this.chirpMassHistogram.hide();
-          if (this.chiEffHistogram) this.chiEffHistogram.hide();
-          if (this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.hide();
+          this.hideAllStatsCharts();
         }
       });
     });
@@ -973,6 +970,56 @@ export class MergerScene implements Scene {
     // Explorer: play/pause only — hide speed button/label
     this.speedBtn.style.display = mode === "explorer" ? "none" : "";
     this.speedLabel.style.display = mode === "explorer" ? "none" : "";
+  }
+
+  /** Hide Stats tab button in Explorer mode; force back to List tab if needed */
+  private applyStatsTabGating(mode: ViewMode): void {
+    const statsTabBtn = Array.from(this.eventTabButtons).find(
+      (t) => t.dataset.tab === "stats",
+    );
+    if (!statsTabBtn) return;
+
+    if (mode === "explorer") {
+      statsTabBtn.style.display = "none";
+      // If currently on Stats tab, switch back to List
+      if (this.activeEventTab === "stats") {
+        this.activeEventTab = "list";
+        this.eventTabButtons.forEach((t) =>
+          t.classList.toggle("active", t.dataset.tab === "list"),
+        );
+        this.eventListContent.style.display = "";
+        this.eventStatsContent.style.display = "none";
+        this.hideAllStatsCharts();
+      }
+    } else {
+      statsTabBtn.style.display = "";
+    }
+  }
+
+  /** Show charts appropriate for the current view mode */
+  private showStatsCharts(mode: ViewMode): void {
+    if (mode === "explorer") return;
+
+    // Student + Researcher: m1 vs m2 scatter (no ellipses for student) + chirp mass histogram
+    if (this.populationScatter) this.populationScatter.show();
+    if (this.chirpMassHistogram) this.chirpMassHistogram.show();
+
+    // Researcher only: chi_eff histogram + chirp mass vs distance scatter
+    if (mode === "researcher") {
+      if (this.chiEffHistogram) this.chiEffHistogram.show();
+      if (this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.show();
+    } else {
+      if (this.chiEffHistogram) this.chiEffHistogram.hide();
+      if (this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.hide();
+    }
+  }
+
+  /** Hide all stats charts */
+  private hideAllStatsCharts(): void {
+    if (this.populationScatter) this.populationScatter.hide();
+    if (this.chirpMassHistogram) this.chirpMassHistogram.hide();
+    if (this.chiEffHistogram) this.chiEffHistogram.hide();
+    if (this.chirpMassDistanceScatter) this.chirpMassDistanceScatter.hide();
   }
 
   /** Apply mode-gating to the info panel elements */
