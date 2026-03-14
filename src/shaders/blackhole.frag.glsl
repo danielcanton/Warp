@@ -90,20 +90,26 @@ float computePhotonSphere(float rs, float spin) {
 
 // ─── Accretion disk ─────────────────────────────────────────────────
 
-// Temperature-based coloring: hot inner → cool outer
-vec3 diskColor(float r, float rs) {
+// Temperature-based coloring with Doppler beaming
+// pos: disk-plane position, viewDir: ray direction at hit point
+vec3 diskColor(float r, float rs, vec3 pos, vec3 viewDir) {
   float innerEdge = computeISCO(rs, uSpin);
   float outerEdge = rs * 15.0;
+  float M = rs * 0.5;
 
   // Normalized radius within disk
   float t = clamp((r - innerEdge) / (outerEdge - innerEdge), 0.0, 1.0);
 
   // Temperature profile: T ~ r^(-3/4) for thin disk
-  float temp = pow(1.0 - t, 0.75);
+  // Boost temperature at high spin: smaller ISCO → hotter peak
+  float schwarzISCO = 3.0 * rs;  // ISCO at a=0
+  float spinTempBoost = schwarzISCO / max(innerEdge, 0.01);  // >1 at high spin
+  float temp = pow(1.0 - t, 0.75) * clamp(spinTempBoost, 1.0, 3.0);
+  temp = clamp(temp, 0.0, 1.0);
 
-  // Hot: blue-white, Cool: red-orange
-  vec3 hot = vec3(0.8, 0.85, 1.0);
-  vec3 warm = vec3(1.0, 0.6, 0.2);
+  // Color palette: shifted bluer at high spin
+  vec3 hot = vec3(0.7, 0.8, 1.0);
+  vec3 warm = mix(vec3(1.0, 0.6, 0.2), vec3(0.8, 0.75, 1.0), uSpin * 0.5);
   vec3 cool = vec3(0.8, 0.2, 0.05);
 
   vec3 color;
@@ -113,18 +119,49 @@ vec3 diskColor(float r, float rs) {
     color = mix(cool, warm, temp * 2.0);
   }
 
-  // Doppler shift approximation (one side brighter)
-  float phi = atan(r, r); // simplified
+  // ─── Relativistic Doppler beaming ──────────────────────────────
+  // Prograde orbital velocity: v_phi = sqrt(M/r) / (1 + a*sqrt(M/r^3))
+  float sqrtMr = sqrt(M / r);
+  float vPhi = sqrtMr / (1.0 + uSpin * sqrt(M / (r * r * r)));
+
+  // Orbital velocity vector (tangent to circular orbit in equatorial plane)
+  // For prograde orbit around +Y axis: v = vPhi * (-sin(phi), 0, cos(phi))
+  float phi = atan(pos.z, pos.x);
+  vec3 vOrbit = vPhi * vec3(-sin(phi), 0.0, cos(phi));
+
+  // Doppler factor: delta = 1 / (gamma * (1 - v . n_hat))
+  float v2 = vPhi * vPhi;
+  float gamma = 1.0 / sqrt(max(1.0 - v2, 0.001));
+  float vDotN = dot(vOrbit, normalize(viewDir));
+  float doppler = 1.0 / (gamma * (1.0 - vDotN));
+  doppler = clamp(doppler, 0.2, 5.0);  // prevent extreme values
+
+  // Apply Doppler: intensity scales as delta^3, color shifts
+  float dopplerIntensity = doppler * doppler * doppler;
+
+  // Doppler color shift: blueshifted (approaching) vs redshifted (receding)
+  vec3 dopplerColor = color;
+  if (doppler > 1.0) {
+    // Approaching: shift toward blue-white
+    float blueShift = clamp((doppler - 1.0) * 0.5, 0.0, 1.0);
+    dopplerColor = mix(color, vec3(0.8, 0.85, 1.0), blueShift);
+  } else {
+    // Receding: shift toward red
+    float redShift = clamp((1.0 - doppler) * 0.5, 0.0, 1.0);
+    dopplerColor = mix(color, vec3(1.0, 0.3, 0.1), redShift);
+  }
+
+  // Time-varying brightness (retained from original)
   float brightness = 1.0 + 0.3 * sin(uTime * 0.5);
 
   // Radial brightness falloff
   float falloff = smoothstep(outerEdge, innerEdge, r);
 
-  return color * falloff * brightness * 2.5;
+  return dopplerColor * falloff * brightness * dopplerIntensity * 2.5;
 }
 
 // Check if ray hits the thin accretion disk (y ≈ 0 plane)
-bool hitDisk(vec3 pos, float rs, out vec3 color) {
+bool hitDisk(vec3 pos, float rs, vec3 viewDir, out vec3 color) {
   float r = length(pos);
   float innerEdge = computeISCO(rs, uSpin);
   float outerEdge = rs * 15.0;
@@ -137,7 +174,7 @@ bool hitDisk(vec3 pos, float rs, out vec3 color) {
     float phi = atan(pos.z, pos.x);
     float spiral = sin(phi * 3.0 - log(r) * 4.0 + uTime * 0.3) * 0.3 + 0.7;
 
-    color = diskColor(r, rs) * spiral * opacity;
+    color = diskColor(r, rs, pos, viewDir) * spiral * opacity;
     return true;
   }
   return false;
@@ -233,7 +270,7 @@ void main() {
     // Check accretion disk hit
     if (uShowDisk > 0.5) {
       vec3 dColor;
-      if (hitDisk(pos, rs, dColor)) {
+      if (hitDisk(pos, rs, vel, dColor)) {
         // Semi-transparent disk: accumulate color
         float alpha = 0.15;
         finalColor += dColor * alpha * (1.0 - length(finalColor) * 0.3);

@@ -85,14 +85,23 @@ float computePhotonSphere(float rs, float spin) {
 
 // ─── Accretion disk ─────────────────────────────────────────────────
 
-vec3 diskColor(float r, float rs) {
+// Temperature-based coloring with Doppler beaming
+vec3 diskColor(float r, float rs, vec3 pos, vec3 viewDir) {
   float innerEdge = computeISCO(rs, uSpin);
   float outerEdge = rs * 15.0;
-  float t = clamp((r - innerEdge) / (outerEdge - innerEdge), 0.0, 1.0);
-  float temp = pow(1.0 - t, 0.75);
+  float M = rs * 0.5;
 
-  vec3 hot = vec3(0.8, 0.85, 1.0);
-  vec3 warm = vec3(1.0, 0.6, 0.2);
+  float t = clamp((r - innerEdge) / (outerEdge - innerEdge), 0.0, 1.0);
+
+  // Boost temperature at high spin: smaller ISCO → hotter peak
+  float schwarzISCO = 3.0 * rs;
+  float spinTempBoost = schwarzISCO / max(innerEdge, 0.01);
+  float temp = pow(1.0 - t, 0.75) * clamp(spinTempBoost, 1.0, 3.0);
+  temp = clamp(temp, 0.0, 1.0);
+
+  // Color palette: shifted bluer at high spin
+  vec3 hot = vec3(0.7, 0.8, 1.0);
+  vec3 warm = mix(vec3(1.0, 0.6, 0.2), vec3(0.8, 0.75, 1.0), uSpin * 0.5);
   vec3 cool = vec3(0.8, 0.2, 0.05);
 
   vec3 color;
@@ -102,13 +111,37 @@ vec3 diskColor(float r, float rs) {
     color = mix(cool, warm, temp * 2.0);
   }
 
+  // ─── Relativistic Doppler beaming ──────────────────────────────
+  float sqrtMr = sqrt(M / r);
+  float vPhi = sqrtMr / (1.0 + uSpin * sqrt(M / (r * r * r)));
+
+  float phi = atan(pos.z, pos.x);
+  vec3 vOrbit = vPhi * vec3(-sin(phi), 0.0, cos(phi));
+
+  float v2 = vPhi * vPhi;
+  float gamma = 1.0 / sqrt(max(1.0 - v2, 0.001));
+  float vDotN = dot(vOrbit, normalize(viewDir));
+  float doppler = 1.0 / (gamma * (1.0 - vDotN));
+  doppler = clamp(doppler, 0.2, 5.0);
+
+  float dopplerIntensity = doppler * doppler * doppler;
+
+  vec3 dopplerColor = color;
+  if (doppler > 1.0) {
+    float blueShift = clamp((doppler - 1.0) * 0.5, 0.0, 1.0);
+    dopplerColor = mix(color, vec3(0.8, 0.85, 1.0), blueShift);
+  } else {
+    float redShift = clamp((1.0 - doppler) * 0.5, 0.0, 1.0);
+    dopplerColor = mix(color, vec3(1.0, 0.3, 0.1), redShift);
+  }
+
   float brightness = 1.0 + 0.3 * sin(uTime * 0.5);
   float falloff = smoothstep(outerEdge, innerEdge, r);
 
-  return color * falloff * brightness * 2.5;
+  return dopplerColor * falloff * brightness * dopplerIntensity * 2.5;
 }
 
-bool hitDisk(vec3 pos, float rs, out vec3 color) {
+bool hitDisk(vec3 pos, float rs, vec3 viewDir, out vec3 color) {
   float r = length(pos);
   float innerEdge = computeISCO(rs, uSpin);
   float outerEdge = rs * 15.0;
@@ -117,7 +150,7 @@ bool hitDisk(vec3 pos, float rs, out vec3 color) {
     float opacity = smoothstep(outerEdge, innerEdge + 1.0, r) * 0.9;
     float phi = atan(pos.z, pos.x);
     float spiral = sin(phi * 3.0 - log(r) * 4.0 + uTime * 0.3) * 0.3 + 0.7;
-    color = diskColor(r, rs) * spiral * opacity;
+    color = diskColor(r, rs, pos, viewDir) * spiral * opacity;
     return true;
   }
   return false;
@@ -216,7 +249,7 @@ void main() {
     if (uShowDisk > 0.5) {
       vec3 dColor;
       vec3 diskPos = pos - bhPos; // disk relative to BH center
-      if (hitDisk(diskPos, rs, dColor)) {
+      if (hitDisk(diskPos, rs, vel, dColor)) {
         float alpha = 0.15;
         diskAccum += dColor * alpha * (1.0 - length(diskAccum) * 0.3);
       }
