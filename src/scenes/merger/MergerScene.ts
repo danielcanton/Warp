@@ -865,6 +865,7 @@ export class MergerScene implements Scene {
       m2: event.mass_2_source,
       distance: event.luminosity_distance,
       finalMass: event.final_mass_source ?? 0,
+      chiEff: event.chi_eff ?? 0,
     };
 
     const section = await buildEquationsSection(mergerEquations, mode, values);

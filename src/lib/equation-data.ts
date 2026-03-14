@@ -3,6 +3,7 @@
 // and the equations module renders them with KaTeX.
 
 import type { ViewMode } from "./view-mode";
+import { computeQNMModes } from "./qnm";
 
 export interface EquationDef {
   id: string;
@@ -59,6 +60,31 @@ export const mergerEquations: EquationDef[] = [
     latex: String.raw`L_{\text{peak}} \sim \frac{c^5}{G} \approx 3.6 \times 10^{52}\;\text{W}`,
     label: "Briefly outshines the observable universe",
     modes: ["researcher"],
+  },
+  {
+    id: "qnm-frequency",
+    latex: String.raw`f_{\text{QNM}} = \frac{\omega_{lmn}(a_f)}{2\pi\, M_f}`,
+    label: "The remnant black hole rings at this frequency",
+    modes: ["student", "researcher"],
+    compute: (p) => {
+      if (!p.m1 || !p.m2) return "";
+      const modes = computeQNMModes(p.m1, p.m2, p.chiEff ?? 0, 0, ["2,2,0"]);
+      if (!modes.length) return "";
+      return `f₂₂₀ = ${modes[0].frequency.toFixed(0)} Hz`;
+    },
+  },
+  {
+    id: "qnm-damping",
+    latex: String.raw`\tau = \frac{Q_{lmn}}{\pi\, f_{\text{QNM}}}`,
+    label: "How quickly the ringdown fades",
+    modes: ["researcher"],
+    compute: (p) => {
+      if (!p.m1 || !p.m2) return "";
+      const modes = computeQNMModes(p.m1, p.m2, p.chiEff ?? 0, 0, ["2,2,0"]);
+      if (!modes.length) return "";
+      const tau_ms = modes[0].dampingTime * 1000;
+      return `τ₂₂₀ = ${tau_ms.toFixed(2)} ms (Q = ${modes[0].qualityFactor.toFixed(1)})`;
+    },
   },
 ];
 
