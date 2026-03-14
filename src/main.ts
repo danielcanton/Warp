@@ -227,7 +227,7 @@ if (sidebarTourBtn) {
   sidebarTourBtn.addEventListener("click", () => {
     const tourMenu = document.getElementById("tour-menu");
     if (tourMenu) {
-      tourMenu.style.display = tourMenu.style.display === "none" ? "" : "none";
+      tourMenu.classList.toggle("show");
     }
   });
 }

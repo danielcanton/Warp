@@ -383,6 +383,22 @@
         color: rgba(255,255,255,0.85);
       }
 
+      /* ─── Stats Content Layout ─── */
+      #event-stats-content {
+        overflow-y: auto;
+        max-height: calc(100vh - 200px);
+        -webkit-overflow-scrolling: touch;
+      }
+      /* Desktop: 2x2 grid */
+      .stats-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .stats-grid > div {
+        min-width: 0;
+      }
+
       /* ─── Event List ─── */
       #event-list {
         position: fixed;
@@ -843,8 +859,8 @@
       #tour-menu {
         position: fixed;
         bottom: 80px;
-        left: 50%;
-        transform: translateX(-50%);
+        left: calc(var(--sidebar-current) + 24px);
+        transition: left 0.25s ease;
         z-index: 25;
         padding: 12px 16px;
         min-width: 240px;
@@ -1122,6 +1138,17 @@
         #event-info .info-catalog { display: none; }
         .info-equations { display: none; }
         .type-badge { margin-bottom: 0; font-size: 10px; padding: 1px 6px; }
+
+        /* Stats grid — stack vertically on mobile */
+        .stats-grid {
+          grid-template-columns: 1fr;
+        }
+        .stats-grid canvas {
+          height: 160px !important;
+        }
+        #event-stats-content {
+          max-height: calc(100vh - 160px);
+        }
 
         /* Event list — mobile overlay (hidden by default, toggled via JS) */
         #event-list {
@@ -1691,6 +1718,10 @@
         z-index: 31;
         min-width: 220px;
         padding: 8px;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
         display: none;
       }
       #sidebar-mode-dropdown.show { display: block; }
@@ -2246,27 +2277,10 @@
 
       <!-- Tools -->
       <div class="sidebar-section sidebar-tools">
-        <div style="position:relative;">
           <button class="sidebar-item" id="sidebar-mode-btn" title="View Mode">
             <span class="sidebar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
             <span class="sidebar-label">View Mode</span>
           </button>
-          <div id="sidebar-mode-dropdown" class="glass">
-            <div class="mode-label">View Mode</div>
-            <button class="mode-option active" data-mode="explorer">
-              Explorer
-              <span class="mode-option-desc">Clean visuals, minimal data</span>
-            </button>
-            <button class="mode-option" data-mode="student">
-              Student
-              <span class="mode-option-desc">Labels, equations, guided info</span>
-            </button>
-            <button class="mode-option" data-mode="researcher">
-              Researcher
-              <span class="mode-option-desc">Full data tables, parameters, exports</span>
-            </button>
-          </div>
-        </div>
         <button class="sidebar-item" id="sidebar-tour-btn" title="Tours">
           <span class="sidebar-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg></span>
           <span class="sidebar-label">Tours</span>
@@ -2287,6 +2301,23 @@
         </a>
       </div>
     </nav>
+
+    <!-- View Mode Dropdown (outside sidebar to avoid overflow clipping) -->
+    <div id="sidebar-mode-dropdown" class="glass">
+      <div class="mode-label">View Mode</div>
+      <button class="mode-option active" data-mode="explorer">
+        Explorer
+        <span class="mode-option-desc">Clean visuals, minimal data</span>
+      </button>
+      <button class="mode-option" data-mode="student">
+        Student
+        <span class="mode-option-desc">Labels, equations, guided info</span>
+      </button>
+      <button class="mode-option" data-mode="researcher">
+        Researcher
+        <span class="mode-option-desc">Full data tables, parameters, exports</span>
+      </button>
+    </div>
 
     <!-- Map Tooltip -->
     <div id="map-tooltip" class="glass"></div>
