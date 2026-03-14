@@ -149,8 +149,15 @@ sceneManager.switchScene(startScene);
 
 const initialMode = initViewMode();
 
-const sidebarModeBtn = document.getElementById("sidebar-mode-btn")!;
-const dropdown = document.getElementById("sidebar-mode-dropdown")!;
+const modeLabelsMap: Record<ViewMode, string> = {
+  explorer: "Explorer",
+  student: "Student",
+  researcher: "Researcher",
+};
+
+const viewModeBtn = document.getElementById("view-mode-btn")!;
+const viewModeLabel = document.getElementById("view-mode-label")!;
+const dropdown = document.getElementById("view-mode-dropdown")!;
 const modeOptions = dropdown.querySelectorAll<HTMLButtonElement>(".mode-option");
 
 // Set initial active state from resolved mode
@@ -158,18 +165,12 @@ function updateModeUI(mode: ViewMode): void {
   modeOptions.forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.mode === mode);
   });
+  viewModeLabel.textContent = modeLabelsMap[mode];
 }
 updateModeUI(initialMode);
 
-// Position dropdown next to the mode button
-function positionDropdown() {
-  const rect = sidebarModeBtn.getBoundingClientRect();
-  dropdown.style.top = `${rect.top}px`;
-}
-
-sidebarModeBtn.addEventListener("click", (e) => {
+viewModeBtn.addEventListener("click", (e) => {
   e.stopPropagation();
-  positionDropdown();
   dropdown.classList.toggle("show");
 });
 
@@ -183,8 +184,8 @@ modeOptions.forEach((btn) => {
 
 // Close dropdown on click outside
 document.addEventListener("click", (e) => {
-  if (!(e.target as HTMLElement).closest("#sidebar-mode-btn") &&
-      !(e.target as HTMLElement).closest("#sidebar-mode-dropdown")) {
+  if (!(e.target as HTMLElement).closest("#view-mode-btn") &&
+      !(e.target as HTMLElement).closest("#view-mode-dropdown")) {
     dropdown.classList.remove("show");
   }
 });
