@@ -18,11 +18,19 @@ const SOFTENING = 0.5;
 const SUBSTEPS = 8;
 const MAX_TRAIL = 300;
 const TOP_TRAIL_COUNT = 10;
+/** Dark matter halo mass as a multiple of visible galaxy mass. */
+const DM_HALO_RATIO = 5.0;
+/** Base Hubble parameter for expansion. */
+const H0 = 0.012;
 
 let nextId = 0;
 
 export class CosmologySystem {
   galaxies: Galaxy[] = [];
+  /** 0–2: fraction of dark matter halo mass applied (1 = 100%). */
+  darkMatterFraction = 1.0;
+  /** 0–2: fraction of dark energy driving Hubble expansion (1 = 100%). */
+  darkEnergyFraction = 1.0;
 
   addGalaxy(opts: {
     mass: number;
@@ -121,26 +129,36 @@ export class CosmologySystem {
     const n = this.galaxies.length;
     const eps2 = SOFTENING * SOFTENING;
     const diff = new Vector3();
+    const dmScale = this.darkMatterFraction * DM_HALO_RATIO;
 
     for (let i = 0; i < n; i++) {
       this.galaxies[i].acceleration.set(0, 0, 0);
     }
 
     for (let i = 0; i < n; i++) {
+      // Effective mass = visible mass + dark matter halo contribution
+      const mi = this.galaxies[i].mass * (1 + dmScale);
       for (let j = i + 1; j < n; j++) {
+        const mj = this.galaxies[j].mass * (1 + dmScale);
         diff.subVectors(this.galaxies[j].position, this.galaxies[i].position);
         const dist2 = diff.lengthSq() + eps2;
         const dist = Math.sqrt(dist2);
         const force = G / (dist2 * dist);
 
-        this.galaxies[i].acceleration.addScaledVector(
-          diff,
-          force * this.galaxies[j].mass,
-        );
-        this.galaxies[j].acceleration.addScaledVector(
-          diff,
-          -force * this.galaxies[i].mass,
-        );
+        this.galaxies[i].acceleration.addScaledVector(diff, force * mj);
+        this.galaxies[j].acceleration.addScaledVector(diff, -force * mi);
+      }
+    }
+
+    // Hubble flow: expansion away from center of mass
+    if (this.darkEnergyFraction > 0) {
+      const H = H0 * this.darkEnergyFraction;
+      const com = this.getCenterOfMass();
+      const rVec = new Vector3();
+      for (let i = 0; i < n; i++) {
+        rVec.subVectors(this.galaxies[i].position, com);
+        // a_expansion = H * r (simplified Hubble acceleration)
+        this.galaxies[i].acceleration.addScaledVector(rVec, H);
       }
     }
   }

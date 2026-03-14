@@ -43,6 +43,8 @@ export class CosmologyScene implements Scene {
         onPlayPause: () => { this.isPlaying = !this.isPlaying; },
         onReset: () => this.loadPreset(0),
         onSpeedChange: (s) => { this.speed = s; },
+        onDarkMatterChange: (f) => { this.system.darkMatterFraction = f; },
+        onDarkEnergyChange: (f) => { this.system.darkEnergyFraction = f; },
       });
     } else {
       scene.add(this.group);

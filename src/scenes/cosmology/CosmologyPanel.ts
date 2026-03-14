@@ -5,6 +5,8 @@ export interface CosmologyPanelCallbacks {
   onPlayPause: () => void;
   onReset: () => void;
   onSpeedChange: (speed: number) => void;
+  onDarkMatterChange: (fraction: number) => void;
+  onDarkEnergyChange: (fraction: number) => void;
 }
 
 export class CosmologyPanel {
@@ -59,6 +61,24 @@ export class CosmologyPanel {
       </div>
 
       <div class="cos-collapsible" id="cos-collapsible">
+        <div class="cos-section">
+          <div class="cos-row cos-slider-row">
+            <label>Dark Matter</label>
+            <input type="range" class="cos-slider" id="cos-dm" min="0" max="200" value="100" />
+            <span class="cos-speed-val" id="cos-dm-val">100%</span>
+          </div>
+          <div class="cos-hint">How much invisible mass holds galaxies together</div>
+        </div>
+
+        <div class="cos-section">
+          <div class="cos-row cos-slider-row">
+            <label>Dark Energy</label>
+            <input type="range" class="cos-slider" id="cos-de" min="0" max="200" value="100" />
+            <span class="cos-speed-val" id="cos-de-val">100%</span>
+          </div>
+          <div class="cos-hint">How fast the universe expands</div>
+        </div>
+
         <div class="cos-info">
           <span>Galaxies: <strong id="cos-galaxy-count">0</strong></span>
         </div>
@@ -108,6 +128,24 @@ export class CosmologyPanel {
       const speed = this.speeds[this.speedIndex];
       this.speedValEl.textContent = `${speed}x`;
       this.callbacks.onSpeedChange(speed);
+    });
+
+    // Dark Matter
+    const dmSlider = panel.querySelector("#cos-dm") as HTMLInputElement;
+    const dmVal = panel.querySelector("#cos-dm-val")!;
+    dmSlider.addEventListener("input", () => {
+      const pct = parseInt(dmSlider.value);
+      dmVal.textContent = `${pct}%`;
+      this.callbacks.onDarkMatterChange(pct / 100);
+    });
+
+    // Dark Energy
+    const deSlider = panel.querySelector("#cos-de") as HTMLInputElement;
+    const deVal = panel.querySelector("#cos-de-val")!;
+    deSlider.addEventListener("input", () => {
+      const pct = parseInt(deSlider.value);
+      deVal.textContent = `${pct}%`;
+      this.callbacks.onDarkEnergyChange(pct / 100);
     });
 
     return panel;
