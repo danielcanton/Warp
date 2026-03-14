@@ -39,6 +39,10 @@ export class BlackHoleScene implements Scene {
   private elapsed = 0;
   private pinchStartDist = 0; // for pinch-zoom
 
+  // Starfield texture state
+  private useStarfield = false;
+  private starfieldTexture: THREE.Texture | null = null;
+
   // AR mode state
   private arModeActive = false;
   private cameraStream: MediaStream | null = null;
@@ -94,6 +98,8 @@ export class BlackHoleScene implements Scene {
           uUseCamera: { value: 0.0 },
           uMirrorX: { value: 1.0 },
           uInvCameraMatrix: { value: new THREE.Matrix4() },
+          uStarfield: { value: new THREE.Texture() },
+          uUseStarfield: { value: 0.0 },
         },
         depthWrite: false,
         depthTest: false,
@@ -122,6 +128,8 @@ export class BlackHoleScene implements Scene {
           uCameraFeed: { value: new THREE.Texture() },
           uBHCenter: { value: new THREE.Vector3() },
           uSphereRadius: { value: 2.0 },
+          uStarfield: { value: new THREE.Texture() },
+          uUseStarfield: { value: 0.0 },
         },
         side: THREE.DoubleSide,
         depthWrite: false,
@@ -132,6 +140,17 @@ export class BlackHoleScene implements Scene {
       this.vrSphere.frustumCulled = false;
       this.vrSphere.visible = false;
       scene.add(this.vrSphere);
+
+      // Load starfield equirectangular panorama (ESO Milky Way, CC-BY 4.0)
+      new THREE.TextureLoader().load("textures/milkyway.jpg", (tex) => {
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        this.starfieldTexture = tex;
+        this.bhMaterial.uniforms.uStarfield.value = tex;
+        this.vrMaterial.uniforms.uStarfield.value = tex;
+      });
     } else {
       // Re-add meshes to scene on re-entry
       scene.add(this.quad);
@@ -399,6 +418,7 @@ export class BlackHoleScene implements Scene {
 
     // Sync VR material uniforms
     this.vrMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
+    this.vrMaterial.uniforms.uUseStarfield.value = this.useStarfield ? 1.0 : 0.0;
 
     // BH at eye level 5m ahead — reduced mass for manageable VR scale
     this.vrMaterial.uniforms.uMass.value = 0.2;
@@ -541,6 +561,12 @@ export class BlackHoleScene implements Scene {
         </div>
         <div class="bh-row">
           <label class="bh-toggle-label">
+            <input type="checkbox" id="bh-starfield" />
+            Starfield
+          </label>
+        </div>
+        <div class="bh-row">
+          <label class="bh-toggle-label">
             <input type="checkbox" id="bh-ar" />
             AR Mode
           </label>
@@ -578,6 +604,15 @@ export class BlackHoleScene implements Scene {
       this.showDisk = diskCheckbox.checked;
       this.bhMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
       this.vrMaterial.uniforms.uShowDisk.value = this.showDisk ? 1.0 : 0.0;
+    });
+
+    // Starfield toggle
+    const starfieldCheckbox = this.panelEl.querySelector("#bh-starfield") as HTMLInputElement;
+    starfieldCheckbox.addEventListener("change", () => {
+      this.useStarfield = starfieldCheckbox.checked;
+      const val = this.useStarfield ? 1.0 : 0.0;
+      this.bhMaterial.uniforms.uUseStarfield.value = val;
+      this.vrMaterial.uniforms.uUseStarfield.value = val;
     });
 
     // AR mode toggle
@@ -652,7 +687,12 @@ export class BlackHoleScene implements Scene {
 
       this.bhMaterial.uniforms.uBackground.value = this.videoTexture;
       this.bhMaterial.uniforms.uUseCamera.value = 1.0;
+      // Disable starfield in AR mode
+      this.bhMaterial.uniforms.uUseStarfield.value = 0.0;
       this.arModeActive = true;
+      // Hide starfield toggle
+      const sfRow = this.panelEl?.querySelector("#bh-starfield")?.closest(".bh-row") as HTMLElement | null;
+      if (sfRow) sfRow.style.display = "none";
     } catch (err) {
       console.warn("AR camera failed:", err);
       if (this.arCheckbox) this.arCheckbox.checked = false;
@@ -687,7 +727,12 @@ export class BlackHoleScene implements Scene {
     this.arCtx = null;
     this.bhMaterial.uniforms.uUseCamera.value = 0.0;
     this.bhMaterial.uniforms.uBackground.value = new THREE.Texture();
+    // Restore starfield state
+    this.bhMaterial.uniforms.uUseStarfield.value = this.useStarfield ? 1.0 : 0.0;
     this.arModeActive = false;
+    // Show starfield toggle again
+    const sfRow = this.panelEl?.querySelector("#bh-starfield")?.closest(".bh-row") as HTMLElement | null;
+    if (sfRow) sfRow.style.display = "";
   }
 
   private addHandler(el: EventTarget, type: string, fn: EventListener, options?: AddEventListenerOptions) {
@@ -892,6 +937,11 @@ export class BlackHoleScene implements Scene {
 
   dispose(): void {
     this.stopCameraFeed();
+
+    if (this.starfieldTexture) {
+      this.starfieldTexture.dispose();
+      this.starfieldTexture = null;
+    }
 
     if (this.unsubViewMode) {
       this.unsubViewMode();

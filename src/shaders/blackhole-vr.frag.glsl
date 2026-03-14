@@ -23,6 +23,10 @@ uniform sampler2D uCameraFeed; // Passthrough camera texture (when available)
 uniform vec3 uBHCenter;        // World-space black hole position
 uniform float uSphereRadius;   // Localized sphere radius (for early ray termination)
 
+// Starfield texture
+uniform sampler2D uStarfield;  // Equirectangular panorama texture
+uniform float uUseStarfield;   // 0.0 = procedural, 1.0 = texture
+
 const float PI = 3.14159265359;
 const float MAX_DIST = 100.0;
 const int MAX_STEPS = 200;
@@ -289,10 +293,20 @@ void main() {
 
     // Star background
     if (!absorbed) {
-      float stars = starField(vel);
-      vec3 bgColor = vec3(0.0, 0.002, 0.008);
-      vec3 starColor = vec3(0.9, 0.92, 1.0) * stars;
-      finalColor += bgColor + starColor;
+      if (uUseStarfield > 0.5) {
+        // Sample equirectangular starfield texture
+        vec2 sfUV = vec2(
+          atan(vel.z, vel.x) / (2.0 * PI) + 0.5,
+          acos(clamp(vel.y, -1.0, 1.0)) / PI
+        );
+        vec3 texColor = texture2D(uStarfield, sfUV).rgb;
+        finalColor += texColor;
+      } else {
+        float stars = starField(vel);
+        vec3 bgColor = vec3(0.0, 0.002, 0.008);
+        vec3 starColor = vec3(0.9, 0.92, 1.0) * stars;
+        finalColor += bgColor + starColor;
+      }
       finalColor += vec3(0.6, 0.7, 1.0) * ringGlow;
     }
 
