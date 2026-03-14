@@ -5,7 +5,7 @@ import { blackholeEquations } from "../../lib/equation-data";
 import { buildEquationsSection, updateEquationValues, removeEquationsSection } from "../../lib/equations";
 import { VRPanel } from "../../lib/VRPanel";
 import { VRTutorial } from "../../lib/vr-tutorial";
-import { integrateGeodesic, type GeodesicResult, type GeodesicOutcome } from "../../lib/geodesic";
+import { integrateGeodesic, integrateTimelikeGeodesic, type GeodesicResult, type GeodesicOutcome, type ParticleType } from "../../lib/geodesic";
 import { VeffPlot } from "../../lib/veff-plot";
 import vertexShader from "../../shaders/blackhole.vert.glsl?raw";
 import fragmentShader from "../../shaders/blackhole.frag.glsl?raw";
@@ -75,12 +75,16 @@ export class BlackHoleScene implements Scene {
   private geodesicTrails: { line: THREE.Line; result: GeodesicResult; index: number; animating: boolean }[] = [];
   private activeTrail: { line: THREE.Line; points: THREE.Vector3[]; index: number; result: GeodesicResult } | null = null;
   private veffPlot: VeffPlot | null = null;
+  private geodesicParticleType: ParticleType = "photon";
+  private geodesicEnergy = 1.0; // E²/m²c⁴ for massive particles
+  private boundTrailAnimPhase: Map<THREE.Line, number> = new Map();
 
   private static readonly MAX_TRAILS = 10;
   private static readonly OUTCOME_COLORS: Record<GeodesicOutcome, number> = {
     captured: 0x6366f1,  // indigo
     scattered: 0x22d3ee, // cyan
     orbiting: 0xf59e0b,  // amber
+    bound: 0xf59e0b,     // amber
   };
   private launchIndicator: THREE.ArrowHelper | null = null;
   private geodesicRaycaster = new THREE.Raycaster();
@@ -621,7 +625,9 @@ export class BlackHoleScene implements Scene {
       if (!this.veffPlot) {
         this.veffPlot = new VeffPlot();
       }
+      this.veffPlot.setParticleType(this.geodesicParticleType);
       this.veffPlot.setParams(this.mass, 5); // default L
+      this.veffPlot.setEnergyLevel(this.geodesicParticleType === "particle" ? this.geodesicEnergy : null);
       this.veffPlot.show();
     } else {
       this.ctx.scene.background = null;
@@ -647,7 +653,7 @@ export class BlackHoleScene implements Scene {
     const hint = this.panelEl?.querySelector(".bh-hint");
     if (hint) {
       hint.textContent = active
-        ? "Click to place photon. Drag to aim."
+        ? `Click to place ${this.geodesicParticleType}. Drag to aim.`
         : "Drag to orbit. Scroll to zoom.";
     }
 
@@ -696,15 +702,22 @@ export class BlackHoleScene implements Scene {
     }
     this.geodesicTrails = [];
     this.activeTrail = null;
+    this.boundTrailAnimPhase.clear();
     // Reset V_eff plot dot
     this.veffPlot?.setDotPosition(null);
   }
 
   private launchPhoton(hitPoint: THREE.Vector3, direction: THREE.Vector3) {
     const rs = this.mass;
-    const result = integrateGeodesic(hitPoint, direction, rs);
 
-    // Color by outcome
+    let result: GeodesicResult;
+    if (this.geodesicParticleType === "particle") {
+      result = integrateTimelikeGeodesic(hitPoint, direction, rs, this.geodesicEnergy);
+    } else {
+      result = integrateGeodesic(hitPoint, direction, rs);
+    }
+
+    // Color by outcome: bound=amber, captured=indigo, scattered=cyan
     const color = BlackHoleScene.OUTCOME_COLORS[result.outcome];
 
     // Create line with full geometry but only show first point initially
@@ -726,21 +739,26 @@ export class BlackHoleScene implements Scene {
       this.geodesicGroup.remove(old.line);
       old.line.geometry.dispose();
       (old.line.material as THREE.Material).dispose();
+      this.boundTrailAnimPhase.delete(old.line);
     }
 
     // Update V_eff plot with this trail's L and rs
     if (this.veffPlot) {
+      this.veffPlot.setParticleType(this.geodesicParticleType);
       this.veffPlot.setParams(rs, result.L);
+      this.veffPlot.setEnergyLevel(this.geodesicParticleType === "particle" ? this.geodesicEnergy : null);
     }
 
     // Update info display
     const info = this.panelEl?.querySelector(".bh-geodesic-info");
     if (info) {
-      info.textContent = result.outcome === "captured"
-        ? "Captured by black hole"
-        : result.outcome === "scattered"
-          ? "Scattered to infinity"
-          : "Unstable orbit";
+      const labels: Record<GeodesicOutcome, string> = {
+        captured: "Plunging into horizon",
+        scattered: "Escaping to infinity",
+        orbiting: "Unstable orbit",
+        bound: "Bound orbit (oscillating)",
+      };
+      info.textContent = labels[result.outcome];
     }
   }
 
@@ -783,6 +801,17 @@ export class BlackHoleScene implements Scene {
             AR Mode
           </label>
         </div>
+      </div>
+      <div class="bh-row bh-geodesic-only" style="display:none">
+        <div class="bh-mode-toggle" style="margin-bottom:6px">
+          <button class="bh-mode-btn active" id="bh-particle-photon">Photon</button>
+          <button class="bh-mode-btn" id="bh-particle-massive">Particle</button>
+        </div>
+      </div>
+      <div class="bh-row bh-geodesic-only bh-energy-row" style="display:none">
+        <label>Energy E/mc²</label>
+        <input type="range" class="bh-slider" id="bh-energy" min="900" max="1100" value="1000" />
+        <span class="bh-val" id="bh-energy-val">1.000</span>
       </div>
       <div class="bh-row bh-geodesic-only" style="display:none">
         <button class="bh-mode-btn" id="bh-clear-trails" style="width:100%">Clear Trails</button>
@@ -852,6 +881,48 @@ export class BlackHoleScene implements Scene {
     // Clear trails button
     const clearBtn = this.panelEl.querySelector("#bh-clear-trails") as HTMLButtonElement;
     clearBtn.addEventListener("click", () => this.clearGeodesicTrails());
+
+    // Particle type toggle: Photon / Particle
+    const photonBtn = this.panelEl.querySelector("#bh-particle-photon") as HTMLButtonElement;
+    const massiveBtn = this.panelEl.querySelector("#bh-particle-massive") as HTMLButtonElement;
+    const energyRow = this.panelEl.querySelector(".bh-energy-row") as HTMLElement;
+
+    photonBtn.addEventListener("click", () => {
+      this.geodesicParticleType = "photon";
+      photonBtn.classList.add("active");
+      massiveBtn.classList.remove("active");
+      energyRow.style.display = "none";
+      if (this.veffPlot) {
+        this.veffPlot.setParticleType("photon");
+        this.veffPlot.setEnergyLevel(null);
+      }
+      const hint = this.panelEl?.querySelector(".bh-hint");
+      if (hint && this.geodesicMode) hint.textContent = "Click to place photon. Drag to aim.";
+    });
+
+    massiveBtn.addEventListener("click", () => {
+      this.geodesicParticleType = "particle";
+      massiveBtn.classList.add("active");
+      photonBtn.classList.remove("active");
+      energyRow.style.display = "";
+      if (this.veffPlot) {
+        this.veffPlot.setParticleType("particle");
+        this.veffPlot.setEnergyLevel(this.geodesicEnergy);
+      }
+      const hint = this.panelEl?.querySelector(".bh-hint");
+      if (hint && this.geodesicMode) hint.textContent = "Click to place particle. Drag to aim.";
+    });
+
+    // Energy slider
+    const energySlider = this.panelEl.querySelector("#bh-energy") as HTMLInputElement;
+    const energyVal = this.panelEl.querySelector("#bh-energy-val")!;
+    energySlider.addEventListener("input", () => {
+      this.geodesicEnergy = parseInt(energySlider.value) / 1000;
+      energyVal.textContent = this.geodesicEnergy.toFixed(3);
+      if (this.veffPlot) {
+        this.veffPlot.setEnergyLevel(this.geodesicEnergy);
+      }
+    });
   }
 
   private async startCameraFeed() {
@@ -1235,12 +1306,32 @@ export class BlackHoleScene implements Scene {
         const entry = this.geodesicTrails.find(t => t.line === trail.line);
         if (entry) entry.index = trail.index;
       } else {
-        // Animation complete — show final dot position
+        // Animation complete
+        if (trail.result.outcome === "bound") {
+          // Bound orbit: start looping animation phase
+          this.boundTrailAnimPhase.set(trail.line, 0);
+        }
         if (this.veffPlot && trail.points.length > 0) {
           const finalPos = trail.points[trail.points.length - 1];
           this.veffPlot.setDotPosition(finalPos.length());
         }
         this.activeTrail = null;
+      }
+    }
+
+    // Animate bound orbit loops — cycle a highlighted segment through the trail
+    for (const trailEntry of this.geodesicTrails) {
+      if (trailEntry.result.outcome !== "bound") continue;
+      const phase = this.boundTrailAnimPhase.get(trailEntry.line);
+      if (phase === undefined) continue;
+      const total = trailEntry.result.points.length;
+      const newPhase = (phase + 8) % total;
+      this.boundTrailAnimPhase.set(trailEntry.line, newPhase);
+      // Update V_eff dot for the most recent bound orbit
+      if (this.veffPlot && trailEntry === this.geodesicTrails[this.geodesicTrails.length - 1]) {
+        const idx = Math.floor(newPhase) % total;
+        const pos = trailEntry.result.points[idx];
+        if (pos) this.veffPlot.setDotPosition(pos.length());
       }
     }
 

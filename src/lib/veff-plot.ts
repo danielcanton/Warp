@@ -1,11 +1,14 @@
 /**
- * Canvas2D renderer for the null-geodesic effective potential V_eff(r).
+ * Canvas2D renderer for the effective potential V_eff(r).
  *
- * V_eff = (1 - r_s/r) * L² / r²
+ * Null (photon):     V_eff = (1 - r_s/r) * L² / r²
+ * Timelike (massive): V_eff = (1 - r_s/r)(1 + L²/r²)
  *
- * Draws the curve, marks the photon-sphere peak, and animates a dot
- * at the particle's current radial position.
+ * Draws the curve, marks key radii, animates a dot at the particle's
+ * current radial position, and optionally shows an energy level line.
  */
+
+import type { ParticleType } from "./geodesic";
 
 export interface VeffPlotOptions {
   /** Schwarzschild radius */
@@ -24,6 +27,7 @@ const AXIS_COLOR = "rgba(255,255,255,0.3)";
 const CURVE_COLOR = "#818cf8"; // indigo-400
 const DOT_COLOR = "#fbbf24"; // amber-400
 const PHOTON_MARKER_COLOR = "#f472b6"; // pink-400
+const ENERGY_LINE_COLOR = "#f87171"; // red-400
 const BG_COLOR = "rgba(10, 10, 30, 0.85)";
 const TEXT_COLOR = "rgba(255,255,255,0.6)";
 
@@ -34,6 +38,8 @@ export class VeffPlot {
   private rs = 1.5;
   private L = 5;
   private dotR: number | null = null; // current radial position of tracked particle
+  private particleType: ParticleType = "photon";
+  private energyLevel: number | null = null; // E² for energy level line
 
   constructor() {
     this.container = document.createElement("div");
@@ -102,13 +108,26 @@ export class VeffPlot {
     this.L = L;
   }
 
+  setParticleType(type: ParticleType) {
+    this.particleType = type;
+  }
+
+  setEnergyLevel(energy: number | null) {
+    this.energyLevel = energy;
+  }
+
   setDotPosition(r: number | null) {
     this.dotR = r;
   }
 
-  /** Compute V_eff at given r */
+  /** Compute V_eff at given r based on particle type */
   private veff(r: number): number {
     if (r <= this.rs) return 0;
+    if (this.particleType === "particle") {
+      // Timelike: V_eff = (1 - rs/r)(1 + L²/r²)
+      return (1 - this.rs / r) * (1 + (this.L * this.L) / (r * r));
+    }
+    // Null: V_eff = (1 - rs/r) * L²/r²
     return (1 - this.rs / r) * (this.L * this.L) / (r * r);
   }
 
@@ -137,17 +156,28 @@ export class VeffPlot {
 
     // Find V_eff peak for auto-scaling
     let vMax = 0;
-    const photonR = 1.5 * this.rs; // photon sphere radius
+    let vMin = Infinity;
     for (let r = rMin; r <= rMax; r += (rMax - rMin) / 200) {
       const v = this.veff(r);
       if (v > vMax) vMax = v;
+      if (v < vMin) vMin = v;
     }
+
+    // For timelike, include the energy level in scaling
+    if (this.particleType === "particle" && this.energyLevel !== null) {
+      if (this.energyLevel > vMax) vMax = this.energyLevel;
+    }
+
     vMax *= 1.2; // headroom
     if (vMax <= 0) vMax = 1;
 
+    // For timelike, use 0 as floor for better visualization
+    const vFloor = this.particleType === "particle" ? Math.max(0, vMin * 0.9) : 0;
+    const vRange = vMax - vFloor;
+
     // Map functions
     const mapX = (r: number) => PADDING_LEFT + ((r - rMin) / (rMax - rMin)) * plotW;
-    const mapY = (v: number) => PADDING_TOP + plotH - (v / vMax) * plotH;
+    const mapY = (v: number) => PADDING_TOP + plotH - ((v - vFloor) / vRange) * plotH;
 
     // Grid lines
     ctx.strokeStyle = GRID_COLOR;
@@ -191,24 +221,66 @@ export class VeffPlot {
     }
     ctx.stroke();
 
-    // Mark photon sphere peak
-    if (photonR > rMin && photonR < rMax) {
-      const px = mapX(photonR);
-      const py = mapY(this.veff(photonR));
-      ctx.strokeStyle = PHOTON_MARKER_COLOR;
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 3]);
-      ctx.beginPath();
-      ctx.moveTo(px, PADDING_TOP + plotH);
-      ctx.lineTo(px, py);
-      ctx.stroke();
-      ctx.setLineDash([]);
+    if (this.particleType === "photon") {
+      // Mark photon sphere peak
+      const photonR = 1.5 * this.rs;
+      if (photonR > rMin && photonR < rMax) {
+        const px = mapX(photonR);
+        const py = mapY(this.veff(photonR));
+        ctx.strokeStyle = PHOTON_MARKER_COLOR;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(px, PADDING_TOP + plotH);
+        ctx.lineTo(px, py);
+        ctx.stroke();
+        ctx.setLineDash([]);
 
-      // Label
-      ctx.fillStyle = PHOTON_MARKER_COLOR;
-      ctx.font = "9px system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("r_ph", px, PADDING_TOP + plotH + 12);
+        // Label
+        ctx.fillStyle = PHOTON_MARKER_COLOR;
+        ctx.font = "9px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("r_ph", px, PADDING_TOP + plotH + 12);
+      }
+    } else {
+      // Timelike: mark ISCO
+      const iscoR = 3 * this.rs;
+      if (iscoR > rMin && iscoR < rMax) {
+        const ix = mapX(iscoR);
+        const iy = mapY(this.veff(iscoR));
+        ctx.strokeStyle = "#22d3ee"; // cyan
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(ix, PADDING_TOP + plotH);
+        ctx.lineTo(ix, iy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = "#22d3ee";
+        ctx.font = "9px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("ISCO", ix, PADDING_TOP + plotH + 12);
+      }
+
+      // Draw energy level line
+      if (this.energyLevel !== null) {
+        const ey = mapY(this.energyLevel);
+        ctx.strokeStyle = ENERGY_LINE_COLOR;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        ctx.moveTo(PADDING_LEFT, ey);
+        ctx.lineTo(w - PADDING_RIGHT, ey);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Label
+        ctx.fillStyle = ENERGY_LINE_COLOR;
+        ctx.font = "9px system-ui, sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText("E²", w - PADDING_RIGHT - 2, ey - 4);
+      }
     }
 
     // Animated dot at current particle r
@@ -256,7 +328,8 @@ export class VeffPlot {
     ctx.fillStyle = TEXT_COLOR;
     ctx.font = "9px system-ui, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(`L = ${this.L.toFixed(2)}`, PADDING_LEFT + 4, PADDING_TOP + 10);
+    const modeLabel = this.particleType === "particle" ? "Massive" : "Photon";
+    ctx.fillText(`${modeLabel}  L = ${this.L.toFixed(2)}`, PADDING_LEFT + 4, PADDING_TOP + 10);
   }
 
   dispose() {
