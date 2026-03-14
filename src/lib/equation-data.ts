@@ -64,6 +64,19 @@ export const mergerEquations: EquationDef[] = [
 
 // ─── Black Hole ──────────────────────────────────────────────────────
 
+// ─── Kerr ISCO helpers ───────────────────────────────────────────────
+// Z1, Z2 intermediaries for prograde ISCO in Kerr metric
+function kerrISCO(mass: number, a: number): number {
+  // mass in solar masses, a = spin parameter a/M (0..1)
+  // Returns r_isco in gravitational radii (GM/c²)
+  const a2 = a * a;
+  const z1 = 1 + Math.cbrt(1 - a2) * (Math.cbrt(1 + a) + Math.cbrt(1 - a));
+  const z2 = Math.sqrt(3 * a2 + z1 * z1);
+  // Prograde orbit: minus sign
+  const rIsco = 3 + z2 - Math.sqrt((3 - z1) * (3 + z1 + 2 * z2));
+  return rIsco; // in units of M (gravitational radii)
+}
+
 export const blackholeEquations: EquationDef[] = [
   {
     id: "schwarzschild",
@@ -78,23 +91,66 @@ export const blackholeEquations: EquationDef[] = [
   },
   {
     id: "photon-sphere",
-    latex: String.raw`r_{\text{ph}} = \frac{3}{2}\,r_s`,
+    latex: String.raw`r_{\text{ph}} = \frac{3}{2}\,r_s \quad\text{(spin-dependent in Kerr)}`,
     label: "The bright ring of light",
     modes: ["student", "researcher"],
     compute: (p) => {
       const rph_km = 1.5 * 2.95 * p.mass;
-      return `r_ph = ${rph_km.toFixed(1)} km`;
+      return `r_ph = ${rph_km.toFixed(1)} km (Schwarzschild limit)`;
     },
   },
   {
-    id: "isco",
-    latex: String.raw`r_{\text{isco}} = 3\,r_s`,
-    label: "Where the accretion disk truncates",
+    id: "kerr-isco",
+    latex: String.raw`r_{\text{isco}} = M\!\left(3 + Z_2 - \sqrt{(3-Z_1)(3+Z_1+2Z_2)}\right)`,
+    label: "Inner edge of the accretion disk (Kerr)",
+    modes: ["student", "researcher"],
+    compute: (p) => {
+      const a = p.spin ?? 0;
+      const rIsco = kerrISCO(p.mass, a);
+      // Convert from gravitational radii (M) to km: 1 M = 1.475 km per solar mass
+      const rIsco_km = rIsco * 1.475 * p.mass;
+      const label = a === 0 ? " (= 3r_s, Schwarzschild)" : "";
+      return `r_isco = ${rIsco_km.toFixed(1)} km (${rIsco.toFixed(2)} M)${label}`;
+    },
+  },
+  {
+    id: "ergosphere",
+    latex: String.raw`r_{\text{ergo}} = M + \sqrt{M^2 - a^2\cos^2\!\theta}`,
+    label: "Boundary of the ergosphere (equatorial)",
+    modes: ["student", "researcher"],
+    compute: (p) => {
+      const a = p.spin ?? 0;
+      // At equator (θ = π/2), cos²θ = 0, so r_ergo = 2M
+      // In gravitational radii: r_ergo = 1 + sqrt(1 - a²cos²θ)
+      // At equator: r_ergo = 2M always
+      const rErgo = 1 + Math.sqrt(1 - a * a * 0); // cos²(π/2) = 0
+      const rErgo_km = rErgo * 1.475 * p.mass;
+      return `r_ergo = ${rErgo_km.toFixed(1)} km (${rErgo.toFixed(2)} M, equatorial)`;
+    },
+  },
+  {
+    id: "frame-dragging",
+    latex: String.raw`\omega = \frac{2Mar}{\Sigma\,\Delta + 2Mr\,a^2}`,
+    label: "Frame-dragging angular velocity at ISCO",
     modes: ["researcher"],
     compute: (p) => {
-      const risco_km = 3 * 2.95 * p.mass;
-      return `r_isco = ${risco_km.toFixed(0)} km`;
+      const a = p.spin ?? 0;
+      if (a === 0) return "ω = 0 (no spin)";
+      // Evaluate at ISCO, equatorial plane (θ = π/2)
+      const r = kerrISCO(p.mass, a);
+      // Σ = r² + a²cos²θ → r² at equator
+      const Sigma = r * r;
+      // Δ = r² - 2r + a²  (in units of M=1)
+      const Delta = r * r - 2 * r + a * a;
+      const omega = (2 * a * r) / (Sigma * Delta + 2 * r * a * a);
+      return `ω = ${omega.toFixed(4)} c³/(GM) at ISCO`;
     },
+  },
+  {
+    id: "kerr-metric",
+    latex: String.raw`ds^2 = -\!\left(1-\frac{2Mr}{\Sigma}\right)dt^2 - \frac{4Mar\sin^2\!\theta}{\Sigma}\,dt\,d\phi + \frac{\Sigma}{\Delta}\,dr^2 + \Sigma\,d\theta^2 + \cdots`,
+    label: "Kerr metric line element",
+    modes: ["researcher"],
   },
   {
     id: "lensing",

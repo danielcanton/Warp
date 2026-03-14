@@ -291,7 +291,7 @@ export class BlackHoleScene implements Scene {
         this.bhMaterial.uniforms.uMass.value = this.mass;
         this.vrMaterial.uniforms.uMass.value = this.mass;
         this.vrPanel?.updateButton(0, `Mass: ${this.mass}`);
-        this.updateEquationValuesForMass();
+        this.updateEquationValues();
         const slider = this.panelEl?.querySelector("#bh-mass") as HTMLInputElement | null;
         if (slider) {
           slider.value = String(this.mass * 100);
@@ -342,6 +342,7 @@ export class BlackHoleScene implements Scene {
           const valEl = this.panelEl?.querySelector("#bh-spin-val");
           if (valEl) valEl.innerHTML = `${this.spin.toFixed(2)} a/M`;
         }
+        this.updateEquationValues();
       },
     });
 
@@ -765,7 +766,7 @@ export class BlackHoleScene implements Scene {
       this.bhMaterial.uniforms.uMass.value = this.mass;
       this.vrMaterial.uniforms.uMass.value = this.mass;
       // Update equation computed values live
-      this.updateEquationValuesForMass();
+      this.updateEquationValues();
     });
 
     // Spin slider
@@ -776,6 +777,8 @@ export class BlackHoleScene implements Scene {
       spinVal.innerHTML = `${this.spin.toFixed(2)} a/M`;
       this.bhMaterial.uniforms.uSpin.value = this.spin;
       this.vrMaterial.uniforms.uSpin.value = this.spin;
+      // Update equation computed values live when spin changes
+      this.updateEquationValues();
     });
 
     // Disk toggle
@@ -1235,22 +1238,26 @@ export class BlackHoleScene implements Scene {
     return this.mass * 10;
   }
 
+  /** Current parameter values for equation computation */
+  private getEquationParams(): Record<string, number> {
+    return { mass: this.getMassSolarMasses(), spin: this.spin };
+  }
+
   private async ensureEquationsSection(mode: ViewMode): Promise<void> {
     if (!this.panelEl) return;
     removeEquationsSection(this.panelEl);
 
     if (mode === "explorer") return;
 
-    const values = { mass: this.getMassSolarMasses() };
-    const section = await buildEquationsSection(blackholeEquations, mode, values);
+    const section = await buildEquationsSection(blackholeEquations, mode, this.getEquationParams());
     if (section) this.panelEl.appendChild(section);
   }
 
-  private updateEquationValuesForMass(): void {
+  private updateEquationValues(): void {
     if (!this.panelEl) return;
     const section = this.panelEl.querySelector<HTMLElement>(".info-equations");
     if (!section) return;
-    updateEquationValues(section, blackholeEquations, { mass: this.getMassSolarMasses() });
+    updateEquationValues(section, blackholeEquations, this.getEquationParams());
   }
 
   dispose(): void {
