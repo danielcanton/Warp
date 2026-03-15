@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { Scene, SceneContext } from "../types";
+import type { Scene, SceneContext, DetailTab } from "../types";
 import {
   fetchEventCatalog,
   generateWaveform,
@@ -229,6 +229,11 @@ export class MergerScene implements Scene {
   private eventTabButtons!: NodeListOf<HTMLButtonElement>;
   private activeEventTab: "list" | "stats" = "list";
 
+  // Detail panel tab containers
+  private infoTabEl: HTMLDivElement | null = null;
+  private eventsTabEl: HTMLDivElement | null = null;
+  private toursTabEl: HTMLDivElement | null = null;
+
   // Intro animation
   private introProgress = 0;
   private introActive = false;
@@ -383,6 +388,26 @@ export class MergerScene implements Scene {
         this.tourOverlay.appendChild(this.mmSkymap.getElement());
       }
       this.mmSkymap.hide();
+
+      // ─── Build detail panel tab containers ───
+      this.infoTabEl = document.createElement("div");
+      this.infoTabEl.className = "detail-tab-content";
+
+      this.eventsTabEl = document.createElement("div");
+      this.eventsTabEl.className = "detail-tab-content";
+
+      this.toursTabEl = document.createElement("div");
+      this.toursTabEl.className = "detail-tab-content";
+
+      // Reparent event-info into info tab
+      this.infoTabEl.appendChild(this.eventInfoEl);
+
+      // Reparent event-list into events tab
+      this.eventsTabEl.appendChild(this.eventListEl);
+
+      // Reparent tour-menu content into tours tab
+      this.toursTabEl.appendChild(this.tourMenu);
+      this.toursTabEl.appendChild(this.tourOverlay);
     }
 
     // ─── Build 3D objects (only first time — re-add on subsequent inits) ───
@@ -437,6 +462,7 @@ export class MergerScene implements Scene {
     }
 
     // ─── Show all merger-specific UI ───
+    // Event info and event list are now inside detail panel tabs — always visible within their tab
     this.eventInfoEl.style.display = "block";
     this.eventListEl.style.display = "";
     this.timeControlsEl.style.display = "flex";
@@ -1860,7 +1886,16 @@ export class MergerScene implements Scene {
   }
 
   getUI(): HTMLElement | null {
-    return null; // Merger uses global DOM elements from app.html
+    return null; // Merger uses detail panel tabs instead
+  }
+
+  getDetailTabs(): DetailTab[] {
+    const tabs: DetailTab[] = [
+      { id: "info", label: "Info", element: this.infoTabEl! },
+      { id: "events", label: "Events", element: this.eventsTabEl! },
+      { id: "tours", label: "Tours", element: this.toursTabEl! },
+    ];
+    return tabs;
   }
 
   private updateWaveformPlot(event: GWEvent, mode: ViewMode): void {
@@ -1987,7 +2022,6 @@ export class MergerScene implements Scene {
     this.mapLegendEl.style.display = "none";
     this.helpOverlay.style.display = "none";
     this.tourOverlay.classList.remove("show");
-    this.tourMenu.classList.remove("show");
     this.mapTooltip.style.display = "none";
     this.eventListEl.style.display = "none";
     this.aboutOverlay.classList.remove("show");

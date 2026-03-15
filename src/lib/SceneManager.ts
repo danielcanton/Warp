@@ -1,13 +1,16 @@
 import type { Scene, SceneContext } from "../scenes/types";
+import type { DetailPanel } from "./DetailPanel";
 
 export class SceneManager {
   private scenes = new Map<string, Scene>();
   private activeScene: Scene | null = null;
   private ctx: SceneContext;
   private selectorEl: HTMLElement | null = null;
+  private detailPanel: DetailPanel | null = null;
 
-  constructor(ctx: SceneContext) {
+  constructor(ctx: SceneContext, detailPanel?: DetailPanel) {
     this.ctx = ctx;
+    this.detailPanel = detailPanel ?? null;
     this.selectorEl = document.getElementById("sidebar");
 
     // Wire up static sidebar scene buttons
@@ -35,13 +38,25 @@ export class SceneManager {
 
   async switchScene(id: string) {
     const next = this.scenes.get(id);
-    if (!next || next === this.activeScene) return;
+    if (!next) return;
+
+    // Clicking the already-active scene toggles the detail panel
+    if (next === this.activeScene) {
+      this.detailPanel?.toggle();
+      return;
+    }
 
     // Dispose current scene
     if (this.activeScene) {
       const currentUI = this.activeScene.getUI();
       if (currentUI) currentUI.style.display = "none";
       this.activeScene.dispose();
+    }
+
+    // Clear detail panel before switching
+    if (this.detailPanel) {
+      this.detailPanel.clear();
+      this.detailPanel.close();
     }
 
     // Reset VR camera rig so position/rotation doesn't carry between scenes
@@ -54,6 +69,21 @@ export class SceneManager {
 
     const nextUI = next.getUI();
     if (nextUI) nextUI.style.display = "";
+
+    // Mount detail panel content
+    if (this.detailPanel) {
+      if (next.getDetailTabs) {
+        const tabs = next.getDetailTabs();
+        this.detailPanel.mount(next.label, tabs);
+        this.detailPanel.open();
+      } else if (nextUI) {
+        // Wrap simple scene's getUI() in a single "Controls" tab
+        this.detailPanel.mount(next.label, [
+          { id: "controls", label: "Controls", element: nextUI },
+        ]);
+        this.detailPanel.open();
+      }
+    }
 
     // Sync URL with current scene
     const url = new URL(window.location.href);

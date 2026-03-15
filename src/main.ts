@@ -13,6 +13,7 @@ import {
 } from "postprocessing";
 import { GWDistortionEffect } from "./lib/GWDistortionEffect";
 import { SceneManager } from "./lib/SceneManager";
+import { DetailPanel } from "./lib/DetailPanel";
 import { XRManager } from "./lib/XRManager";
 import { MergerScene } from "./scenes/merger/MergerScene";
 import { SandboxScene } from "./scenes/sandbox/SandboxScene";
@@ -111,7 +112,8 @@ const ctx: SceneContext = {
   xrManager,
 };
 
-const sceneManager = new SceneManager(ctx);
+const detailPanel = new DetailPanel();
+const sceneManager = new SceneManager(ctx, detailPanel);
 
 // Register scenes
 sceneManager.register(new MergerScene());
@@ -222,14 +224,20 @@ if (sidebarAboutBtn && aboutOverlay) {
 }
 
 // ─── Sidebar tours button ───────────────────────────────────────────
-
+// Tours are now in the Merger scene's detail panel "Tours" tab.
+// Clicking the sidebar tours button switches to merger scene if not active,
+// or opens the detail panel to the tours tab.
 const sidebarTourBtn = document.getElementById("sidebar-tour-btn");
 if (sidebarTourBtn) {
   sidebarTourBtn.addEventListener("click", () => {
-    const tourMenu = document.getElementById("tour-menu");
-    if (tourMenu) {
-      tourMenu.classList.toggle("show");
+    if (sceneManager.currentId !== "merger") {
+      sceneManager.switchScene("merger");
     }
+    // Open detail panel if closed
+    if (!detailPanel.isOpen) {
+      detailPanel.open();
+    }
+    detailPanel.setActiveTab("tours");
   });
 }
 

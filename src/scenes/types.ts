@@ -20,6 +20,12 @@ export interface SceneContext {
   xrManager: XRManager | null;
 }
 
+export interface DetailTab {
+  id: string;
+  label: string;
+  element: HTMLElement;
+}
+
 export interface Scene {
   id: string;
   label: string;
@@ -27,6 +33,7 @@ export interface Scene {
   update(dt: number, elapsed: number): void;
   onResize(w: number, h: number): void;
   getUI(): HTMLElement | null;
+  getDetailTabs?(): DetailTab[];
   dispose(): void;
   supportsXR?: boolean;
 }
