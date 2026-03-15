@@ -75,6 +75,32 @@ const icons = {
       <path d="M14 16h4" />
     </svg>
   ),
+  blackhole: (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <ellipse cx="16" cy="16" rx="13" ry="5" />
+      <ellipse cx="16" cy="16" rx="9" ry="3.5" />
+      <circle cx="16" cy="16" r="4" />
+    </svg>
+  ),
+  telescope: (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 8l10 4 8-6 6 3-8 6-10-4z" />
+      <path d="M14 12l-2 14" />
+      <path d="M8 26h8" />
+      <circle cx="26" cy="6" r="2" />
+    </svg>
+  ),
+  chart: (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 28V8" />
+      <path d="M4 28h24" />
+      <path d="M8 20v8" />
+      <path d="M14 14v14" />
+      <path d="M20 18v10" />
+      <path d="M26 10v18" />
+      <path d="M8 16l6-6 6 4 6-8" />
+    </svg>
+  ),
 };
 
 const features = [
@@ -82,7 +108,7 @@ const features = [
     icon: icons.waveform,
     title: "90+ Real Events",
     description:
-      "Explore real gravitational wave detections — from binary black holes to neutron star mergers.",
+      "Explore real gravitational wave detections with population statistics, chirp mass histograms, and parameter posteriors.",
     spotlight: "rgba(129, 140, 248, 0.15)" as const,
     hasCounter: true,
   },
@@ -109,16 +135,37 @@ const features = [
   },
   {
     icon: icons.play,
-    title: "5 Interactive Scenes",
+    title: "6 Interactive Scenes",
     description:
-      "Watch mergers unfold in real-time 3D — inspiral, merge, and ringdown animated from the waveform.",
+      "From binary mergers to N-body simulations, Kerr black holes, and cosmic expansion — all animated in real-time 3D.",
     spotlight: "rgba(192, 132, 252, 0.15)" as const,
   },
   {
     icon: icons.vr,
-    title: "WebXR / VR Ready",
+    title: "WebXR / AR Ready",
     description:
-      "Step inside the simulation with any WebXR headset. Gravitational waves all around you.",
+      "Step inside with any WebXR headset or use Quest 3 AR passthrough to bring gravitational waves into your room.",
+    spotlight: "rgba(34, 211, 238, 0.15)" as const,
+  },
+  {
+    icon: icons.blackhole,
+    title: "Black Hole Physics",
+    description:
+      "Ray-traced Kerr black holes with spin-dependent accretion disks, interactive Penrose diagrams, and geodesic particle launching.",
+    spotlight: "rgba(129, 140, 248, 0.15)" as const,
+  },
+  {
+    icon: icons.telescope,
+    title: "Multi-Messenger",
+    description:
+      "Explore GW170817 with electromagnetic counterparts, sky localization maps, and an animated multi-messenger timeline.",
+    spotlight: "rgba(192, 132, 252, 0.15)" as const,
+  },
+  {
+    icon: icons.chart,
+    title: "Researcher Tools",
+    description:
+      "Population histograms, noise curves with SNR integration, QNM computation, and 90% credible interval posteriors.",
     spotlight: "rgba(34, 211, 238, 0.15)" as const,
   },
 ];
@@ -129,21 +176,21 @@ const useCases = [
     accent: "rgba(129, 140, 248, 0.15)",
     accentBorder: "border-indigo-400/20",
     description:
-      "Explore general relativity hands-on. Visualize what textbook equations describe — black hole masses, spin, distance — and build intuition for spacetime curvature.",
+      "Explore general relativity hands-on. Visualize Penrose diagrams, launch geodesics around black holes, and build intuition for spacetime curvature with real data.",
   },
   {
     heading: "Educators",
     accent: "rgba(192, 132, 252, 0.15)",
     accentBorder: "border-purple-400/20",
     description:
-      "Bring gravitational waves into the classroom. Use real LIGO data to demonstrate wave physics, astronomical scales, and the evidence for merging compact objects.",
+      "Bring gravitational waves into the classroom. Use population statistics, noise curves, and 3D mergers to demonstrate wave physics and the evidence for compact objects.",
   },
   {
     heading: "Researchers",
     accent: "rgba(34, 211, 238, 0.15)",
     accentBorder: "border-cyan-400/20",
     description:
-      "Quickly preview any cataloged event with sonification and 3D waveform playback. Useful for outreach talks, paper illustrations, and sanity-checking parameters.",
+      "Preview any cataloged event with sonification, QNM computation, noise curve analysis, and parameter posteriors. Built for outreach talks and sanity-checking data.",
   },
 ];
 
@@ -265,9 +312,10 @@ function Landing() {
             </GradientText>
           </h2>
           <p className="text-lg sm:text-xl text-white/60 leading-relaxed">
-            An interactive gravitational wave visualizer built with real data
-            from LIGO, Virgo, and KAGRA. Watch black holes merge in 3D, hear
-            the chirp, and explore the cosmos.
+            An interactive gravitational wave laboratory built with real data
+            from LIGO, Virgo, and KAGRA. Simulate black hole mergers in 3D,
+            explore Kerr spacetime, hear the chirp, and dive into
+            multi-messenger astronomy.
           </p>
         </motion.div>
       </section>
