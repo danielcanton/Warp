@@ -892,9 +892,9 @@ export class BlackHoleScene implements Scene {
     this.panelEl.innerHTML = `
       <h3 class="bh-title">Black Hole</h3>
       <div class="bh-mode-toggle">
-        <button class="bh-mode-btn active" id="bh-mode-lensing">Lensing</button>
-        <button class="bh-mode-btn" id="bh-mode-geodesic">Geodesic</button>
-        <button class="bh-mode-btn" id="bh-mode-penrose">Penrose</button>
+        <button class="bh-mode-btn active" id="bh-mode-lensing" title="Visualise gravitational lensing — how light bends around a black hole">Lensing</button>
+        <button class="bh-mode-btn" id="bh-mode-geodesic" title="Launch particles and photons to trace geodesic paths in curved spacetime">Geodesic</button>
+        <button class="bh-mode-btn" id="bh-mode-penrose" title="Interactive Penrose (conformal) diagram — click to place worldlines and see causal structure">Penrose</button>
       </div>
       <div class="bh-params">
         <div class="bh-row">
@@ -928,8 +928,8 @@ export class BlackHoleScene implements Scene {
       </div>
       <div class="bh-row bh-geodesic-only" style="display:none">
         <div class="bh-mode-toggle" style="margin-bottom:6px">
-          <button class="bh-mode-btn active" id="bh-particle-photon">Photon</button>
-          <button class="bh-mode-btn" id="bh-particle-massive">Particle</button>
+          <button class="bh-mode-btn active" id="bh-particle-photon" title="Massless particle — follows null geodesics (light rays)">Photon</button>
+          <button class="bh-mode-btn" id="bh-particle-massive" title="Massive particle — follows timelike geodesics with adjustable energy">Particle</button>
         </div>
       </div>
       <div class="bh-row bh-geodesic-only bh-energy-row" style="display:none">

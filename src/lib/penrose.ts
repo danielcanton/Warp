@@ -354,14 +354,14 @@ export class PenroseDiagram {
       this.container.style.height = "60vh";
       this.container.style.borderRadius = "12px 12px 0 0";
     } else {
-      const size = Math.min(window.innerWidth * 0.55, window.innerHeight * 0.7, 600);
+      const size = Math.min(window.innerHeight * 0.5, 400);
       this.container.style.width = size + "px";
       this.container.style.height = size + "px";
-      this.container.style.left = "50%";
-      this.container.style.top = "50%";
-      this.container.style.right = "auto";
-      this.container.style.bottom = "auto";
-      this.container.style.transform = "translate(-50%, -50%)";
+      this.container.style.bottom = "16px";
+      this.container.style.right = "16px";
+      this.container.style.left = "auto";
+      this.container.style.top = "auto";
+      this.container.style.transform = "none";
       this.container.style.borderRadius = "12px";
     }
   }
