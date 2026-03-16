@@ -988,9 +988,11 @@
       .equation-math {
         font-size: 13px;
         color: rgba(255, 255, 255, 0.85);
-        overflow-x: hidden;
+        overflow-x: auto;
+        overflow-y: hidden;
         padding: 2px 0;
       }
+      .equation-math::-webkit-scrollbar { display: none; }
       .equation-value {
         font-size: 11px;
         color: rgba(165, 180, 252, 0.7);
@@ -1003,6 +1005,11 @@
       .info-equations .katex .mrel { color: rgba(165, 180, 252, 0.9); }
       .info-equations .katex .mop { color: rgba(255, 255, 255, 0.7); }
       .info-equations .katex .mfrac .frac-line { border-color: rgba(255, 255, 255, 0.4); }
+      /* Hide KaTeX accessibility MathML — prevents backdrop-filter artifacts */
+      .info-equations .katex-mathml { display: none; }
+      /* Prevent KaTeX table-cell spacers from creating paint artifacts */
+      .info-equations .katex .vlist-s { background: transparent; }
+      .info-equations .katex .vlist-t2 { background: transparent; }
 
       /* ── Events toggle button (mobile only) ── */
       .mobile-only { display: none; }
