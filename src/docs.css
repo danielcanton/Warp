@@ -71,6 +71,34 @@
   font-size: 1.125rem;
 }
 
+/* ─── npm badge ────────────────────────────────────────────────────── */
+
+.npm-badge {
+  margin-top: 1rem;
+}
+
+.npm-badge a {
+  display: inline-block;
+  padding: 0.5rem 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  text-decoration: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.npm-badge a:hover {
+  border-color: rgba(129, 140, 248, 0.3);
+  background: rgba(129, 140, 248, 0.05);
+}
+
+.npm-badge code {
+  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, monospace;
+  font-size: 0.8125rem;
+  color: rgba(129, 140, 248, 0.9);
+  background: none;
+  padding: 0;
+}
+
 /* ─── Tabs ─────────────────────────────────────────────────────────── */
 
 .tab-bar {

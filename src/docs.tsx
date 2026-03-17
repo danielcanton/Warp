@@ -370,6 +370,11 @@ function Docs() {
       <header className="docs-header">
         <h1>Documentation</h1>
         <p>Programmatic access to gravitational wave data and physics tools.</p>
+        <div className="npm-badge">
+          <a href="https://www.npmjs.com/package/warplab" target="_blank" rel="noopener noreferrer">
+            <code>npm install warplab</code>
+          </a>
+        </div>
       </header>
 
       {/* Tab switcher */}
