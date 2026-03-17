@@ -4,24 +4,18 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that g
 
 ## Setup
 
-### Build
-
-```bash
-npm run build:server
-```
-
-This creates `dist-server/mcp.js` — the MCP server entry point.
+No install needed — `npx` handles everything.
 
 ### Claude Code
 
-Add to your Claude Code MCP settings (`~/.claude/claude_code_config.json`):
+Add to `~/.claude/claude_code_config.json`:
 
 ```json
 {
   "mcpServers": {
     "warplab": {
-      "command": "node",
-      "args": ["/absolute/path/to/warp/dist-server/mcp.js"]
+      "command": "npx",
+      "args": ["warplab-mcp"]
     }
   }
 }
@@ -35,8 +29,8 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 {
   "mcpServers": {
     "warplab": {
-      "command": "node",
-      "args": ["/absolute/path/to/warp/dist-server/mcp.js"]
+      "command": "npx",
+      "args": ["warplab-mcp"]
     }
   }
 }

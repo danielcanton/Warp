@@ -1,16 +1,21 @@
 {
-  "name": "warp",
+  "name": "warplab",
   "version": "1.0.0",
-  "description": "",
+  "description": "Gravitational wave data tools — CLI and MCP server for AI agents",
   "type": "module",
   "bin": {
     "warplab": "./dist-server/cli.js",
     "warplab-mcp": "./dist-server/mcp.js"
   },
+  "files": [
+    "dist-server/",
+    "src/core/"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "build:server": "tsup",
+    "prepublishOnly": "tsup",
     "preview": "vite preview",
     "download-strain": "python3 scripts/download-strain.py"
   },

@@ -5,12 +5,11 @@ Command-line access to gravitational wave physics tools. Query the GWOSC catalog
 ## Installation
 
 ```bash
-# From the repo
-npm run build:server
-node dist-server/cli.js help
+# Run directly (no install needed)
+npx warplab help
 
-# Or install globally (after npm link or publish)
-npm link
+# Or install globally
+npm install -g warplab
 warplab help
 ```
 

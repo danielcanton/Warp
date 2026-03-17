@@ -445,12 +445,25 @@ function Landing() {
           </motion.div>
 
           <motion.a
+            href="/docs.html"
+            className="flex items-center gap-2 text-white/30 text-sm hover:text-white/60 transition-colors"
+            {...viewFadeUp}
+            transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            </svg>
+            API Docs
+          </motion.a>
+
+          <motion.a
             href="https://github.com/danielcanton/warplab"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 text-white/30 text-sm hover:text-white/60 transition-colors"
             {...viewFadeUp}
-            transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
+            transition={{ duration: 0.6, delay: 0.15, ease: "easeOut" }}
           >
             <svg
               viewBox="0 0 16 16"

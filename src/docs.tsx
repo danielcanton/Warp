@@ -426,35 +426,32 @@ function MCPDocs() {
       <section className="docs-section">
         <h2>Setup</h2>
 
-        <h3>1. Build the server</h3>
-        <CodeBlock language="bash">npm run build:server</CodeBlock>
-
-        <h3>2. Add to Claude Code</h3>
+        <h3>Claude Code</h3>
         <p>
-          Edit <code>~/.claude/claude_code_config.json</code>:
+          Add to <code>~/.claude/claude_code_config.json</code>:
         </p>
         <CodeBlock language="json">{`{
   "mcpServers": {
     "warplab": {
-      "command": "node",
-      "args": ["/path/to/warp/dist-server/mcp.js"]
+      "command": "npx",
+      "args": ["warplab-mcp"]
     }
   }
 }`}</CodeBlock>
 
-        <h3>Or Claude Desktop</h3>
+        <h3>Claude Desktop</h3>
         <p>
           macOS: <code>~/Library/Application Support/Claude/claude_desktop_config.json</code>
         </p>
         <CodeBlock language="json">{`{
   "mcpServers": {
     "warplab": {
-      "command": "node",
-      "args": ["/path/to/warp/dist-server/mcp.js"]
+      "command": "npx",
+      "args": ["warplab-mcp"]
     }
   }
 }`}</CodeBlock>
-        <p className="text-white/40 text-sm mt-2">Restart Claude after editing.</p>
+        <p className="text-white/40 text-sm mt-2">Restart Claude after editing. No install needed — npx handles it.</p>
       </section>
 
       <section className="docs-section">
@@ -489,12 +486,11 @@ function CLIDocs() {
     <>
       <section className="docs-section">
         <h2>Installation</h2>
-        <CodeBlock language="bash">{`# From the repo
-npm run build:server
-node dist-server/cli.js help
+        <CodeBlock language="bash">{`# Run directly (no install needed)
+npx warplab help
 
 # Or install globally
-npm link
+npm install -g warplab
 warplab help`}</CodeBlock>
       </section>
 
@@ -511,10 +507,10 @@ warplab help`}</CodeBlock>
         <h2>Examples</h2>
 
         <h3>Find the 5 loudest events</h3>
-        <CodeBlock language="bash">warplab search --snr-min 20 --limit 5 --table</CodeBlock>
+        <CodeBlock language="bash">npx warplab search --snr-min 20 --limit 5 --table</CodeBlock>
 
         <h3>Generate a waveform for Python analysis</h3>
-        <CodeBlock language="bash">{`warplab waveform GW150914 --format csv > gw150914.csv
+        <CodeBlock language="bash">{`npx warplab waveform GW150914 --format csv > gw150914.csv
 python3 -c "
 import pandas as pd, matplotlib.pyplot as plt
 df = pd.read_csv('gw150914.csv')
@@ -524,18 +520,18 @@ plt.savefig('gw150914.png')
 "`}</CodeBlock>
 
         <h3>Pipe event names into a loop</h3>
-        <CodeBlock language="bash">{`warplab search --type BNS | jq -r '.[].name' | while read name; do
+        <CodeBlock language="bash">{`npx warplab search --type BNS | jq -r '.[].name' | while read name; do
   echo "=== $name ==="
-  warplab qnm "$name"
+  npx warplab qnm "$name"
 done`}</CodeBlock>
 
         <h3>Export a full data package</h3>
         <CodeBlock language="bash">{`mkdir GW150914_data && cd GW150914_data
-warplab export GW150914 --format json > parameters.json
-warplab export GW150914 --format csv > parameters.csv
-warplab export GW150914 --format bibtex > citation.bib
-warplab export GW150914 --format waveform > waveform.csv
-warplab export GW150914 --format notebook > analysis.ipynb`}</CodeBlock>
+npx warplab export GW150914 --format json > parameters.json
+npx warplab export GW150914 --format csv > parameters.csv
+npx warplab export GW150914 --format bibtex > citation.bib
+npx warplab export GW150914 --format waveform > waveform.csv
+npx warplab export GW150914 --format notebook > analysis.ipynb`}</CodeBlock>
       </section>
 
       <section className="docs-section">
