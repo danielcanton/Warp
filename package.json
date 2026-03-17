@@ -42,5 +42,8 @@
     "@types/three": "^0.183.1",
     "typescript": "^5.9.3",
     "vite-plugin-pwa": "^1.2.0"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.0.4"
   }
 }
