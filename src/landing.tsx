@@ -101,6 +101,13 @@ const icons = {
       <path d="M8 16l6-6 6 4 6-8" />
     </svg>
   ),
+  terminal: (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="26" height="22" rx="3" />
+      <path d="M8 12l4 4-4 4" />
+      <path d="M16 20h8" />
+    </svg>
+  ),
 };
 
 const features = [
@@ -167,6 +174,14 @@ const features = [
     description:
       "Population histograms, noise curves with SNR integration, QNM computation, and 90% credible interval posteriors.",
     spotlight: "rgba(34, 211, 238, 0.15)" as const,
+  },
+  {
+    icon: icons.terminal,
+    title: "CLI & MCP Server",
+    description:
+      "Query the catalog, generate waveforms, and compute physics from the terminal or let AI agents access everything via MCP.",
+    spotlight: "rgba(129, 140, 248, 0.15)" as const,
+    link: "/docs.html",
   },
 ];
 
@@ -341,10 +356,13 @@ function Landing() {
               }}
             >
               <SpotlightCard
-                className="p-8 h-full"
+                className={`p-8 h-full ${f.link ? "cursor-pointer" : ""}`}
                 spotlightColor={f.spotlight}
               >
-                <div className="flex flex-col items-center text-center gap-4">
+                <div
+                  className="flex flex-col items-center text-center gap-4"
+                  onClick={f.link ? () => { window.location.href = f.link!; } : undefined}
+                >
                   <div className="text-white/40">{f.icon}</div>
                   {f.hasCounter ? (
                     <CounterOnView value={90} />
@@ -357,6 +375,11 @@ function Landing() {
                   <p className="text-sm text-white/45 leading-relaxed">
                     {f.description}
                   </p>
+                  {f.link && (
+                    <span className="text-xs text-indigo-400/60 mt-1">
+                      View docs &rarr;
+                    </span>
+                  )}
                 </div>
               </SpotlightCard>
             </motion.div>
